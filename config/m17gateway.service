@@ -1,0 +1,19 @@
+[Unit]
+Description=M17Gateway Service
+# Description=Place this file in /lib/systemd/system
+# Description=KC1AWV 07 SEP 2021
+After=network-online.target
+Requires=networking.service
+
+[Service]
+Type=forking
+User=mmdvm
+Group=mmdvm
+Restart=on-failure
+RestartSec=3
+ExecStart=/usr/local/bin/M17Gateway /usr/local/etc/M17Gateway.ini
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target
