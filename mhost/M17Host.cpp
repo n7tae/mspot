@@ -27,14 +27,12 @@
 #include "Version.h"
 #include "StopWatch.h"
 #include "Defines.h"
-#include "Thread.h"
 #include "Log.h"
 #include "GitVersion.h"
 
 #include <cstdio>
-
 #include <cstdlib>
-
+#include <thread>
 #include <sys/types.h>
 #include <unistd.h>
 #include <signal.h>
@@ -343,7 +341,7 @@ int CM17Host::run()
 			m_m17Network->clock(ms);
 
 		if (ms < 5U)
-			CThread::sleep(5U);
+			std::this_thread::sleep_for(std::chrono::milliseconds(5));
 	}
 
 	setMode(MODE_QUIT);

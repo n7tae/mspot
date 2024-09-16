@@ -22,7 +22,6 @@
 #include "StopWatch.h"
 #include "M17Utils.h"
 #include "Version.h"
-#include "Thread.h"
 #include "M17LSF.h"
 #include "Timer.h"
 #include "Voice.h"
@@ -40,6 +39,7 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <pwd.h>
+#include <thread>
 
 
 const char* DEFAULT_INI_FILE = "/etc/M17Gateway.ini";
@@ -626,7 +626,7 @@ int CM17Gateway::run()
 		}
 
 		if (ms < 5U)
-			CThread::sleep(5U);
+			std::this_thread::sleep_for(std::chrono::milliseconds(5));
 	}
 
 	delete voice;

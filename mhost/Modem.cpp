@@ -18,7 +18,6 @@
 
 
 #include "M17Defines.h"
-#include "Thread.h"
 #include "Modem.h"
 #include "Utils.h"
 #include "Log.h"
@@ -28,6 +27,7 @@
 #include <cassert>
 #include <cstdint>
 #include <ctime>
+#include <thread>
 #include <unistd.h>
 
 const unsigned char MMDVM_FRAME_START = 0xE0U;
@@ -195,9 +195,9 @@ void CModem::clock(unsigned int ms)
 		m_error = true;
 		close();
 
-		CThread::sleep(2000U);		// 2s
+		std::this_thread::sleep_for(std::chrono::seconds(2));
 		while (!open())
-			CThread::sleep(5000U);	// 5s
+			std::this_thread::sleep_for(std::chrono::seconds(5));
 	}
 
 	RESP_TYPE_MMDVM type = getResponse();
@@ -482,7 +482,7 @@ bool CModem::readVersion()
 {
 	assert(m_port != NULL);
 
-	CThread::sleep(2000U);	// 2s
+	std::this_thread::sleep_for(std::chrono::seconds(2));
 
 	for (unsigned int i = 0U; i < 6U; i++) {
 		unsigned char buffer[3U];
@@ -502,7 +502,7 @@ bool CModem::readVersion()
 #endif
 
 		for (unsigned int count = 0U; count < MAX_RESPONSES; count++) {
-			CThread::sleep(10U);
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 			RESP_TYPE_MMDVM resp = getResponse();
 			if (resp == RTM_OK && m_buffer[2U] == MMDVM_GET_VERSION) {
 				if (::memcmp(m_buffer + 4U, "MMDVM ", 6U) == 0)
@@ -572,8 +572,7 @@ bool CModem::readVersion()
 				return true;
 			}
 		}
-
-		CThread::sleep(1500U);
+		std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 	}
 
 	LogError("Unable to read the firmware version after six attempts");
@@ -658,7 +657,7 @@ bool CModem::setConfig1()
 	unsigned int count = 0U;
 	RESP_TYPE_MMDVM resp;
 	do {
-		CThread::sleep(10U);
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
 		resp = getResponse();
 		if (resp == RTM_OK && m_buffer[2U] != MMDVM_ACK && m_buffer[2U] != MMDVM_NAK) {
@@ -738,7 +737,7 @@ bool CModem::setConfig2()
 	unsigned int count = 0U;
 	RESP_TYPE_MMDVM resp;
 	do {
-		CThread::sleep(10U);
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
 		resp = getResponse();
 		if (resp == RTM_OK && m_buffer[2U] != MMDVM_ACK && m_buffer[2U] != MMDVM_NAK) {
@@ -810,7 +809,7 @@ bool CModem::setFrequency()
 	unsigned int count = 0U;
 	RESP_TYPE_MMDVM resp;
 	do {
-		CThread::sleep(10U);
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
 		resp = getResponse();
 		if (resp == RTM_OK && m_buffer[2U] != MMDVM_ACK && m_buffer[2U] != MMDVM_NAK) {
