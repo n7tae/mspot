@@ -20,15 +20,13 @@
 #include "RSSIInterpolator.h"
 #include "NullController.h"
 #include "UARTController.h"
-#if defined(__linux__)
 #include "I2CController.h"
-#endif
 #include "UDPController.h"
 #include "Version.h"
 #include "StopWatch.h"
 #include "Defines.h"
 #include "Log.h"
-#include "GitVersion.h"
+#include "../GitVersion.h"
 
 #include <cstdio>
 #include <cstdlib>

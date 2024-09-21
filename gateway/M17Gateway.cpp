@@ -28,7 +28,7 @@
 #include "Utils.h"
 #include "Echo.h"
 #include "Log.h"
-#include "GitVersion.h"
+#include "../GitVersion.h"
 
 #include <sys/socket.h>
 #include <netinet/in.h>
