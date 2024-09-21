@@ -307,7 +307,7 @@ M17-ILS 149.28.123.123 17000
 M17-IND 124.123.68.50 17000
 
 # M17-IP6 VK3JED, AU http://m17-ip6.vkradio.com:3000
-M17-IP6 none 17000
+M17-IP6 2401:c080:2000:2c78:5400:4ff:fe51:7afe 17000
 
 # M17-IRN International Radio Network, US https://m17.irn.radio
 M17-IRN 74.32.197.12 17000
