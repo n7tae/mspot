@@ -94,7 +94,7 @@ m_tx(false),
 m_cd(false),
 m_lockout(false),
 m_error(false),
-m_mode(MODE_IDLE),
+m_mode(MODE_M17),
 m_hwType(HWT_UNKNOWN),
 m_capabilities1(0x00U),
 m_capabilities2(0x00U)
@@ -636,7 +636,7 @@ bool CModem::setConfig1()
 
 	buffer[5U] = m_txDelay / 10U;		// In 10ms units
 
-	buffer[6U] = MODE_IDLE;
+	buffer[6U] = MODE_M17;
 
 	buffer[7U] = (unsigned char)(m_rxLevel * 2.55F + 0.5F);
 
@@ -712,7 +712,7 @@ bool CModem::setConfig2()
 
 	buffer[6U] = m_txDelay / 10U;		// In 10ms units
 
-	buffer[7U] = MODE_IDLE;
+	buffer[7U] = MODE_M17;
 
 	buffer[8U] = (unsigned char)(m_txDCOffset + 128);
 	buffer[9U] = (unsigned char)(m_rxDCOffset + 128);

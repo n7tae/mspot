@@ -119,14 +119,14 @@ m_conf(confFile),
 m_modem(NULL),
 m_m17(NULL),
 m_m17Network(NULL),
-m_mode(MODE_IDLE),
+m_mode(MODE_M17),
 m_m17RFModeHang(10U),
 m_m17NetModeHang(3U),
 m_modeTimer(1000U),
 m_duplex(false),
 m_timeout(180U),
 m_callsign(),
-m_fixedMode(false)
+m_fixedMode(true)
 {
 	CUDPSocket::startup();
 }
@@ -265,7 +265,7 @@ int CM17Host::run()
 
 	CTimer pocsagTimer(1000U, 30U);
 
-	setMode(MODE_IDLE);
+	setMode(MODE_M17);
 
 	LogInfo("M17Host-%s is running", VERSION);
 
@@ -275,13 +275,13 @@ int CM17Host::run()
 		if (lockout && m_mode != MODE_LOCKOUT)
 			setMode(MODE_LOCKOUT);
 		else if (!lockout && m_mode == MODE_LOCKOUT)
-			setMode(MODE_IDLE);
+			setMode(MODE_M17);
 
 		bool error = m_modem->hasError();
 		if (error && m_mode != MODE_ERROR)
 			setMode(MODE_ERROR);
 		else if (!error && m_mode == MODE_ERROR)
-			setMode(MODE_IDLE);
+			setMode(MODE_M17);
 
 		unsigned char data[500U];
 		unsigned int len;
@@ -306,7 +306,7 @@ int CM17Host::run()
 
 		if (!m_fixedMode) {
 			if (m_modeTimer.isRunning() && m_modeTimer.hasExpired())
-				setMode(MODE_IDLE);
+				setMode(MODE_M17);
 		}
 
 		if (m_m17 != NULL) {
@@ -539,8 +539,8 @@ void CM17Host::setMode(unsigned char mode)
 			m_m17Network->enable(true);
 		if (m_m17 != NULL)
 			m_m17->enable(true);
-		m_modem->setMode(MODE_IDLE);
-		m_mode = MODE_IDLE;
+		m_modem->setMode(MODE_M17);
+		m_mode = MODE_M17;
 		m_modeTimer.stop();
 		LogMessage("Mode set to Idle");
 		break;
