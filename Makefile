@@ -1,5 +1,5 @@
 # Use the following CFLAGS and LIBS if you don't want to use gpsd.
-CFLAGS  = -std=c++17 -Wall -Icommon -Igateway -Imhost
+CFLAGS  = -std=c++17 -Wall -I. -Icommon -Igateway -Imhost
 LIBS    = -pthread
 
 # Use the following CFLAGS and LIBS if you do want to use gpsd.
@@ -15,10 +15,10 @@ HSTOBJS = $(HSTSRCS:.cpp=.o)
 
 all : gate host
 
-gate : $(GATOBJS) $(COMOBJS) GitVersion.h
+gate : GitVersion.h $(GATOBJS) $(COMOBJS)
 	$(CXX) $(CFLAGS) $(COMOBJS) $(GATOBJS) $(LIBS) -o $@
 
-host : $(HSTOBJS) $(COMOBJS) GitVersion.h
+host : GitVersion.h $(HSTOBJS) $(COMOBJS)
 	$(CXX) $(CFLAGS) $(COMOBJS) $(HSTOBJS) $(LIBS) -o $@
 
 %.o: %.cpp

@@ -26,7 +26,7 @@
 #include "StopWatch.h"
 #include "Defines.h"
 #include "Log.h"
-#include "../GitVersion.h"
+#include "GitVersion.h"
 
 #include <cstdio>
 #include <cstdlib>
