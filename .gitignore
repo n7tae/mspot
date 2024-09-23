@@ -33,3 +33,11 @@
 *.exe
 *.out
 *.app
+
+# Misc files
+GitVersion.h
+*Hosts.txt
+gate
+gate.ini
+host
+host.ini
