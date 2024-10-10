@@ -1,5 +1,5 @@
 /*
- *   Copyright (C) 2017 by Lieven De Samblanx ON7LDS
+ *   Copyright (C) 2019 by Thomas Early N7TAE
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -15,18 +15,33 @@
  *   along with this program; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
+#pragma once
 
-#if !defined(NETWORKINFO_H)
-#define	NETWORKINFO_H
+#include <string>
+#include <stdlib.h>
+#include <sys/un.h>
 
-class CNetworkInfo {
+class CUnixDgramReader
+{
 public:
-	CNetworkInfo();
-	~CNetworkInfo();
-
-	void getNetworkInterface(unsigned char* info);
-
-private:	
+	CUnixDgramReader();
+	~CUnixDgramReader();
+	bool Open(const char *path);
+	ssize_t Read(void *buf, size_t size);
+	void Close();
+	int GetFD();
+private:
+	int fd;
 };
 
-#endif
+class CUnixDgramWriter
+{
+public:
+	CUnixDgramWriter();
+	~CUnixDgramWriter();
+	void SetUp(const char *path);
+	ssize_t Write(const void *buf, size_t size);
+	ssize_t Write(const std::string &s) { return Write(s.c_str(), s.size()); }
+private:
+	struct sockaddr_un addr;
+};

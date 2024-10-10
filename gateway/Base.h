@@ -1,5 +1,6 @@
+#pragma once
 /*
- *   Copyright (C) 2020 by Jonathan Naylor G4KLX
+ *   Copyright (C) 2020 by Thomas Early N7TAE
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -16,20 +17,18 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#if !defined(M17Utils_H)
-#define  M17Utils_H
+#include "UnixDgramSocket.h"
 
-#include <string>
-
-class CM17Utils {
+class CBase
+{
 public:
-	CM17Utils();
-	~CM17Utils();
+	CBase();
+	virtual ~CBase() {}
 
-	static void encodeCallsign(const std::string& callsign, unsigned char* encoded);
-	static std::string decodeCallsign(const unsigned char* encoded);
+protected:
+	void SendLog(const char *fmt, ...);
+	void Dump(const char *title, const void *pointer, int length);
 
 private:
+	CUnixDgramWriter LogInput;
 };
-
-#endif

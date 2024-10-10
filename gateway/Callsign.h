@@ -1,5 +1,5 @@
 /*
- *   Copyright (C) 2009-2014,2016,2018,2020 by Jonathan Naylor G4KLX
+ *   Copyright (c) 2020 by Thomas A. Early N7TAE
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -16,40 +16,26 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef	RptNetwork_H
-#define	RptNetwork_H
-
-#include "M17Defines.h"
-#include "RingBuffer.h"
-#include "UDPSocket.h"
-#include "Timer.h"
+#pragma once
 
 #include <cstdint>
+#include <string>
+#include <cstring>
 
-class CRptNetwork {
+class CCallsign
+{
 public:
-	CRptNetwork(unsigned short localPort, const std::string& gwyAddress, unsigned short gwyPort, bool debug);
-	~CRptNetwork();
-
-	bool open();
-
-	bool write(const unsigned char* data);
-
-	bool read(unsigned char* data);
-
-	void close();
-
-	void clock(unsigned int ms);
+	CCallsign();
+	CCallsign(const std::string &cs);
+	CCallsign(const uint8_t *code);
+	void CSIn(const std::string &cs);
+	void CodeIn(const uint8_t *code);
+	const std::string GetCS(unsigned len = 0) const;
+	void CodeOut(uint8_t *out) const { memcpy(out, code, 6); };
+	bool operator==(const CCallsign &rhs) const;
+	char GetModule(void) const;
 
 private:
-	CUDPSocket       m_socket;
-	sockaddr_storage m_addr;
-	unsigned int     m_addrLen;
-	bool             m_debug;
-	CRingBuffer<unsigned char> m_buffer;
-	CTimer           m_timer;
-
-	void sendPing();
+	uint8_t code[6];
+	char cs[10];
 };
-
-#endif

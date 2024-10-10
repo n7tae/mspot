@@ -1,75 +1,90 @@
 /*
-*   Copyright (C) 2016,2018,2020,2021 by Jonathan Naylor G4KLX
-*
-*   This program is free software; you can redistribute it and/or modify
-*   it under the terms of the GNU General Public License as published by
-*   the Free Software Foundation; either version 2 of the License, or
-*   (at your option) any later version.
-*
-*   This program is distributed in the hope that it will be useful,
-*   but WITHOUT ANY WARRANTY; without even the implied warranty of
-*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-*   GNU General Public License for more details.
-*
-*   You should have received a copy of the GNU General Public License
-*   along with this program; if not, write to the Free Software
-*   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-*/
+ *   Copyright (c) 2020-2021 by Thomas A. Early N7TAE
+ *
+ *   This program is free software; you can redistribute it and/or modify
+ *   it under the terms of the GNU General Public License as published by
+ *   the Free Software Foundation; either version 2 of the License, or
+ *   (at your option) any later version.
+ *
+ *   This program is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with this program; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
 
-#if !defined(M17Gateway_H)
-#define	M17Gateway_H
+#pragma once
 
-#include "M17Network.h"
-#include "APRSWriter.h"
-#include "GPSHandler.h"
-#include "Timer.h"
-#include "Conf.h"
-
-#include <cstdio>
+#include <atomic>
 #include <string>
-#include <vector>
+#include <mutex>
 
-#include <netdb.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
+#include "UnixDgramSocket.h"
+#include "SockAddress.h"
+#include "Configure.h"
+#include "UDPSocket.h"
+#include "Callsign.h"
+#include "Timer.h"
+#include "Packet.h"
+#include "Base.h"
+#include "CRC.h"
 
-enum M17_STATUS {
-	M17S_NOTLINKED,
-	M17S_LINKED,
-	M17S_LINKING,
-	M17S_UNLINKING,
-	M17S_ECHO
+enum class ELinkState { unlinked, linking, linked };
+
+using SM17Link = struct sm17link_tag
+{
+	SM17RefPacket pongPacket;
+	CSockAddress addr;
+	CCallsign cs;
+	char from_mod;
+	std::atomic<ELinkState> state;
+	CTimer receivePingTimer;
 };
 
-class CM17Gateway
+using SStream = struct stream_tag
+{
+	CTimer lastPacketTime;
+	SM17Frame header;
+};
+
+class CM17Gateway : public CBase
 {
 public:
-	CM17Gateway(const std::string& file);
+	CM17Gateway();
 	~CM17Gateway();
+	bool Init(const CFGDATA &cfgdata);
+	void Process();
+	void SetDestAddress(const std::string &address, uint16_t port);
+	ELinkState GetLinkState() const { return mlink.state; }
+	bool TryLock();
+	void ReleaseLock();
 
-	int run();
+	std::atomic<bool> keep_running;
 
 private:
-	CConf            m_conf;
-	M17_STATUS       m_status;
-	M17_STATUS       m_oldStatus;
-	CM17Network*     m_network;
-	CTimer           m_timer;
-	std::string      m_reflector;
-	unsigned int     m_addrLen;
-	sockaddr_storage m_addr;
-	char             m_module;
-	CAPRSWriter*     m_writer;
-	CGPSHandler*     m_gps;
+	CFGDATA cfg;
+	CCRC crc;
+	CUnixDgramReader AM2M17;
+	CUnixDgramWriter M172AM;
+	CUDPSocket ipv4, ipv6;
+	SM17Link mlink;
+	CTimer linkingTime;
+	SStream currentStream;
+	std::mutex streamLock;
+	std::string qnvoice_file;
+	CSockAddress from17k, destination;
 
-	void linking();
-	void unlinking();
-
-	void createGPS();
+	void LinkCheck();
+	void Write(const void *buf, const size_t size, const CSockAddress &addr) const;
+	void PlayAudioMessage(const char *msg);
+	void StreamTimeout();
+	void PlayVoiceFile();
+	void PlayAudioNotifyMessage(const char *msg);
+	void Send(const void *buf, size_t size, const CSockAddress &addr) const;
+	bool ProcessFrame(const uint8_t *buf);
+	bool ProcessAM(const uint8_t *buf);
+	void SendLinkRequest(const CCallsign &ref);
 };
-
-#endif
