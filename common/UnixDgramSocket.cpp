@@ -27,6 +27,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
+#include "Log.h"
 #include "UnixDgramSocket.h"
 
 CUnixDgramReader::CUnixDgramReader() : fd(-1) {}
@@ -40,10 +41,12 @@ bool CUnixDgramReader::Open(const char *path)	// returns true on failure
 {
 	fd = socket(AF_UNIX, SOCK_DGRAM, 0);
 	if (fd < 0) {
-		fprintf(stderr, "CUnixDgramReader::Open: socket() failed: %s\n", strerror(errno));
+		LogError("%s: socket() failed: %s", path, strerror(errno));
 		return true;
 	}
-	//fcntl(fd, F_SETFL, O_NONBLOCK);
+
+	// set to nonblocking
+	fcntl(fd, F_SETFL, O_NONBLOCK);
 
 	struct sockaddr_un addr;
 	memset(&addr, 0, sizeof(addr));
@@ -52,21 +55,31 @@ bool CUnixDgramReader::Open(const char *path)	// returns true on failure
 
 	int rval = bind(fd, (struct sockaddr *)&addr, sizeof(addr));
 	if (rval < 0) {
-		fprintf(stderr, "CUnixDgramReader::Open: bind() failed: %s\n", strerror(errno));
+		LogError("%s: bind() failed: %s", path, strerror(errno));
 		close(fd);
 		fd = -1;
 		return true;
 	}
+	name.assign(path);
 	return false;
 }
 
 ssize_t CUnixDgramReader::Read(void *buf, size_t size)
 {
 	if (fd < 0)
-		return -1;
+	{
+		if (0 == name.size())
+			return -1;
+		LogError("Trying to reopen %s", name.c_str());
+		if (Open(name.c_str()))
+			return -1;
+	}
 	ssize_t len = read(fd, buf, size);
-	if (len < 1)
-		fprintf(stderr, "CUnixDgramReader::Read read() returned %d: %s\n", int(len), strerror(errno));
+	if (len < 0)
+	{
+		LogError("%s read() returned %d: %s", name.c_str(), int(len), strerror(errno));
+		Close();
+	}
 	return len;
 }
 
@@ -99,13 +112,13 @@ ssize_t CUnixDgramWriter::Write(const void *buf, size_t size)
 	// open the socket
 	int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
 	if (fd < 0) {
-		fprintf(stderr, "Failed to open socket %s : %s\n", addr.sun_path+1, strerror(errno));
+		LogError("Failed to open %s : %s", addr.sun_path+1, strerror(errno));
 		return -1;
 	}
 	// connect to the receiver
 	int rval = connect(fd, (struct sockaddr *)&addr, sizeof(addr));
 	if (rval < 0) {
-		fprintf(stderr, "Failed to connect to socket %s : %s\n", addr.sun_path+1, strerror(errno));
+		LogError("Failed to connect %s : %s", addr.sun_path+1, strerror(errno));
 		close(fd);
 		return -1;
 	}
@@ -117,15 +130,15 @@ ssize_t CUnixDgramWriter::Write(const void *buf, size_t size)
 		if (written == (ssize_t)size)
 			break;
 		else if (written < 0)
-			fprintf(stderr, "ERROR: faied to write to %s : %s\n", addr.sun_path+1, strerror(errno));
+			LogError("Faied to write to %s : %s", addr.sun_path+1, strerror(errno));
 		else if (written == 0)
-			fprintf(stderr, "Warning: zero bytes written to %s\n", addr.sun_path+1);
+			LogWarning("Zero bytes written to %s", addr.sun_path+1);
 		else if (written != (ssize_t)size) {
-			fprintf(stderr, "ERROR: only %d of %d bytes written to %s\n", (int)written, (int)size, addr.sun_path+1);
+			LogError("Only %d of %d bytes written to %s", (int)written, (int)size, addr.sun_path+1);
 			break;
 		}
 		if (++count >= 100) {
-			fprintf(stderr, "ERROR: Write failed after %d attempts\n", count-1);
+			LogError("%s: Write failed after %d attempts", addr.sun_path+1, count-1);
 			break;
 		}
 		std::this_thread::sleep_for(std::chrono::microseconds(5));

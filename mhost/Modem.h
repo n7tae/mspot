@@ -1,5 +1,6 @@
 /*
  *   Copyright (C) 2011-2018,2020,2021 by Jonathan Naylor G4KLX
+ *   Copyright (C) 2024 by Thomas A. Early N7TAE
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -16,8 +17,9 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef	Modem_H
-#define	Modem_H
+#pragma once
+
+#include <memory>
 
 #include "ModemPort.h"
 #include "RingBuffer.h"
@@ -45,10 +47,10 @@ public:
 	CModem(bool duplex, bool rxInvert, bool txInvert, bool pttInvert, unsigned int txDelay, bool trace, bool debug);
 	~CModem();
 
-	void setPort(IModemPort* port);
-	void setRFParams(unsigned int rxFrequency, int rxOffset, unsigned int txFrequency, int txOffset, int txDCOffset, int rxDCOffset, float rfLevel);
-	void setLevels(float rxLevel, float m17TXLevel);
-	void setM17Params(unsigned int txHang);
+	void setPort(std::unique_ptr<IModemPort> port);
+	void setRFParams(unsigned rxFrequency, int rxOffset, unsigned txFrequency, int txOffset, int txDCOffset, int rxDCOffset, unsigned rfLevel);
+	void setLevels(unsigned rxLevel, unsigned m17TXLevel);
+	void setM17Params(unsigned txHang);
 
 	bool open();
 
@@ -79,24 +81,24 @@ public:
 	void close();
 
 private:
-	unsigned int               m_protocolVersion;
-	unsigned int               m_m17TXHang;
+	unsigned                   m_protocolVersion;
+	unsigned                   m_txHang;
 	bool                       m_duplex;
 	bool                       m_rxInvert;
 	bool                       m_txInvert;
 	bool                       m_pttInvert;
-	unsigned int               m_txDelay;
-	float                      m_rxLevel;
-	float                      m_m17TXLevel;
-	float                      m_rfLevel;
+	unsigned                   m_txDelay;
+	unsigned                   m_rxLevel;
+	unsigned                   m_txLevel;
+	unsigned                   m_rfLevel;
 	bool                       m_trace;
 	bool                       m_debug;
-	unsigned int               m_rxFrequency;
-	unsigned int               m_txFrequency;
+	unsigned                   m_rxFrequency;
+	unsigned                   m_txFrequency;
 	int                        m_rxDCOffset;
 	int                        m_txDCOffset;
-	IModemPort*                m_port;
-	unsigned char*             m_buffer;
+	std::unique_ptr<IModemPort>m_port;
+	uint8_t                   *m_buffer;
 	unsigned int               m_length;
 	unsigned int               m_offset;
 	SERIAL_STATE               m_state;
@@ -106,7 +108,7 @@ private:
 	CTimer                     m_statusTimer;
 	CTimer                     m_inactivityTimer;
 	CTimer                     m_playoutTimer;
-	unsigned int               m_m17Space;
+	unsigned                   m_m17Space;
 	bool                       m_tx;
 	bool                       m_cd;
 	bool                       m_lockout;
@@ -126,5 +128,3 @@ private:
 
 	RESP_TYPE_MMDVM getResponse();
 };
-
-#endif

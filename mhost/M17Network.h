@@ -21,7 +21,7 @@
 
 #include "M17Defines.h"
 #include "RingBuffer.h"
-#include "UDPSocket.h"
+#include "UnixDgramSocket.h"
 #include "Timer.h"
 
 #include <random>
@@ -46,21 +46,15 @@ public:
 
 	void clock(unsigned int ms);
 
-	bool isConnected() const;
-
 private:
-	CUDPSocket       m_socket;
-	sockaddr_storage m_addr;
-	unsigned int     m_addrLen;
+	CUnixDgramReader Gate2Host;
+	CUnixDgramWriter Host2Gate;
 	bool             m_debug;
 	bool             m_enabled;
 	uint16_t         m_outId;
 	uint16_t         m_inId;
 	CRingBuffer<unsigned char> m_buffer;
 	std::mt19937     m_random;
-	CTimer           m_timer;
-
-	void sendPing();
 };
 
 #endif

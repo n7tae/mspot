@@ -32,6 +32,7 @@ public:
 	int GetFD();
 private:
 	int fd;
+	std::string name;
 };
 
 class CUnixDgramWriter

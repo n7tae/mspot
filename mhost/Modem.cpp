@@ -63,22 +63,21 @@ const unsigned char CAP1_M17    = 0x20U;
 
 CModem::CModem(bool duplex, bool rxInvert, bool txInvert, bool pttInvert, unsigned int txDelay, bool trace, bool debug) :
 m_protocolVersion(0U),
-m_m17TXHang(5U),
+m_txHang(5U),
 m_duplex(duplex),
 m_rxInvert(rxInvert),
 m_txInvert(txInvert),
 m_pttInvert(pttInvert),
 m_txDelay(txDelay),
-m_rxLevel(0.0F),
-m_m17TXLevel(0.0F),
-m_rfLevel(0.0F),
+m_rxLevel(0),
+m_txLevel(0),
+m_rfLevel(0),
 m_trace(trace),
 m_debug(debug),
 m_rxFrequency(0U),
 m_txFrequency(0U),
 m_rxDCOffset(0),
 m_txDCOffset(0),
-m_port(NULL),
 m_buffer(NULL),
 m_length(0U),
 m_offset(0U),
@@ -104,18 +103,16 @@ m_capabilities2(0x00U)
 
 CModem::~CModem()
 {
-	delete   m_port;
+	m_port.reset();
 	delete[] m_buffer;
 }
 
-void CModem::setPort(IModemPort* port)
+void CModem::setPort(std::unique_ptr<IModemPort> port)
 {
-	assert(port != NULL);
-
-	m_port = port;
+	m_port = std::move(port);
 }
 
-void CModem::setRFParams(unsigned int rxFrequency, int rxOffset, unsigned int txFrequency, int txOffset, int txDCOffset, int rxDCOffset, float rfLevel)
+void CModem::setRFParams(unsigned rxFrequency, int rxOffset, unsigned txFrequency, int txOffset, int txDCOffset, int rxDCOffset, unsigned rfLevel)
 {
 	m_rxFrequency     = rxFrequency + rxOffset;
 	m_txFrequency     = txFrequency + txOffset;
@@ -124,15 +121,15 @@ void CModem::setRFParams(unsigned int rxFrequency, int rxOffset, unsigned int tx
 	m_rfLevel         = rfLevel;
 }
 
-void CModem::setLevels(float rxLevel, float m17TXLevel)
+void CModem::setLevels(unsigned rxLevel, unsigned txLevel)
 {
-	m_rxLevel       = rxLevel;
-	m_m17TXLevel    = m17TXLevel;
+	m_rxLevel = rxLevel;
+	m_txLevel = txLevel;
 }
 
 void CModem::setM17Params(unsigned int txHang)
 {
-	m_m17TXHang = txHang;
+	m_txHang = txHang;
 }
 
 bool CModem::open()
@@ -146,8 +143,7 @@ bool CModem::open()
 	ret = readVersion();
 	if (!ret) {
 		m_port->close();
-		delete m_port;
-		m_port = NULL;
+		m_port.reset();
 		return false;
 	} else {
 		/* Stopping the inactivity timer here when a firmware version has been
@@ -158,16 +154,14 @@ bool CModem::open()
 	ret = setFrequency();
 	if (!ret) {
 		m_port->close();
-		delete m_port;
-		m_port = NULL;
+		m_port.reset();
 		return false;
 	}
 
 	ret = writeConfig();
 	if (!ret) {
 		m_port->close();
-		delete m_port;
-		m_port = NULL;
+		m_port.reset();
 		return false;
 	}
 
@@ -638,16 +632,16 @@ bool CModem::setConfig1()
 
 	buffer[6U] = MODE_M17;
 
-	buffer[7U] = (unsigned char)(m_rxLevel * 2.55F + 0.5F);
+	buffer[7U] = (unsigned char)(m_rxLevel);
 
 	buffer[11U] = 128U;           // Was OscOffset
 
 	buffer[16U] = (unsigned char)(m_txDCOffset + 128);
 	buffer[17U] = (unsigned char)(m_rxDCOffset + 128);
 
-	buffer[24U] = (unsigned char)(m_m17TXLevel * 2.55F + 0.5F);
+	buffer[24U] = (unsigned char)(m_txLevel);
 
-	buffer[25U] = (unsigned char)m_m17TXHang;
+	buffer[25U] = (unsigned char)m_txHang;
 
 	// CUtils::dump(1U, "Written", buffer, 26U);
 
@@ -717,15 +711,15 @@ bool CModem::setConfig2()
 	buffer[8U] = (unsigned char)(m_txDCOffset + 128);
 	buffer[9U] = (unsigned char)(m_rxDCOffset + 128);
 
-	buffer[10U] = (unsigned char)(m_rxLevel * 2.55F + 0.5F);
+	buffer[10U] = (unsigned char)(m_rxLevel);
 
 
-	buffer[17U] = (unsigned char)(m_m17TXLevel * 2.55F + 0.5F);
+	buffer[17U] = (unsigned char)(m_txLevel);
 
 	buffer[21U] = 0x00U;
 	buffer[22U] = 0x00U;
 
-	buffer[26U] = (unsigned char)m_m17TXHang;
+	buffer[26U] = (unsigned char)m_txHang;
 	buffer[27U] = 0x00U;
 	buffer[28U] = 0x00U;
 

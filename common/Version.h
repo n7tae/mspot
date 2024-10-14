@@ -1,24 +1,49 @@
-/*
- *   Copyright (C) 2015-2024 by Jonathan Naylor G4KLX
- *
- *   This program is free software; you can redistribute it and/or modify
- *   it under the terms of the GNU General Public License as published by
- *   the Free Software Foundation; either version 2 of the License, or
- *   (at your option) any later version.
- *
- *   This program is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with this program; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- */
+/****************************************************************
+ *                                                              *
+ *             More - An M17-only Repeater/HotSpot              *
+ *                                                              *
+ *         Copyright (c) 2024 by Thomas A. Early N7TAE          *
+ *                                                              *
+ * See the LICENSE file for details about the software license. *
+ *                                                              *
+ ****************************************************************/
 
-#if !defined(VERSION_H)
-#define	VERSION_H
+#pragma once
 
-const char* VERSION = "20240923";
+#include <cstdint>
+#include <iostream>
 
-#endif
+class CVersion
+{
+public:
+	// constructors
+	CVersion();
+	CVersion(uint8_t maj, uint8_t min, uint8_t rev);
+
+	// get
+	int GetMajor(void) const;
+	int GetMinor(void) const;
+	int GetRevision(void) const;
+	int GetVersion(void) const;
+	const char *GetString() { return strversion.c_str(); }
+
+	// set
+	void Set(uint8_t, uint8_t, uint8_t);
+
+	// comparison operators
+	bool operator ==(const CVersion &v) const;
+	bool operator !=(const CVersion &v) const;
+	bool operator >=(const CVersion &v) const;
+	bool operator <=(const CVersion &v) const;
+	bool operator  >(const CVersion &v) const;
+	bool operator  <(const CVersion &v) const;
+
+	// output
+	friend std::ostream &operator <<(std::ostream &os, const CVersion &v);
+
+
+protected:
+	// data
+	int version;
+	std::string strversion;
+};

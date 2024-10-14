@@ -1,20 +1,13 @@
-/*
- *   Copyright (c) 2020-2021 by Thomas A. Early N7TAE
- *
- *   This program is free software; you can redistribute it and/or modify
- *   it under the terms of the GNU General Public License as published by
- *   the Free Software Foundation; either version 2 of the License, or
- *   (at your option) any later version.
- *
- *   This program is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with this program; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- */
+/****************************************************************
+ *                                                              *
+ *             More - An M17-only Repeater/HotSpot              *
+ *                                                              *
+ *         Copyright (c) 2024 by Thomas A. Early N7TAE          *
+ *                                                              *
+ * See the LICENSE file for details about the software license. *
+ *                                                              *
+ ****************************************************************/
+
 
 #pragma once
 
@@ -29,10 +22,10 @@
 #include "Callsign.h"
 #include "Timer.h"
 #include "Packet.h"
-#include "Base.h"
 #include "CRC.h"
 
 enum class ELinkState { unlinked, linking, linked };
+enum class EInternetType { ipv4only, ipv6only, both };
 
 using SM17Link = struct sm17link_tag
 {
@@ -50,25 +43,24 @@ using SStream = struct stream_tag
 	SM17Frame header;
 };
 
-class CM17Gateway : public CBase
+class CM17Gateway
 {
 public:
-	CM17Gateway();
-	~CM17Gateway();
-	bool Init(const CFGDATA &cfgdata);
+	bool Initialize();
 	void Process();
+	void Close();
 	void SetDestAddress(const std::string &address, uint16_t port);
 	ELinkState GetLinkState() const { return mlink.state; }
 	bool TryLock();
 	void ReleaseLock();
 
-	std::atomic<bool> keep_running;
-
 private:
-	CFGDATA cfg;
+	CCallsign thisCS;
+	EInternetType internetType;
+	std::atomic<bool> keep_running;
 	CCRC crc;
-	CUnixDgramReader AM2M17;
-	CUnixDgramWriter M172AM;
+	CUnixDgramReader Host2Gate;
+	CUnixDgramWriter Gate2Host;
 	CUDPSocket ipv4, ipv6;
 	SM17Link mlink;
 	CTimer linkingTime;
@@ -77,7 +69,7 @@ private:
 	std::string qnvoice_file;
 	CSockAddress from17k, destination;
 
-	void LinkCheck();
+	void linkCheck();
 	void Write(const void *buf, const size_t size, const CSockAddress &addr) const;
 	void PlayAudioMessage(const char *msg);
 	void StreamTimeout();
@@ -87,4 +79,5 @@ private:
 	bool ProcessFrame(const uint8_t *buf);
 	bool ProcessAM(const uint8_t *buf);
 	void SendLinkRequest(const CCallsign &ref);
+	void Dump(const char *title, const void *pointer, int length);
 };

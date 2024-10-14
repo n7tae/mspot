@@ -1,5 +1,6 @@
 /*
  *   Copyright (C) 2015-2021 by Jonathan Naylor G4KLX
+ *   Copyright (C) 2024 by Thomas A. Early N7TAE
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -16,46 +17,41 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#if !defined(MMDVMHOST_H)
-#define	MMDVMHOST_H
+#pragma once
+
+#include <string>
+#include <atomic>
+#include <memory>
 
 #include "M17Control.h"
 #include "M17Network.h"
 #include "Timer.h"
 #include "Modem.h"
-#include "Conf.h"
-
-#include <string>
-
 
 class CM17Host
 {
 public:
-  CM17Host(const std::string& confFile);
+  CM17Host();
   ~CM17Host();
 
-  int run();
+  bool Run();
+  void Stop();
 
 private:
-  CConf           m_conf;
-  CModem*         m_modem;
-  CM17Control*    m_m17;
-  CM17Network*    m_m17Network;
+  std::unique_ptr<CModem>      m_modem;
+  std::unique_ptr<CM17Control> m_m17;
+  std::unique_ptr<CM17Network> m_m17Network;
   unsigned char   m_mode;
-  unsigned int    m_m17RFModeHang;
   unsigned int    m_m17NetModeHang;
-  CTimer          m_modeTimer;
   bool            m_duplex;
   unsigned int    m_timeout;
   std::string     m_callsign;
-  bool            m_fixedMode;
+  std::atomic<bool> keep_running;
 
   void readParams();
   bool createModem();
   bool createM17Network();
 
-  void setMode(unsigned char mode);
+  void setMode(uint8_t mode);
 
 };
-
-#endif
