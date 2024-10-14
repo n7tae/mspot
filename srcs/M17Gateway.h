@@ -20,7 +20,7 @@
 #include "Configure.h"
 #include "UDPSocket.h"
 #include "Callsign.h"
-#include "Timer.h"
+#include "SteadyTimer.h"
 #include "Packet.h"
 #include "CRC.h"
 
@@ -34,12 +34,12 @@ using SM17Link = struct sm17link_tag
 	CCallsign cs;
 	char from_mod;
 	std::atomic<ELinkState> state;
-	CTimer receivePingTimer;
+	CSteadyTimer receivePingTimer;
 };
 
 using SStream = struct stream_tag
 {
-	CTimer lastPacketTime;
+	CSteadyTimer lastPacketTime;
 	SM17Frame header;
 };
 
@@ -63,7 +63,7 @@ private:
 	CUnixDgramWriter Gate2Host;
 	CUDPSocket ipv4, ipv6;
 	SM17Link mlink;
-	CTimer linkingTime;
+	CSteadyTimer linkingTime;
 	SStream currentStream;
 	std::mutex streamLock;
 	std::string qnvoice_file;
