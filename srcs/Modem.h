@@ -21,20 +21,22 @@
 
 #include <memory>
 
-#include "ModemPort.h"
+#include "SerialPort.h"
 #include "RingBuffer.h"
 #include "Defines.h"
 #include "Timer.h"
 
 #include <string>
 
-enum RESP_TYPE_MMDVM {
+enum RESP_TYPE_MMDVM
+{
 	RTM_OK,
 	RTM_TIMEOUT,
 	RTM_ERROR
 };
 
-enum SERIAL_STATE {
+enum SERIAL_STATE
+{
 	SS_START,
 	SS_LENGTH1,
 	SS_LENGTH2,
@@ -42,12 +44,13 @@ enum SERIAL_STATE {
 	SS_DATA
 };
 
-class CModem {
+class CModem
+{
 public:
 	CModem(bool duplex, bool rxInvert, bool txInvert, bool pttInvert, unsigned int txDelay, bool trace, bool debug);
 	~CModem();
 
-	void setPort(std::unique_ptr<IModemPort> port);
+	void setPort(std::unique_ptr<ISerialPort> port);
 	void setRFParams(unsigned rxFrequency, int rxOffset, unsigned txFrequency, int txOffset, int txDCOffset, int rxDCOffset, unsigned rfLevel);
 	void setLevels(unsigned rxLevel, unsigned m17TXLevel);
 	void setM17Params(unsigned txHang);
@@ -97,7 +100,7 @@ private:
 	unsigned                   m_txFrequency;
 	int                        m_rxDCOffset;
 	int                        m_txDCOffset;
-	std::unique_ptr<IModemPort>m_port;
+	std::unique_ptr<ISerialPort> m_port;
 	uint8_t                   *m_buffer;
 	unsigned int               m_length;
 	unsigned int               m_offset;

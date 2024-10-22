@@ -1,22 +1,14 @@
 #pragma once
 
-/*
- *   Copyright (C) 2019-2020 by Thomas Early N7TAE
- *
- *   This program is free software; you can redistribute it and/or modify
- *   it under the terms of the GNU General Public License as published by
- *   the Free Software Foundation; either version 2 of the License, or
- *   (at your option) any later version.
- *
- *   This program is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with this program; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- */
+/****************************************************************
+ *                                                              *
+ *             More - An M17-only Repeater/HotSpot              *
+ *                                                              *
+ *         Copyright (c) 2024 by Thomas A. Early N7TAE          *
+ *                                                              *
+ * See the LICENSE file for details about the software license. *
+ *                                                              *
+ ****************************************************************/
 
 #include <iostream>
 #include <cstring>
@@ -28,6 +20,8 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
+#include "Log.h"
+
 class CSockAddress
 {
 public:
@@ -36,68 +30,82 @@ public:
 		Clear();
 	}
 
-	CSockAddress(const char *address, uint16_t port, int type = SOCK_DGRAM)
+	~CSockAddress() {}
+
+	bool Initialize(const std::string &address, uint16_t port = 0)
 	{
-		Clear();
+			Clear();
 		struct addrinfo hints, *result;
 		memset(&hints, 0, sizeof(struct addrinfo));
 		hints.ai_family = AF_UNSPEC;
-		hints.ai_socktype = type;
-		if (0 == getaddrinfo(address, (port ? std::to_string(port).c_str() : nullptr), &hints, &result))
+		hints.ai_socktype = SOCK_DGRAM;
+		if (0 == getaddrinfo(address.c_str(), (port ? std::to_string(port).c_str() : nullptr), &hints, &result))
 		{
 			memcpy(&addr, result->ai_addr, result->ai_addrlen);
 			addr.ss_family = result->ai_family;
 			freeaddrinfo(result);
+			if (port)
+				SetPort(port);
+			return false;
 		}
 		else
 		{
-			std::cerr << "ERROR: Couldn't find IP Address for '" << address << "'" << std::endl;
-			addr.ss_family = AF_INET;
+			LogError("Could not find address for %s", address.c_str());
+			return true;
 		}
-		SetPort(port);
 	}
 
-	CSockAddress(const int family, const unsigned short port = 0, const char *address = NULL)
-	{
-		Initialize(family, port, address);
-	}
-
-	~CSockAddress() {}
-
-	void Initialize(const int family, const uint16_t port = 0U, const char *address = NULL)
+	bool Initialize(const int family, const uint16_t port = 0U, const char *address = NULL)
 	{
 		Clear();
 		addr.ss_family = family;
-		if (AF_INET == family) {
+		if (AF_INET == family)
+		{
 			auto addr4 = (struct sockaddr_in *)&addr;
 			addr4->sin_port = htons(port);
-			if (address) {
+			if (address)
+			{
 				if (0 == strncasecmp(address, "loc", 3))
 					inet_pton(AF_INET, "127.0.0.1", &(addr4->sin_addr));
 				else if (0 == strncasecmp(address, "any", 3))
 					inet_pton(AF_INET, "0.0.0.0", &(addr4->sin_addr));
-				else if (address) {
+				else
+				{
 					if (1 > inet_pton(AF_INET, address, &(addr4->sin_addr)))
-						std::cerr << "Address Initialization Error: '" << address << "' is not a valdid IPV4 address!" << std::endl;
+					{
+						LogError("IPv4 SockAddress initialization failed for '%s'", address);
+						return true;
+					}
 				}
 			}
-		} else if (AF_INET6 == family) {
+		}
+		else if (AF_INET6 == family)
+		{
 			auto addr6 = (struct sockaddr_in6 *)&addr;
 			addr6->sin6_port = htons(port);
-			if (address) {
+			if (address)
+			{
 				if (0 == strncasecmp(address, "loc", 3))
 					inet_pton(AF_INET6, "::1", &(addr6->sin6_addr));
 				else if (0 == strncasecmp(address, "any", 3))
 					inet_pton(AF_INET6, "::", &(addr6->sin6_addr));
-				else if (address) {
+				else if (address)
+				{
 					if (1 > inet_pton(AF_INET6, address, &(addr6->sin6_addr)))
-						std::cerr << "Address Initialization Error: '" << address << "' is not a valid IPV6 address!" << std::endl;
+					{
+						LogError("IPv6 SockAddress initialization failed for '%s'", address);
+						return true;
+					}
 				}
 			}
-		} else {
-			addr.ss_family = AF_INET;
-			std::cerr << "Error: Wrong address family type:" << family << " for [" << (address ? address : "NULL") << "]:" << port << std::endl;
 		}
+		else
+		{
+			addr.ss_family = AF_INET;
+			LogError("Address Family must be IPv4 or IPv6");
+			return true;
+		}
+		return false;
 	}
 
 	CSockAddress &operator=(const CSockAddress &from)
@@ -197,7 +205,8 @@ public:
 			auto addr6 = (struct sockaddr_in6 *)&addr;
 			inet_ntop(AF_INET6, &(addr6->sin6_addr), straddr, INET6_ADDRSTRLEN);
 		} else {
-			std::cerr << "Unknown socket family: " << addr.ss_family << std::endl;
+			LogError("Can't get address, unknown family: %u", addr.ss_family);
+			return "UNKNOWN";
 		}
 		return straddr;
 	}

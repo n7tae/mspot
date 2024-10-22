@@ -54,12 +54,7 @@ CUARTController::~CUARTController()
 bool CUARTController::open()
 {
 	assert(m_fd == -1);
-
-#if defined(__APPLE__)
-	m_fd = ::open(m_device.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK); /*open in block mode under OSX*/
-#else
 	m_fd = ::open(m_device.c_str(), O_RDWR | O_NOCTTY | O_NDELAY, 0);
-#endif
 	if (m_fd < 0) {
 		LogError("Cannot open device - %s", m_device.c_str());
 		return false;
@@ -88,14 +83,8 @@ bool CUARTController::setRaw()
 	termios.c_cflag |=  (CS8 | CLOCAL | CREAD);
 	termios.c_lflag &= ~(ISIG | ICANON | IEXTEN);
 	termios.c_lflag &= ~(ECHO | ECHOE | ECHOK | ECHONL);
-#if defined(__APPLE__)
-	termios.c_cc[VMIN] = 1;
-	termios.c_cc[VTIME] = 1;
-	#define B460800 460800
-#else
 	termios.c_cc[VMIN]  = 0;
 	termios.c_cc[VTIME] = 10;
-#endif
 
 	switch (m_speed) {
 #if defined(B1200)
@@ -192,27 +181,8 @@ bool CUARTController::setRaw()
 			return false;
 		}
 	}
-
-#if defined(__APPLE__)
-	setNonblock(false);
-#endif
-
 	return true;
 }
-
-#if defined(__APPLE__)
-int CUARTController::setNonblock(bool nonblock)
-{
-	int flag = ::fcntl(m_fd, F_GETFL, 0);
-
-	if (nonblock)
-		flag |= O_NONBLOCK;
-	else
-		flag &= ~O_NONBLOCK;
-
-	return ::fcntl(m_fd, F_SETFL, flag);
-}
-#endif
 
 int CUARTController::read(unsigned char* buffer, unsigned int length)
 {
@@ -263,23 +233,7 @@ int CUARTController::read(unsigned char* buffer, unsigned int length)
 }
 
 bool CUARTController::canWrite(){
-#if defined(__APPLE__)
-	fd_set wset;
-	FD_ZERO(&wset);
-	FD_SET(m_fd, &wset);
-
-	struct timeval timeo;
-	timeo.tv_sec  = 0;
-	timeo.tv_usec = 0;
-
-	int rc = ::select(m_fd + 1, NULL, &wset, NULL, &timeo);
-	if (rc > 0 && FD_ISSET(m_fd, &wset))
-		return true;
-
-	return false;
-#else
 	return true;
-#endif
 }
 
 int CUARTController::write(const unsigned char* buffer, unsigned int length)

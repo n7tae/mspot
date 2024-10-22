@@ -16,7 +16,7 @@
 #include <nlohmann/json.hpp>
 
 enum class ErrorLevel { fatal, mild };
-enum class ESection { none, modem, gateway };
+enum class ESection { none, general, log, modem, gateway };
 
 #define IS_TRUE(a) ((a)=='t' || (a)=='T' || (a)=='1')
 
@@ -38,10 +38,11 @@ private:
 	// CFGDATA data;
 	unsigned counter;
 	nlohmann::json data;
+	std::regex IPv4RegEx, IPv6RegEx, MoreCS, MrefdCS, UrfdCS;
 
 	unsigned getUnsigned(const std::string &value, const std::string &label, unsigned min, unsigned max, unsigned defaultvalue) const;
 	int getInt(const std::string &value, const std::string &label, int min, int max, int defaultvalue) const;
 	void badParam(const std::string &param) const;
 	void checkFile(const std::string &section, const std::string &key, const std::string &filepath) const;
-	bool isDefined(ErrorLevel level, const std::string &section, const std::string &pname, const std::string &key, bool &rval);
+	bool isDefined(ErrorLevel level, const std::string &section, const std::string &key, bool &rval);
 };

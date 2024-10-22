@@ -1,25 +1,28 @@
-# Use the following CFLAGS and LIBS if you don't want to use gpsd.
-CFLAGS  = -std=c++17 -Wall -I. -Icommon -Igateway -Imhost
+################################################################
+#                                                              #
+#             More - An M17-only Repeater/HotSpot              #
+#                                                              #
+#         Copyright (c) 2024 by Thomas A. Early N7TAE          #
+#                                                              #
+# See the LICENSE file for details about the software license. #
+#                                                              #
+################################################################
+
+include mhost.mk
+
+CFLAGS  = -std=c++17 -Wall -Isrcs
 LIBS    = -pthread
 
-# Use the following CFLAGS and LIBS if you do want to use gpsd.
-#CFLAGS  = -g -std=c++17 -Wall -DUSE_GPSD -pthread
-#LIBS    = -lpthread -lgps
+SRCS = $(wildcard srcs/*.cpp)
+OBJS = $(SRCS:.cpp=.o)
 
-COMSRCS = $(wildcard common/*.cpp)
-COMOBJS = $(COMSRCS:.cpp=.o)
-GATSRCS = $(wildcard gateway/*.cpp)
-GATOBJS = $(GATSRCS:.cpp=.o)
-HSTSRCS = $(wildcard mhost/*.cpp)
-HSTOBJS = $(HSTSRCS:.cpp=.o)
+all : mhost inicheck
 
-all : gate host
+mhost : GitVersion.h $(OBJS)
+	$(CXX) $(CFLAGS) $(OBJS) $(LIBS) -o $@
 
-gate : GitVersion.h $(GATOBJS) $(COMOBJS)
-	$(CXX) $(CFLAGS) $(COMOBJS) $(GATOBJS) $(LIBS) -o $@
-
-host : GitVersion.h $(HSTOBJS) $(COMOBJS)
-	$(CXX) $(CFLAGS) $(COMOBJS) $(HSTOBJS) $(LIBS) -o $@
+inicheck : srcs/Configure.h srcs/Configure.cpp srcs/JsonKeys.h
+	$(CXX) $(CFLAGS) -DINICHECK srcs/Configure.cpp -o $@
 
 %.o: %.cpp
 		$(CXX) $(CFLAGS) -c -o $@ $<
@@ -29,16 +32,15 @@ host : GitVersion.h $(HSTOBJS) $(COMOBJS)
 FORCE:
 
 clean :
-	$(RM) gate host common/*.o gateway/*.o mhost/*.o GitVersion.h
+	$(RM) $(all) srcs/*.o GitVersion.h
 
 install : gateway/gate mhost/host
-	install -m 755 gate /usr/local/bin/
-	install -m 755 host /usr/local/bin/
+	install -m 755 m17host $(BINDIR)
 
 # Export the current git version if the index file exists, else 000...
 GitVersion.h :
 ifneq ("$(wildcard .git/index)","")
-	echo "const char *gitversion = \"$(shell git rev-parse HEAD)\";" > common/$@
+	echo "const char *gitversion = \"$(shell git rev-parse HEAD)\";" > srcs/$@
 else
-	echo "const char *gitversion = \"0000000000000000000000000000000000000000\";" > common/$@
+	echo "const char *gitversion = \"0000000000000000000000000000000000000000\";" > srcs/$@
 endif

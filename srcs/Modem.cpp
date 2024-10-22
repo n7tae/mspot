@@ -107,7 +107,7 @@ CModem::~CModem()
 	delete[] m_buffer;
 }
 
-void CModem::setPort(std::unique_ptr<IModemPort> port)
+void CModem::setPort(std::unique_ptr<ISerialPort> port)
 {
 	m_port = std::move(port);
 }
@@ -127,7 +127,7 @@ void CModem::setLevels(unsigned rxLevel, unsigned txLevel)
 	m_txLevel = txLevel;
 }
 
-void CModem::setM17Params(unsigned int txHang)
+void CModem::setM17Params(unsigned txHang)
 {
 	m_txHang = txHang;
 }
@@ -492,10 +492,6 @@ bool CModem::readVersion()
 		if (ret != 3)
 			return false;
 
-#if defined(__APPLE__)
-		m_port->setNonblock(true);
-#endif
-
 		for (unsigned int count = 0U; count < MAX_RESPONSES; count++) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 			RESP_TYPE_MMDVM resp = getResponse();
@@ -632,16 +628,16 @@ bool CModem::setConfig1()
 
 	buffer[6U] = MODE_M17;
 
-	buffer[7U] = (unsigned char)(m_rxLevel);
+	buffer[7U] = m_rxLevel;
 
 	buffer[11U] = 128U;           // Was OscOffset
 
-	buffer[16U] = (unsigned char)(m_txDCOffset + 128);
-	buffer[17U] = (unsigned char)(m_rxDCOffset + 128);
+	buffer[16U] = m_txDCOffset + 128;
+	buffer[17U] = m_rxDCOffset + 128;
 
-	buffer[24U] = (unsigned char)(m_txLevel);
+	buffer[24U] = m_txLevel;
 
-	buffer[25U] = (unsigned char)m_txHang;
+	buffer[25U] = m_txHang;
 
 	// CUtils::dump(1U, "Written", buffer, 26U);
 
@@ -708,18 +704,18 @@ bool CModem::setConfig2()
 
 	buffer[7U] = MODE_M17;
 
-	buffer[8U] = (unsigned char)(m_txDCOffset + 128);
-	buffer[9U] = (unsigned char)(m_rxDCOffset + 128);
+	buffer[8U] = m_txDCOffset + 128;
+	buffer[9U] = m_rxDCOffset + 128;
 
-	buffer[10U] = (unsigned char)(m_rxLevel);
+	buffer[10U] = m_rxLevel;
 
 
-	buffer[17U] = (unsigned char)(m_txLevel);
+	buffer[17U] = m_txLevel;
 
 	buffer[21U] = 0x00U;
 	buffer[22U] = 0x00U;
 
-	buffer[26U] = (unsigned char)m_txHang;
+	buffer[26U] = m_txHang;
 	buffer[27U] = 0x00U;
 	buffer[28U] = 0x00U;
 

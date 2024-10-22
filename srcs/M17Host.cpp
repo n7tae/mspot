@@ -36,7 +36,6 @@
 #include "StopWatch.h"
 #include "Defines.h"
 #include "Log.h"
-#include "GitVersion.h"
 #include "Configure.h"
 #include "JsonKeys.h"
 #include "Version.h"
@@ -151,7 +150,7 @@ bool CM17Host::Run()
 	LogInfo(HEADER4);
 
 	LogInfo("mhost-%s is starting", g_Version.GetString());
-	LogInfo("Built %s %s (GitID #%.7s)", __TIME__, __DATE__, gitversion);
+	LogInfo("Built %s %s", __TIME__, __DATE__);
 
 	readParams();
 
@@ -371,7 +370,7 @@ bool CM17Host::createModem()
 
 	m_modem = std::make_unique<CModem>(m_duplex, rxInvert, txInvert, pttInvert, txDelay, trace, debug);
 
-	std::unique_ptr<IModemPort> port;
+	std::unique_ptr<ISerialPort> port;
 	if (protocol == "uart")
 		port = std::make_unique<CUARTController>(uartPort, uartSpeed, true);
 	else if (protocol == "udp")
@@ -407,7 +406,7 @@ bool CM17Host::createM17Network()
 	LogInfo("M17 Network Parameters");
 	LogInfo("    Mode Hang: %us", m_m17NetModeHang);
 
-	m_m17Network = std::make_unique<CM17Network>(debug);
+	m_m17Network = std::make_shared<CM17Network>(debug);
 	bool ret = m_m17Network->open();
 	if (!ret) {
 		m_m17Network.reset();
@@ -421,7 +420,7 @@ bool CM17Host::createM17Network()
 
 void CM17Host::readParams()
 {
-	m_duplex   = g_Cfg.GetBoolean(g_Keys.general.duplex);
+	m_duplex   = g_Cfg.GetBoolean(g_Keys.general.isduplex);
 	m_callsign = g_Cfg.GetString(g_Keys.general.callsign);
 
 	LogInfo("General Parameters");

@@ -8,7 +8,6 @@
  *                                                              *
  ****************************************************************/
 
-
 #pragma once
 
 #include <atomic>
@@ -49,16 +48,11 @@ public:
 	bool Initialize();
 	void Process();
 	void Close();
-	void SetDestAddress(const std::string &address, uint16_t port);
-	ELinkState GetLinkState() const { return mlink.state; }
-	bool TryLock();
-	void ReleaseLock();
 
 private:
 	CCallsign thisCS;
 	EInternetType internetType;
 	std::atomic<bool> keep_running;
-	CCRC crc;
 	CUnixDgramReader Host2Gate;
 	CUnixDgramWriter Gate2Host;
 	CUDPSocket ipv4, ipv6;
@@ -70,14 +64,12 @@ private:
 	CSockAddress from17k, destination;
 
 	void linkCheck();
-	void Write(const void *buf, const size_t size, const CSockAddress &addr) const;
-	void PlayAudioMessage(const char *msg);
-	void StreamTimeout();
-	void PlayVoiceFile();
-	void PlayAudioNotifyMessage(const char *msg);
-	void Send(const void *buf, size_t size, const CSockAddress &addr) const;
-	bool ProcessFrame(const uint8_t *buf);
-	bool ProcessAM(const uint8_t *buf);
-	void SendLinkRequest(const CCallsign &ref);
+	ELinkState getLinkState() const { return mlink.state; }
+	void writePacket(const void *buf, const size_t size, const CSockAddress &addr) const;
+	void streamTimeout();
+	void sendPacket(const void *buf, size_t size, const CSockAddress &addr) const;
+	bool processFrame(const uint8_t *buf);
+	void setDestAddress(const std::string &address, uint16_t port);
+	void sendLinkRequest(const CCallsign &ref);
 	void Dump(const char *title, const void *pointer, int length);
 };

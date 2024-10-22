@@ -14,16 +14,18 @@
 #include "M17Control.h"
 #include "M17Convolution.h"
 #include "M17Utils.h"
-#include "M17CRC.h"
 #include "Golay24128.h"
 #include "Utils.h"
 #include "Sync.h"
+#include "CRC.h"
 #include "Log.h"
 
 #include <cstdio>
 #include <cassert>
 #include <cstring>
 #include <ctime>
+
+extern CCRC g_Crc;
 
 const unsigned int INTERLEAVER[] = {
 	0U, 137U, 90U, 227U, 180U, 317U, 270U, 39U, 360U, 129U, 82U, 219U, 172U, 309U, 262U, 31U, 352U, 121U, 74U, 211U, 164U,
@@ -57,7 +59,7 @@ const unsigned char BIT_MASK_TABLE[] = { 0x80U, 0x40U, 0x20U, 0x10U, 0x08U, 0x04
 #define WRITE_BIT(p,i,b) p[(i)>>3] = (b) ? (p[(i)>>3] | BIT_MASK_TABLE[(i)&7]) : (p[(i)>>3] & ~BIT_MASK_TABLE[(i)&7])
 #define READ_BIT(p,i)    (p[(i)>>3] & BIT_MASK_TABLE[(i)&7])
 
-CM17Control::CM17Control(const std::string& callsign, unsigned int can, bool selfOnly, bool allowEncryption, CM17Network* network, unsigned int timeout, bool duplex, CRSSIInterpolator* rssiMapper) :
+CM17Control::CM17Control(const std::string& callsign, unsigned int can, bool selfOnly, bool allowEncryption, std::shared_ptr<CM17Network> network, unsigned int timeout, bool duplex, CRSSIInterpolator* rssiMapper) :
 m_callsign(callsign),
 m_can(can),
 m_selfOnly(selfOnly),
@@ -178,7 +180,7 @@ bool CM17Control::writeModem(unsigned char* data, unsigned int len)
 		unsigned char frame[M17_LSF_LENGTH_BYTES];
 		unsigned int ber = conv.decodeLinkSetup(data + 2U + M17_SYNC_LENGTH_BYTES, frame);
 
-		bool valid = CM17CRC::checkCRC16(frame, M17_LSF_LENGTH_BYTES);
+		bool valid = g_Crc.checkCRC(frame, M17_LSF_LENGTH_BYTES);
 		if (valid) {
 			m_rfCurrentNetLSF.setLinkSetup(frame);
 

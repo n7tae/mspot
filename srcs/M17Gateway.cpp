@@ -21,26 +21,18 @@
 #include "M17Gateway.h"
 #include "Configure.h"
 #include "JsonKeys.h"
+#include "CRC.h"
 #include "Log.h"
 
 extern CConfigure g_Cfg;
 extern SJsonKeys  g_Keys;
+extern CCRC       g_Crc;
 
 void CM17Gateway::Close()
 {
 	Host2Gate.Close();
 	ipv4.Close();
 	ipv6.Close();
-}
-
-bool CM17Gateway::TryLock()
-{
-	return streamLock.try_lock();
-}
-
-void CM17Gateway::ReleaseLock()
-{
-	streamLock.unlock();
 }
 
 bool CM17Gateway::Initialize()
@@ -50,11 +42,11 @@ bool CM17Gateway::Initialize()
 	cs.append(1, g_Cfg.GetString(g_Keys.general.module).at(0));
 	thisCS.CSIn(cs);
 
-	if (g_Cfg.GetBoolean(g_Keys.gate.ipv4))
+	if (g_Cfg.GetBoolean(g_Keys.gateway.ipv4))
 	{
-		internetType = g_Cfg.GetBoolean(g_Keys.gate.ipv6) ? EInternetType::both : EInternetType::ipv4only;
+		internetType = g_Cfg.GetBoolean(g_Keys.gateway.ipv6) ? EInternetType::both : EInternetType::ipv4only;
 	}
-	else if (g_Cfg.GetBoolean(g_Keys.gate.ipv6))
+	else if (g_Cfg.GetBoolean(g_Keys.gateway.ipv6))
 	{
 		internetType = EInternetType::ipv6only;
 	}
@@ -71,12 +63,18 @@ bool CM17Gateway::Initialize()
 
 	if (EInternetType::ipv6only != internetType)
 	{
-		if (ipv4.Open(CSockAddress(AF_INET, 0, "any")))  // use ephemeral port
+		CSockAddress addr;
+		if (addr.Initialize(AF_INET, 0, "any")) // use ephemeral port
+			return true;
+		if (ipv4.Open(addr))
 			return true;
 	}
 	if (EInternetType::ipv4only != internetType)
 	{
-		if (ipv6.Open(CSockAddress(AF_INET6, 0, "any"))) // use ephemeral port
+		CSockAddress addr;
+		if (addr.Initialize(AF_INET6, 0, "any")) // use ephemeral port
+			return true;
+		if (ipv6.Open(addr)) // use ephemeral port
 			return true;
 	}
 	keep_running = true;
@@ -96,7 +94,7 @@ void CM17Gateway::linkCheck()
 	}
 }
 
-void CM17Gateway::StreamTimeout()
+void CM17Gateway::streamTimeout()
 {
 	// set the frame number
 	uint16_t fn = (currentStream.header.GetFrameNumber() + 1) % 0x8000u;
@@ -120,54 +118,12 @@ void CM17Gateway::StreamTimeout()
 		break;
 	}
 	// calculate the crc
-	currentStream.header.SetCRC(crc.CalcCRC(currentStream.header));
+	g_Crc.setCRC(currentStream.header.magic, sizeof(SM17Frame));
 	// send the packet
 	Gate2Host.Write(currentStream.header.magic, sizeof(SM17Frame));
 	// close the stream;
 	currentStream.header.streamid = 0;
 	streamLock.unlock();
-}
-
-void CM17Gateway::PlayVoiceFile()
-{
-		// play a qnvoice file if it is specified
-		// this could be coming from qnvoice or qngateway (connected2network or notincache)
-		std::ifstream voicefile(qnvoice_file.c_str(), std::ifstream::in);
-		if (voicefile)
-		{
-			if (keep_running)
-			{
-				char line[FILENAME_MAX];
-				voicefile.getline(line, FILENAME_MAX);
-				// trim whitespace
-				char *start = line;
-				while (isspace(*start))
-					start++;
-				char *end = start + strlen(start) - 1;
-				while (isspace(*end))
-					*end-- = (char)0;
-				// anthing reasonable left?
-				if (strlen(start) > 2)
-					PlayAudioNotifyMessage(start);
-			}
-			//clean-up
-			voicefile.close();
-			remove(qnvoice_file.c_str());
-		}
-
-}
-
-void CM17Gateway::PlayAudioNotifyMessage(const char *msg)
-{
-	if (strlen(msg) > sizeof(SM17Frame) - 5)
-	{
-		fprintf(stderr, "Audio Message string too long: %s", msg);
-		return;
-	}
-	SM17Frame frame;
-	memcpy(frame.magic, "PLAY", 4);
-	memcpy(frame.magic+4, msg, strlen(msg)+1);	// copy the terminating NULL
-	Gate2Host.Write(frame.magic, sizeof(SM17Frame));
 }
 
 void CM17Gateway::Process()
@@ -201,9 +157,9 @@ void CM17Gateway::Process()
 
 		if (currentStream.header.streamid && currentStream.lastPacketTime.time() >= 2.0)
 		{
-			StreamTimeout(); // current stream has timed out
+			streamTimeout(); // current stream has timed out
 		}
-		PlayVoiceFile(); // play if there is any msg to play
+		//PlayVoiceFile(); // play if there is any msg to play
 
 		FD_ZERO(&fdset);
 		if (EInternetType::ipv6only != internetType)
@@ -278,7 +234,7 @@ void CM17Gateway::Process()
 				{
 					if (0 == memcmp(buf, "PING", 4))
 					{
-						Send(mlink.pongPacket.magic, 10, mlink.addr);
+						sendPacket(mlink.pongPacket.magic, 10, mlink.addr);
 						mlink.receivePingTimer.start();
 					}
 					else if (0 == memcmp(buf, "DISC", 4))
@@ -292,7 +248,7 @@ void CM17Gateway::Process()
 				}
 				break;
 			case sizeof(SM17Frame):	// An M17 frame
-				is_packet = ProcessFrame(buf);
+				is_packet = processFrame(buf);
 				break;
 			default:
 				is_packet = false;
@@ -307,8 +263,6 @@ void CM17Gateway::Process()
 			SM17Frame frame;
 			length = Host2Gate.Read(frame.magic, sizeof(SM17Frame));
 			const CCallsign dest(frame.lich.addr_dst);
-			//printf("DEST=%s=0x%02x%02x%02x%02x%02x%02x\n", dest.GetCS().c_str(), frame.lich.addr_dst[0], frame.lich.addr_dst[1], frame.lich.addr_dst[2], frame.lich.addr_dst[3], frame.lich.addr_dst[4], frame.lich.addr_dst[5]);
-			//std::cout << "Read " << length << " bytes with dest='" << dest.GetCS() << "'" << std::endl;
 			if (0==dest.GetCS(3).compare("M17") || 0==dest.GetCS(3).compare("URF")) // Linking a reflector
 			{
 				switch (mlink.state)
@@ -316,7 +270,7 @@ void CM17Gateway::Process()
 				case ELinkState::linked:
 					if (mlink.cs == dest) // this is heading in to the correct desination
 					{
-						Write(frame.magic, sizeof(SM17Frame), mlink.addr);
+						writePacket(frame.magic, sizeof(SM17Frame), mlink.addr);
 					}
 					break;
 				case ELinkState::unlinked:
@@ -326,7 +280,7 @@ void CM17Gateway::Process()
 						ref.resize(8, ' ');
 						ref.resize(9, dest.GetModule());
 						const CCallsign d(ref);
-						SendLinkRequest(d);
+						sendLinkRequest(d);
 					}
 					break;
 				default:
@@ -338,16 +292,16 @@ void CM17Gateway::Process()
 				SM17RefPacket disc;
 				memcpy(disc.magic, "DISC", 4);
 				thisCS.CodeOut(disc.cscode);
-				Write(disc.magic, 10, mlink.addr);
+				writePacket(disc.magic, 10, mlink.addr);
 			} else {
-				Write(frame.magic, sizeof(SM17Frame), destination);
+				writePacket(frame.magic, sizeof(SM17Frame), destination);
 			}
 			FD_CLR(amfd, &fdset);
 		}
 	}
 }
 
-void CM17Gateway::SetDestAddress(const std::string &address, uint16_t port)
+void CM17Gateway::setDestAddress(const std::string &address, uint16_t port)
 {
 	if (std::string::npos == address.find(':'))
 		destination.Initialize(AF_INET, port, address.c_str());
@@ -355,7 +309,7 @@ void CM17Gateway::SetDestAddress(const std::string &address, uint16_t port)
 		destination.Initialize(AF_INET6, port, address.c_str());
 }
 
-void CM17Gateway::SendLinkRequest(const CCallsign &ref)
+void CM17Gateway::sendLinkRequest(const CCallsign &ref)
 {
 	mlink.addr = destination;
 	mlink.cs = ref;
@@ -366,7 +320,7 @@ void CM17Gateway::SendLinkRequest(const CCallsign &ref)
 	memcpy(conn.magic, "CONN", 4);
 	thisCS.CodeOut(conn.cscode);
 	conn.mod = ref.GetModule();
-	Write(conn.magic, 11, mlink.addr);	// send the link request
+	writePacket(conn.magic, 11, mlink.addr);	// send the link request
 	// go ahead and make the pong packet
 	memcpy(mlink.pongPacket.magic, "PONG", 4);
 	thisCS.CodeOut(mlink.pongPacket.cscode);
@@ -376,7 +330,7 @@ void CM17Gateway::SendLinkRequest(const CCallsign &ref)
 	linkingTime.start();
 }
 
-bool CM17Gateway::ProcessFrame(const uint8_t *buf)
+bool CM17Gateway::processFrame(const uint8_t *buf)
 {
 	SM17Frame frame;
 	memcpy(frame.magic, buf, sizeof(SM17Frame));
@@ -410,9 +364,8 @@ bool CM17Gateway::ProcessFrame(const uint8_t *buf)
 		if (streamLock.try_lock())
 		{
 			// then init the currentStream
-			auto check = crc.CalcCRC(frame);
-			if (frame.GetCRC() != check)
-				std::cout << "Header Packet crc=0x" << std::hex << frame.GetCRC() << " calculate=0x" << std::hex << check << std::endl;
+			if (g_Crc.checkCRC(frame.magic, sizeof(SM17Frame)))
+				LogWarning("CRC of frame# %u doesn't match", frame.GetFrameNumber());
 			memcpy(currentStream.header.magic, frame.magic, sizeof(SM17Frame));
 			Gate2Host.Write(frame.magic, sizeof(SM17Frame));
 			const CCallsign call(frame.lich.addr_src);
@@ -427,7 +380,7 @@ bool CM17Gateway::ProcessFrame(const uint8_t *buf)
 	return true;
 }
 
-void CM17Gateway::Write(const void *buf, const size_t size, const CSockAddress &addr) const
+void CM17Gateway::writePacket(const void *buf, const size_t size, const CSockAddress &addr) const
 {
 	if (AF_INET6 == addr.GetFamily())
 		ipv6.Write(buf, size, addr);
@@ -435,21 +388,7 @@ void CM17Gateway::Write(const void *buf, const size_t size, const CSockAddress &
 		ipv4.Write(buf, size, addr);
 }
 
-void CM17Gateway::PlayAudioMessage(const char *msg)
-{
-	auto len = strlen(msg);
-	if (len > sizeof(SM17Frame)-5)
-	{
-		fprintf(stderr, "Audio Message string too long: %s", msg);
-		return;
-	}
-	SM17Frame m17;
-	memcpy(m17.magic, "PLAY", 4);
-	memcpy(m17.magic+4, msg, len+1);	// copy the terminating NULL
-	Gate2Host.Write(m17.magic, sizeof(SM17Frame));
-}
-
-void CM17Gateway::Send(const void *buf, size_t size, const CSockAddress &addr) const
+void CM17Gateway::sendPacket(const void *buf, size_t size, const CSockAddress &addr) const
 {
 	if (AF_INET ==  addr.GetFamily())
 		ipv4.Write(buf, size, addr);

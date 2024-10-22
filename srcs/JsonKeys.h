@@ -18,11 +18,11 @@ struct SJsonKeys
 {
 	struct GENERAL
 	{
-		const std::string section, callsign, module, duplex, isdaemon, user, txfreq, rxfreq, can, isprivate;
+		const std::string section, callsign, module, isduplex, isdaemon, user, txfreq, rxfreq, can, isprivate;
 	}
 	general
 	{
-		"[General]", "Callsign", "Module", "Duplex", "UserName", "IsDaemon", "TxFrequency", "RxFrequency", "CAN", "IsPrivate"
+		"General", "Callsign", "Module", "IsDuplex", "IsDaemon", "UserName", "TxFrequency", "RxFrequency", "CAN", "IsPrivate"
 	};
 
 	struct LOG
@@ -31,7 +31,7 @@ struct SJsonKeys
 	}
 	log
 	{
-		"[Log]", "DisplayLevel", "FileLevel", "FilePath", "FileName", "FileRotate"
+		"Log", "DisplayLevel", "FileLevel", "FilePath", "FileName", "FileRotate"
 	};
 
 	struct MODEM
@@ -40,15 +40,15 @@ struct SJsonKeys
 	}
 	modem
 	{
-		"[Modem]", "Protocol", "UartPort", "UartSpeed", "I2CPort", "I2CAddress", "ModemAddress", "ModemPort", "LocalAddress", "LocalPort", "RXOffset", "TXOffset", "RXDCOffset", "TXDCOffset", "RXInvert", "TXInvert", "PTTInvert", "TXHang", "TXDelay", "TXLevel", "TXLevel", "RFLevel", "RssiMapFile", "Trace", "Debug"
+		"Modem", "Protocol", "UartPort", "UartSpeed", "I2CPort", "I2CAddress", "ModemAddress", "ModemPort", "LocalAddress", "LocalPort", "RXOffset", "TXOffset", "RXDCOffset", "TXDCOffset", "RXInvert", "TXInvert", "PTTInvert", "TXHang", "TXDelay", "TXLevel", "TXLevel", "RFLevel", "RssiMapFile", "Trace", "Debug"
 	};
 
 	struct GATEWAY
 	{
-		const std::string section, ipv4, ipv6;
+		const std::string section, ipv4, ipv6, startupLink;
 	}
-	gate
+	gateway
 	{
-		"[Gateway]", "EnableIPv4", "EnableIPv6"
+		"Gateway", "EnableIPv4", "EnableIPv6", "StartupLink"
 	};
 };

@@ -38,7 +38,7 @@ const unsigned char MMDVM_FM_PARAMS4 = 0x63U;
 const unsigned char MMDVM_ACK = 0x70U;
 const unsigned char MMDVM_NAK = 0x7FU;
 
-const unsigned char PROTOCOL_VERSION = 2U; 
+const unsigned char PROTOCOL_VERSION = 2U;
 
 const char* HARDWARE = "Null Modem Controller";
 

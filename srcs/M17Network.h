@@ -29,7 +29,7 @@
 
 class CM17Network {
 public:
-	CM17Network(const std::string& localAddress, unsigned short localPort, const std::string& gatewayAddress, unsigned short gatewayPort, bool debug);
+	CM17Network(bool debug);
 	~CM17Network();
 
 	bool open();

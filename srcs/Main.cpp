@@ -18,12 +18,14 @@
 #include "JsonKeys.h"
 #include "M17Host.h"
 #include "Log.h"
+#include "CRC.h"
 
 // global defs
-CVersion g_Version(0, 0, 0);
+CVersion   g_Version(0, 0, 0);
 CConfigure g_Cfg;
-SJsonKeys g_Keys;
-CM17Host host;
+SJsonKeys  g_Keys;
+CCRC       g_Crc;
+CM17Host   host;
 
 static int  m_signal = 0;
 static bool m_reload = false;
@@ -34,24 +36,35 @@ static void sigHandler(int signum)
 	m_signal = signum;
 }
 
+static void usage(const std::string &exename)
+{
+	std::cout << "Usage: " << exename << " [-v | --version | --help | inifilepath]" << std::endl;
+}
+
 int main(int argc, char** argv)
 {
-	if (argc > 1) {
- 		for (int currentArg = 1; currentArg < argc; ++currentArg)
+	if (argc == 2) {
+		const std::string arg(argv[1]);
+		if ((arg == "-v") || (arg == "--version"))
 		{
-			std::string arg = argv[currentArg];
-			if ((arg == "-v") || (arg == "--version"))
-			{
-				std::cout << "More version " << g_Version << " #" << std::string(gitversion, 7) << '\n';
-				return EXIT_SUCCESS;
-			} else if (arg.substr(0,1) == "-") {
-				::fprintf(stderr, "Usage: more [-v|--version] [filename]\n");
-				return EXIT_FAILURE;
-			} else {
-				if (g_Cfg.ReadData(arg))
-					return EXIT_FAILURE;
-			}
+			std::cout << argv[0] << " version " << g_Version << " #" << std::string(gitversion, 7) << std::endl;
+			return EXIT_SUCCESS;
 		}
+		else if (arg == "--help")
+		{
+			usage(argv[0]);
+			EXIT_SUCCESS;
+		}
+		else
+		{
+			if (g_Cfg.ReadData(arg))
+				return EXIT_FAILURE;
+		}
+	}
+	else
+	{
+		usage(argv[0]);
+		EXIT_FAILURE;
 	}
 
 	std::signal(SIGINT,  sigHandler);

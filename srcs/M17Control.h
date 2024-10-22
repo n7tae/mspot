@@ -16,8 +16,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#if !defined(M17Control_H)
-#define	M17Control_H
+#pragma once
 
 #include "RSSIInterpolator.h"
 #include "M17Network.h"
@@ -31,9 +30,10 @@
 
 #include <string>
 
-class CM17Control {
+class CM17Control
+{
 public:
-	CM17Control(const std::string& callsign, unsigned int can, bool selfOnly, bool allowEncryption, CM17Network* network, unsigned int timeout, bool duplex, CRSSIInterpolator* rssiMapper);
+	CM17Control(const std::string& callsign, unsigned int can, bool selfOnly, bool allowEncryption, std::shared_ptr<CM17Network> network, unsigned int timeout, bool duplex, CRSSIInterpolator* rssiMapper);
 	~CM17Control();
 
 	bool writeModem(unsigned char* data, unsigned int len);
@@ -47,45 +47,45 @@ public:
 	void enable(bool enabled);
 
 private:
-	std::string                m_callsign;
-	unsigned int               m_can;
-	bool                       m_selfOnly;
-	bool                       m_allowEncryption;
-	CM17Network*               m_network;
-	bool                       m_duplex;
-	CRingBuffer<unsigned char> m_queue;
-	std::string                m_source;
-	std::string                m_dest;
-	RPT_RF_STATE               m_rfState;
-	RPT_NET_STATE              m_netState;
-	CTimer                     m_rfTimeoutTimer;
-	CTimer                     m_netTimeoutTimer;
-	CTimer                     m_networkWatchdog;
-	CStopWatch                 m_elapsed;
-	unsigned int               m_rfFrames;
-	unsigned int               m_netFrames;
-	unsigned int               m_rfErrs;
-	unsigned int               m_rfBits;
-	unsigned int               m_rfLSFCount;
-	CM17LSF                    m_rfCurrentRFLSF;
-	CM17LSF                    m_rfCurrentNetLSF;
-	CM17LSF                    m_rfCollectingLSF;
-	CM17LSF                    m_rfCollectedLSF;
-	unsigned int               m_rfLSFn;
-	CM17LSF                    m_netLSF;
-	unsigned int               m_netLSFn;
-	unsigned char              m_rfTextBits;
-	unsigned char              m_netTextBits;
-	char*                      m_rfText;
-	char*                      m_netText;
-	CRSSIInterpolator*         m_rssiMapper;
-	unsigned char              m_rssi;
-	unsigned char              m_maxRSSI;
-	unsigned char              m_minRSSI;
-	unsigned int               m_aveRSSI;
-	unsigned int               m_rssiCount;
-	bool                       m_enabled;
-	FILE*                      m_fp;
+	std::string                  m_callsign;
+	unsigned int                 m_can;
+	bool                         m_selfOnly;
+	bool                         m_allowEncryption;
+	std::shared_ptr<CM17Network> m_network;
+	bool                         m_duplex;
+	CRingBuffer<unsigned char>   m_queue;
+	std::string                  m_source;
+	std::string                  m_dest;
+	RPT_RF_STATE                 m_rfState;
+	RPT_NET_STATE                m_netState;
+	CTimer                       m_rfTimeoutTimer;
+	CTimer                       m_netTimeoutTimer;
+	CTimer                       m_networkWatchdog;
+	CStopWatch                   m_elapsed;
+	unsigned int                 m_rfFrames;
+	unsigned int                 m_netFrames;
+	unsigned int                 m_rfErrs;
+	unsigned int                 m_rfBits;
+	unsigned int                 m_rfLSFCount;
+	CM17LSF                      m_rfCurrentRFLSF;
+	CM17LSF                      m_rfCurrentNetLSF;
+	CM17LSF                      m_rfCollectingLSF;
+	CM17LSF                      m_rfCollectedLSF;
+	unsigned int                 m_rfLSFn;
+	CM17LSF                      m_netLSF;
+	unsigned int                 m_netLSFn;
+	unsigned char                m_rfTextBits;
+	unsigned char                m_netTextBits;
+	char                        *m_rfText;
+	char                        *m_netText;
+	CRSSIInterpolator           *m_rssiMapper;
+	unsigned char                m_rssi;
+	unsigned char                m_maxRSSI;
+	unsigned char                m_minRSSI;
+	unsigned int                 m_aveRSSI;
+	unsigned int                 m_rssiCount;
+	bool                         m_enabled;
+	FILE                        *m_fp;
 
 	bool processRFHeader(bool lateEntry);
 
@@ -109,5 +109,3 @@ private:
 	bool writeFile(const unsigned char* data);
 	void closeFile();
 };
-
-#endif

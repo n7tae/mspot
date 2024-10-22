@@ -40,7 +40,7 @@ public:
 private:
   std::unique_ptr<CModem>      m_modem;
   std::unique_ptr<CM17Control> m_m17;
-  std::unique_ptr<CM17Network> m_m17Network;
+  std::shared_ptr<CM17Network> m_m17Network;
   unsigned char   m_mode;
   unsigned int    m_m17NetModeHang;
   bool            m_duplex;

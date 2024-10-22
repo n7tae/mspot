@@ -43,7 +43,7 @@ void CVersion::Set(uint8_t maj, uint8_t min, uint8_t rev)
 	strversion.assign(std::to_string(maj) + '.' + std::to_string(min) + '.' + std::to_string(rev));
 #ifndef NO_DHT
 	strversion.append("-dht");
-#endif;
+#endif
 }
 
 bool CVersion::operator ==(const CVersion &v) const

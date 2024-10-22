@@ -9,6 +9,8 @@
  ****************************************************************/
 
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <pwd.h>
 #include <stdlib.h>
 #include <iostream>
 #include <iomanip>
@@ -21,6 +23,9 @@
 
 #include "Configure.h"
 #include "JsonKeys.h"
+#ifndef INICHECK
+#include "Log.h"
+#endif
 
 extern SJsonKeys g_Keys;
 
@@ -54,8 +59,11 @@ static inline void trim(std::string &s) {
 
 CConfigure::CConfigure()
 {
-	//IPv4RegEx = std::regex("^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3,3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9]){1,1}$", std::regex::extended);
-	//IPv6RegEx = std::regex("^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}(:[0-9a-fA-F]{1,4}){1,1}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|([0-9a-fA-F]{1,4}:){1,1}(:[0-9a-fA-F]{1,4}){1,6}|:((:[0-9a-fA-F]{1,4}){1,7}|:))$", std::regex::extended);
+	MoreCS  = std::regex("^[0-9]?[A-Z]{1,2}[0-9]{1,2}[A-Z]{1,4}[ ]*$", std::regex::extended);
+	MrefdCS = std::regex("^M17-[A-Z0-9]{3,3}( [A-Z])?$", std::regex::extended);
+	UrfdCS  = std::regex("^URF[A-Z0-9]{3,3}(  [A-Z])?$", std::regex::extended);
+	IPv4RegEx = std::regex("^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3,3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9]){1,1}$", std::regex::extended);
+	IPv6RegEx = std::regex("^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}(:[0-9a-fA-F]{1,4}){1,1}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|([0-9a-fA-F]{1,4}:){1,1}(:[0-9a-fA-F]{1,4}){1,6}|:((:[0-9a-fA-F]{1,4}){1,7}|:))$", std::regex::extended);
 }
 
 bool CConfigure::ReadData(const std::string &path)
@@ -68,7 +76,8 @@ bool CConfigure::ReadData(const std::string &path)
 	//data.ysfalmodule = 0;
 	//data.DPlusPort = data.DCSPort = data.DExtraPort = data.BMPort = data.DMRPlusPort = 0;
 	std::ifstream cfgfile(path.c_str(), std::ifstream::in);
-	if (! cfgfile.is_open()) {
+	if (! cfgfile.is_open())
+	{
 		std::cerr << "ERROR: '" << path << "' was not found!" << std::endl;
 		return true;
 	}
@@ -91,11 +100,18 @@ bool CConfigure::ReadData(const std::string &path)
 			if (std::string::npos != pos)
 				hname.resize(pos);
 			section = ESection::none;
-			if (0 == hname.compare(JMODEM))
+			if (0 == hname.compare(g_Keys.general.section))
+				section = ESection::general;
+			else if (0 == hname.compare(g_Keys.log.section))
+				section = ESection::log;
+			else if (0 == hname.compare(g_Keys.modem.section))
 				section = ESection::modem;
+			else if (0 == hname.compare(g_Keys.gateway.section))
+				section = ESection::gateway;
 			else
 			{
 				std::cerr << "WARNING: unknown ini file section: " << line << std::endl;
+				section = ESection::none;
 			}
 			continue;
 		}
@@ -121,78 +137,276 @@ bool CConfigure::ReadData(const std::string &path)
 		const std::string value(tokens[1]);
 		if (key.empty() || value.empty())
 		{
-			std::cout << "WARNING: line #" << counter << ": missing key or value: '" << line << "'" << std::endl;
+			std::cout << "WARNING: line #" << counter << " '" << line << "' missing key or value, skipping" << std::endl;
 			continue;
 		}
 		switch (section)
 		{
-			case ESection::modem:
-				if (0 == key.compare(JPORT))
-					data[g_Keys.modem.port] = value;
-				else if (0 == key.compare(JTXFREQ))
-					data[g_Keys.modem.txfreq] = getUnsigned(value, "Transmitter Frequency", 130000000, 1000000000, 446500000);
-				else if (0 == key.compare(JRXFREQ))
-					data[g_Keys.modem.rxfreq] = getUnsigned(value, "Receiver Frequency", 130000000, 1000000000, 446500000);
-				else if (0 == key.compare(JTXDELAY))
-					data[g_Keys.modem.txdelay] = getUnsigned(value, "Transmitter Delay (ms)", 0, 2550, 100);
-				else if (0 == key.compare(JTXLEVEL))
-					data[g_Keys.modem.txlevel] = getUnsigned(value, "Transmitter Level 0-255", 0, 255, 128);
-				else if (0 == key.compare(JRXLEVEL))
-					data[g_Keys.modem.rxlevel] = getUnsigned(value, "Receiver Level 0-255", 0, 255, 129);
-				else if (0 == key.compare(JRFLEVEL))
-					data[g_Keys.modem.rflevel] = getUnsigned(value, "RF Level 0-255", 0, 255, 255);
-				else if (0 == key.compare(JTXOFFSET))
-					data[g_Keys.modem.txoffset] = getInt(value, "Transmitter Offset (Hz)", -1000000, 1000000, 0);
-				else if (0 == key.compare(JRXOFFSET))
-					data[g_Keys.modem.rxoffset] = getInt(value, "Receiver Offset (Hz)", -1000000, 1000000, 0);
-				else if (0 == key.compare(JDUPLEX))
-					data[g_Keys.modem.duplex] = IS_TRUE(value[0]);
-				else if (0 == key.compare(JTXINVERT))
-					data[g_Keys.modem.txinvert] = IS_TRUE(value[0]);
-				else if (0 == key.compare(JRXINVERT))
-					data[g_Keys.modem.rxinvert] = IS_TRUE(value[0]);
-				else if (0 == key.compare(JPTTINVERT))
-					data[g_Keys.modem.pttinvert] = IS_TRUE(value[0]);
+			case ESection::general:
+				if (0 == key.compare(g_Keys.general.callsign))
+					data[g_Keys.general.callsign] = value;
+				else if (0 == key.compare(g_Keys.general.can))
+					data[g_Keys.general.can] = getUnsigned(value, "Channel Access Number", 0u, 15u, 0u);
+				else if (0 == key.compare(g_Keys.general.isdaemon))
+					data[g_Keys.general.isdaemon] = IS_TRUE(value[0]);
+				else if (0 == key.compare(g_Keys.general.isduplex))
+					data[g_Keys.general.isduplex] = IS_TRUE(value[0]);
+				else if (0 == key.compare(g_Keys.general.isprivate))
+					data[g_Keys.general.isprivate] = IS_TRUE(value[0]);
+				else if (0 == key.compare(g_Keys.general.module))
+					data[g_Keys.general.module] = value;
+				else if (0 == key.compare(g_Keys.general.rxfreq))
+					data[g_Keys.general.rxfreq] = getUnsigned(value, "Receive Frequency", 130000000u, 1000000000u, 446500000u);
+				else if (0 == key.compare(g_Keys.general.txfreq))
+					data[g_Keys.general.txfreq] = getUnsigned(value, "Transmit Frequency", 130000000u, 1000000000u, 446500000u);
+				else if (0 == key.compare(g_Keys.general.user))
+					data[g_Keys.general.user] = value;
 				else
 					badParam(key);
 				break;
+			case ESection::modem:
+				if (0 == key.compare(g_Keys.modem.protocol))
+					data[g_Keys.modem.protocol] = value;
+
+				else if (0 == key.compare(g_Keys.modem.uartPort))
+					data[g_Keys.modem.uartPort] = value;
+				else if (0 == key.compare(g_Keys.modem.uartSpeed))
+					data [g_Keys.modem.uartSpeed] = getUnsigned(value, "Uart Speed", 38400u, 921600u, 460800u);
+
+				else if (0 == key.compare(g_Keys.modem.i2cAddress))
+					data[g_Keys.modem.i2cAddress] = getUnsigned(value, "I2CAddress", 0x0u, 0xffu, 0x22u);
+				else if (0 == key.compare(g_Keys.modem.i2cPort))
+					data[g_Keys.modem.i2cPort] = value;
+
+				else if (0 == key.compare(g_Keys.modem.localAddress))
+					data[g_Keys.modem.localAddress] = value;
+				else if (0 == key.compare(g_Keys.modem.localPort))
+					data[g_Keys.modem.localPort] = getUnsigned(value, "UDP Local Port", 1025u, 49000u, 3335u);
+				else if (0 == key.compare(g_Keys.modem.modemAddress))
+					data[g_Keys.modem.modemAddress] = value;
+				else if (0 == key.compare(g_Keys.modem.modemPort))
+					data[g_Keys.modem.modemPort] = getUnsigned(value, "UDP Modem Port", 1025u, 49000u, 3334u);
+
+				else if (0 == key.compare(g_Keys.modem.txHang))
+					data[g_Keys.modem.txHang] = getUnsigned(value, "Transmit Hang ms 0-255", 0u, 255u, 5u);
+				else if (0 == key.compare(g_Keys.modem.txDelay))
+					data[g_Keys.modem.txDelay] = getUnsigned(value, "Transmit Delay (ms)", 10u, 2550u, 100u);
+				else if (0 == key.compare(g_Keys.modem.pttInvert))
+					data[g_Keys.modem.pttInvert] = IS_TRUE(value[0]);
+				else if (0 == key.compare(g_Keys.modem.rxInvert))
+					data[g_Keys.modem.rxInvert] = IS_TRUE(value[0]);
+				else if (0 == key.compare(g_Keys.modem.txInvert))
+					data[g_Keys.modem.txInvert] = IS_TRUE(value[0]);
+
+				else if (0 == key.compare(g_Keys.modem.rxOffset))
+					data[g_Keys.modem.rxOffset] = getInt(value, "Receive Offset (Hz)", -1000000, 1000000, 0);
+				else if (0 == key.compare(g_Keys.modem.txOffset))
+					data[g_Keys.modem.txOffset] = getInt(value, "Transmit Offset (Hz)", -1000000, 1000000, 0);
+
+				else if (0 == key.compare(g_Keys.modem.rfLevel))
+					data[g_Keys.modem.rfLevel] = getUnsigned(value, "RF Level 0-255", 0u, 255u, 128u);
+				else if (0 == key.compare(g_Keys.modem.rxLevel))
+					data[g_Keys.modem.rxLevel] = getUnsigned(value, "Receive Level 0-255", 0u, 255u, 128u);
+				else if (0 == key.compare(g_Keys.modem.txLevel))
+					data[g_Keys.modem.txLevel] = getUnsigned(value, "Transmit Level 0-255", 0u, 255u, 128u);
+
+				else if (0 == key.compare(g_Keys.modem.rxDCOffset))
+					data[g_Keys.modem.rxDCOffset] = getInt(value, "Receive DC Offset -128-127", -128, 127, 0);
+				else if (0 == key.compare(g_Keys.modem.txDCOffset))
+					data[g_Keys.modem.txDCOffset] = getInt(value, "Transmit DC Offset -128-127", -128, 127, 0);
+
+				else if (0 == key.compare(g_Keys.modem.rssiMapFile))
+					data[g_Keys.modem.rssiMapFile] = value;
+				else if (0 == key.compare(g_Keys.modem.trace))
+					data[g_Keys.modem.trace] = IS_TRUE(value[0]);
+				else if (0 == key.compare(g_Keys.modem.debug))
+					data[g_Keys.modem.debug] = IS_TRUE(value[0]);
+				else
+					badParam(key);
+				break;
+			case ESection::gateway:
+				if (0 == key.compare(g_Keys.gateway.ipv4))
+					data[g_Keys.gateway.ipv4] = IS_TRUE(value[0]);
+				if (0 == key.compare(g_Keys.gateway.ipv6))
+					data[g_Keys.gateway.ipv6] = IS_TRUE(value[0]);
+				if (0 == key.compare(g_Keys.gateway.startupLink))
+					data[g_Keys.gateway.startupLink] = value;
+			case ESection::none:
 			default:
 				std::cout << "WARNING: parameter '" << line << "' defined before any [section]" << std::endl;
+				break;
 		}
 
 	}
 	cfgfile.close();
 
 	////////////////////////////// check the input
+	// General section
+	if (isDefined(ErrorLevel::fatal, g_Keys.general.section, g_Keys.general.callsign, rval))
+	{
+		auto cs = GetString(g_Keys.general.callsign);
+		trim(cs);
+		if (not std::regex_match(cs, MoreCS))
+		{
+			std::cerr << "Error: Callsign '" << cs << "' does not look like a valid callsign" << std::endl;
+			rval = true;
+		}
+		data[g_Keys.general.callsign] = cs;
+	}
+	if (isDefined(ErrorLevel::fatal, g_Keys.general.section, g_Keys.general.module, rval))
+	{
+		auto mod = GetString(g_Keys.general.module).at(0);
+		if ('a' <= mod and mod <= 'z')
+		{
+			std::cout << "WARNING: '" << mod << "' is not uppercase, converting" << std::endl;
+			mod = 'A' + (mod - 'a');
+			data[g_Keys.general.module] = std::string(1, mod);
+		}
+		if (not('A' <= mod and mod <= 'Z'))
+		{
+			std::cerr << "ERROR: '" << mod << "' has to be an upper case letter A-Z" << std::endl;
+			rval = true;
+		}
+	}
+	isDefined(ErrorLevel::fatal, g_Keys.general.section, g_Keys.general.isduplex,  rval);
+	if (isDefined(ErrorLevel::fatal, g_Keys.general.section, g_Keys.general.isdaemon, rval))
+	{
+		if (isDefined(ErrorLevel::fatal, g_Keys.general.section, g_Keys.general.user, rval))
+		{
+			const auto user = GetString(g_Keys.general.user);
+			struct passwd *pwitem = getpwnam(user.c_str());
+			if (nullptr == pwitem)
+			{
+				std::cerr << "ERROR: user '" << user << "' was not found in the user db" << std::endl;
+				rval = true;
+			}
+		}
+	}
+	isDefined(ErrorLevel::fatal, g_Keys.general.section, g_Keys.general.rxfreq,    rval);
+	isDefined(ErrorLevel::fatal, g_Keys.general.section, g_Keys.general.txfreq,    rval);
+	isDefined(ErrorLevel::fatal, g_Keys.general.section, g_Keys.general.can,       rval);
+	isDefined(ErrorLevel::fatal, g_Keys.general.section, g_Keys.general.isprivate, rval);
+
 	// Modem section
-	isDefined(ErrorLevel::fatal, JMODEM, JTXFREQ,    g_Keys.modem.txfreq,    rval);
-	isDefined(ErrorLevel::fatal, JMODEM, JRXFREQ,    g_Keys.modem.rxfreq,    rval);
-	isDefined(ErrorLevel::fatal, JMODEM, JTXOFFSET,  g_Keys.modem.txoffset,  rval);
-	isDefined(ErrorLevel::fatal, JMODEM, JRXOFFSET,  g_Keys.modem.rxoffset,  rval);
-	isDefined(ErrorLevel::fatal, JMODEM, JTXDELAY,   g_Keys.modem.txdelay,   rval);
-	isDefined(ErrorLevel::fatal, JMODEM, JTXLEVEL,   g_Keys.modem.txlevel,   rval);
-	isDefined(ErrorLevel::fatal, JMODEM, JRXLEVEL,   g_Keys.modem.rxlevel,   rval);
-	isDefined(ErrorLevel::fatal, JMODEM, JRFLEVEL,   g_Keys.modem.rflevel,   rval);
-	isDefined(ErrorLevel::fatal, JMODEM, JDUPLEX,    g_Keys.modem.duplex,    rval);
-	isDefined(ErrorLevel::fatal, JMODEM, JTXINVERT,  g_Keys.modem.txinvert,  rval);
-	isDefined(ErrorLevel::fatal, JMODEM, JRXINVERT,  g_Keys.modem.rxinvert,  rval);
-	isDefined(ErrorLevel::fatal, JMODEM, JPTTINVERT, g_Keys.modem.pttinvert, rval);
+	if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.protocol, rval))
+	{
+		const auto protocol = GetString(g_Keys.modem.protocol);
+		if (protocol.compare("uart"))
+		{
+			if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.uartPort, rval))
+			{
+				const auto path = GetString(g_Keys.modem.uartPort);
+				checkFile(g_Keys.modem.section, g_Keys.modem.uartPort, path);
+			}
+			if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.uartSpeed, rval))
+			{
+				const auto speed = GetUnsigned(g_Keys.modem.uartSpeed);
+				switch (speed)
+				{
+					case 38400u:
+					case 57600u:
+					case 115200u:
+					case 230400u:
+					case 460800u:
+					case 921600u:
+						break;
+					default:
+						std::cerr << "Uart Speed of " << speed << " is not acceptable" << std::endl;
+						rval = true;
+				}
+			}
+		}
+		else if (0 == protocol.compare("udp"))
+		{
+			if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.localAddress, rval))
+			{
+				const auto addr = GetString(g_Keys.modem.localAddress);
+				if (not(std::regex_match(addr, IPv4RegEx)) and not(std::regex_match(addr, IPv6RegEx)))
+				{
+					std::cerr << "ERROR: [" << g_Keys.modem.section << "]" << g_Keys.modem.localAddress << " does not look like an internet address" << std::endl;
+					rval = true;
+				}
+			}
+			isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.localPort, rval);
+
+			if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.modemAddress, rval))
+			{
+				const auto addr = GetString(g_Keys.modem.modemAddress);
+				if (not(std::regex_match(addr, IPv4RegEx)) and not(std::regex_match(addr, IPv6RegEx)))
+				{
+					std::cerr << "ERROR: [" << g_Keys.modem.section << "]" << g_Keys.modem.modemAddress << " does not look like an internet address" << std::endl;
+					rval = true;
+				}
+			}
+			isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.localPort, rval);
+		}
+		else if (0 == protocol.compare("i2c"))
+		{
+			if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.i2cAddress, rval))
+			{
+				const auto path = GetString(g_Keys.modem.i2cAddress);
+				checkFile(g_Keys.modem.section, g_Keys.modem.i2cAddress, path);
+			}
+			isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.i2cPort, rval);
+		}
+		else if (protocol.compare("null"))
+		{
+			std::cerr << "ERROR: Unknown Protocol '" << protocol << "'" << std::endl;
+			rval = true;
+		}
+	}
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.txHang,     rval);
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.txDelay,    rval);
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.pttInvert,  rval);
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.rxInvert,   rval);
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.txInvert,   rval);
+
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.rxOffset,   rval);
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.txOffset,   rval);
+
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.rfLevel,    rval);
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.rxLevel,    rval);
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.txLevel,    rval);
+
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.rxDCOffset, rval);
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.txDCOffset, rval);
+
+	if (isDefined(ErrorLevel::mild, g_Keys.modem.section, g_Keys.modem.rssiMapFile, rval))
+	{
+		const auto path = GetString(g_Keys.modem.rssiMapFile);
+		checkFile(g_Keys.modem.section, g_Keys.modem.rssiMapFile, path);
+	}
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.trace, rval);
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.debug, rval);
+
+	// Gateway section
+	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.ipv4, rval);
+	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.ipv6, rval);
+	if (data.contains(g_Keys.gateway.startupLink))
+	{
+		const auto ref = GetString(g_Keys.gateway.startupLink);
+		if (not(std::regex_match(ref, MrefdCS) and not(std::regex_match(ref, UrfdCS))))
+		{
+			std::cout << "WARNING: [" << g_Keys.gateway.section << "]" << g_Keys.gateway.startupLink << "doesn't look like a reflector designator with module" << std::endl;
+		}
+	}
+
 	return rval;
 }
 
-bool CConfigure::isDefined(ErrorLevel level, const std::string &section, const std::string &pname, const std::string &key, bool &rval)
+bool CConfigure::isDefined(ErrorLevel level, const std::string &section, const std::string &key, bool &rval)
 {
 	if (data.contains(key))
 		return true;
 
 	if (ErrorLevel::mild == level)
 	{
-		std::cout << "WARNING: [" << section << ']' << pname << " is not defined" << std::endl;
+		std::cout << "WARNING: [" << section << ']' << key << " is not defined" << std::endl;
 		data[key] = nullptr;
 	}
 	else
 	{
-		std::cerr << "ERROR: [" << section << ']' << pname << " is not defined" << std::endl;
+		std::cerr << "ERROR: [" << section << ']' << key << " is not defined" << std::endl;
 		rval = true;
 	}
 	return false;
@@ -200,7 +414,7 @@ bool CConfigure::isDefined(ErrorLevel level, const std::string &section, const s
 
 unsigned CConfigure::getUnsigned(const std::string &valuestr, const std::string &label, unsigned min, unsigned max, unsigned def) const
 {
-	auto i = unsigned(std::stoul(valuestr.c_str()));
+	auto i = unsigned(std::stoul(valuestr, nullptr, 0));
 	if ( i < min || i > max )
 	{
 		std::cout << "WARNING: line #" << counter << ": " << label << " is out of range. Reset to " << def << std::endl;

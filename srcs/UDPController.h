@@ -1,52 +1,40 @@
-/*
- *   Copyright (C) 2021 by Jonathan Naylor G4KLX
- *
- *   This program is free software; you can redistribute it and/or modify
- *   it under the terms of the GNU General Public License as published by
- *   the Free Software Foundation; either version 2 of the License, or
- *   (at your option) any later version.
- *
- *   This program is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with this program; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- */
+// Copyright (C) 2021 by Jonathan Naylor G4KLX
 
-#ifndef UDPController_H
-#define UDPController_H
+/****************************************************************
+ *                                                              *
+ *             More - An M17-only Repeater/HotSpot              *
+ *                                                              *
+ *         Copyright (c) 2024 by Thomas A. Early N7TAE          *
+ *                                                              *
+ * See the LICENSE file for details about the software license. *
+ *                                                              *
+ ****************************************************************/
+#pragma once
 
-#include "ModemPort.h"
+#include "SerialPort.h"
 #include "RingBuffer.h"
 #include "UDPSocket.h"
 
 #include <string>
 
-class CUDPController : public IModemPort {
+class CUDPController : public ISerialPort
+{
 public:
-	CUDPController(const std::string& modemAddress, unsigned int modemPort, const std::string& localAddress, unsigned int localPort);
+	CUDPController(const std::string& modemAddress, unsigned modemPort, const std::string& localAddress, unsigned localPort);
 	virtual ~CUDPController();
 
 	virtual bool open();
 
-	virtual int read(unsigned char* buffer, unsigned int length);
+	virtual int read(unsigned char *buffer, unsigned length);
 
-	virtual int write(const unsigned char* buffer, unsigned int length);
+	virtual int write(const unsigned char *buffer, unsigned length);
 
 	virtual void close();
-	
-#if defined(__APPLE__)
-	int setNonblock(bool nonblock) { return 0; }
-#endif
 
 protected:
-	CUDPSocket       m_socket;
-	sockaddr_storage m_addr;
-	unsigned int     m_addrLen;
+	const std::string m_modemAddress, m_localAddress;
+	const unsigned m_modemPort, m_localPort;
+	CSockAddress m_localSocket, m_modemSocket;
+	CUDPSocket m_udpSocket;
 	CRingBuffer<unsigned char> m_buffer;
 };
-
-#endif

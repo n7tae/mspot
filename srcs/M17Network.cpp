@@ -29,7 +29,7 @@
 
 const unsigned int BUFFER_LENGTH = 200U;
 
-CM17Network::CM17Network(const std::string& localAddress, unsigned short localPort, const std::string& gatewayAddress, unsigned short gatewayPort, bool debug) :
+CM17Network::CM17Network(bool debug) :
 m_debug(debug),
 m_enabled(false),
 m_outId(0U),
