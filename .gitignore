@@ -1,6 +1,5 @@
 # Visual Code
 .vscode
-M17Gateway
 
 # Prerequisites
 *.d
@@ -8,10 +7,10 @@ M17Gateway
 # Compiled Object files
 *.o
 
-# Misc files
-GitVersion.h
-*Hosts.txt
-gate
-gate.ini
-host
-host.ini
+# executables
+mhost
+inicheck
+
+# local configs
+mhost.*
+srcs/GitVersion.h
