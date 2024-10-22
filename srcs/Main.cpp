@@ -13,7 +13,6 @@
 #include <csignal>
 
 #include "Version.h"
-#include "GitVersion.h"
 #include "Configure.h"
 #include "JsonKeys.h"
 #include "M17Host.h"
@@ -47,7 +46,7 @@ int main(int argc, char** argv)
 		const std::string arg(argv[1]);
 		if ((arg == "-v") || (arg == "--version"))
 		{
-			std::cout << argv[0] << " version " << g_Version << " #" << std::string(gitversion, 7) << std::endl;
+			std::cout << argv[0] << " version " << g_Version << std::endl;
 			return EXIT_SUCCESS;
 		}
 		else if (arg == "--help")

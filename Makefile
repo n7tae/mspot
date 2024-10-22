@@ -10,37 +10,28 @@
 
 include mhost.mk
 
-CFLAGS  = -std=c++17 -Wall -Isrcs
+CFLAGS  = -g -std=c++17 -Wall -Isrcs
 LIBS    = -pthread
 
 SRCS = $(wildcard srcs/*.cpp)
 OBJS = $(SRCS:.cpp=.o)
+DEPS = $(SRCS:.cpp=.d)
 
 all : mhost inicheck
 
-mhost : GitVersion.h $(OBJS)
+mhost : $(OBJS)
 	$(CXX) $(CFLAGS) $(OBJS) $(LIBS) -o $@
 
 inicheck : srcs/Configure.h srcs/Configure.cpp srcs/JsonKeys.h
 	$(CXX) $(CFLAGS) -DINICHECK srcs/Configure.cpp -o $@
 
+-include $(DEPS)
+
 %.o: %.cpp
-		$(CXX) $(CFLAGS) -c -o $@ $<
-
-.PHONY: GitVersion.h
-
-FORCE:
+		$(CXX) $(CFLAGS) -MMD -MP -c -o $@ $<
 
 clean :
-	$(RM) $(all) srcs/*.o GitVersion.h
+	$(RM) $(all) srcs/*.o srcs/*.d
 
 install : gateway/gate mhost/host
 	install -m 755 m17host $(BINDIR)
-
-# Export the current git version if the index file exists, else 000...
-GitVersion.h :
-ifneq ("$(wildcard .git/index)","")
-	echo "const char *gitversion = \"$(shell git rev-parse HEAD)\";" > srcs/$@
-else
-	echo "const char *gitversion = \"0000000000000000000000000000000000000000\";" > srcs/$@
-endif
