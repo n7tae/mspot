@@ -173,7 +173,7 @@ bool CM17Host::Run()
 	// For all modes we handle RSSI
 	const std::string rssiMappingFile(g_Cfg.GetString(g_Keys.modem.rssiMapFile));
 
-	CRSSIInterpolator* rssi = new CRSSIInterpolator;
+	auto rssi = std::make_unique<CRSSIInterpolator>();
 	if (!rssiMappingFile.empty())
 	{
 		LogInfo("RSSI");
@@ -195,7 +195,7 @@ bool CM17Host::Run()
 	LogInfo("    CAN: %u", can);
 	//LogInfo("    Allow Encryption: %s", allowEncryption ? "true" : "false");
 
-	m_m17 = std::make_unique<CM17Control>(m_callsign, can, selfOnly, allowEncryption, m_m17Network, m_timeout, m_duplex, rssi);
+	m_m17 = std::make_unique<CM17Control>(m_callsign, can, selfOnly, allowEncryption, m_m17Network, m_timeout, m_duplex, rssi.get());
 
 	CTimer pocsagTimer(1000U, 30U);
 
@@ -300,6 +300,7 @@ bool CM17Host::Run()
 
 	m_modem->close();
 	m_modem.reset();
+	rssi.reset();
 
 	return false;
 }
@@ -325,8 +326,8 @@ bool CM17Host::createModem()
 	unsigned txLevel         = g_Cfg.GetUnsigned(g_Keys.modem.txLevel);
 	unsigned rfLevel         = g_Cfg.GetUnsigned(g_Keys.modem.rfLevel);
 	unsigned txHang          = g_Cfg.GetUnsigned(g_Keys.modem.txHang);
-	unsigned rxFrequency     = g_Cfg.GetUnsigned(g_Keys.general.rxfreq);
-	unsigned txFrequency     = g_Cfg.GetUnsigned(g_Keys.general.txfreq);
+	unsigned rxFrequency     = g_Cfg.GetUnsigned(g_Keys.modem.rxFreq);
+	unsigned txFrequency     = g_Cfg.GetUnsigned(g_Keys.modem.txFreq);
 	int rxOffset             = g_Cfg.GetInt(g_Keys.modem.rxOffset);
 	int txOffset             = g_Cfg.GetInt(g_Keys.modem.txOffset);
 	int rxDCOffset           = g_Cfg.GetInt(g_Keys.modem.rxDCOffset);

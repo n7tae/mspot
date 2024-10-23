@@ -47,6 +47,7 @@ class CM17Gateway
 public:
 	bool Initialize();
 	void Process();
+	void Stop() { keep_running = false; }
 	void Close();
 
 private:

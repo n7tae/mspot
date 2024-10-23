@@ -22,7 +22,6 @@
 // global defs
 CVersion   g_Version(0, 0, 0);
 CConfigure g_Cfg;
-SJsonKeys  g_Keys;
 CCRC       g_Crc;
 CM17Host   host;
 

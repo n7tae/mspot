@@ -23,11 +23,8 @@
 
 #include "Configure.h"
 #include "JsonKeys.h"
-#ifndef INICHECK
-#include "Log.h"
-#endif
 
-extern SJsonKeys g_Keys;
+SJsonKeys g_Keys;	// the global definition
 
 static inline void split(const std::string &s, char delim, std::vector<std::string> &v)
 {
@@ -155,10 +152,6 @@ bool CConfigure::ReadData(const std::string &path)
 					data[g_Keys.general.isprivate] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.general.module))
 					data[g_Keys.general.module] = value;
-				else if (0 == key.compare(g_Keys.general.rxfreq))
-					data[g_Keys.general.rxfreq] = getUnsigned(value, "Receive Frequency", 130000000u, 1000000000u, 446500000u);
-				else if (0 == key.compare(g_Keys.general.txfreq))
-					data[g_Keys.general.txfreq] = getUnsigned(value, "Transmit Frequency", 130000000u, 1000000000u, 446500000u);
 				else if (0 == key.compare(g_Keys.general.user))
 					data[g_Keys.general.user] = value;
 				else
@@ -198,6 +191,11 @@ bool CConfigure::ReadData(const std::string &path)
 				else if (0 == key.compare(g_Keys.modem.txInvert))
 					data[g_Keys.modem.txInvert] = IS_TRUE(value[0]);
 
+				else if (0 == key.compare(g_Keys.modem.rxFreq))
+					data[g_Keys.modem.rxFreq] = getUnsigned(value, "Receive Frequency", 130000000u, 1000000000u, 446500000u);
+				else if (0 == key.compare(g_Keys.modem.txFreq))
+					data[g_Keys.modem.txFreq] = getUnsigned(value, "Transmit Frequency", 130000000u, 1000000000u, 446500000u);
+
 				else if (0 == key.compare(g_Keys.modem.rxOffset))
 					data[g_Keys.modem.rxOffset] = getInt(value, "Receive Offset (Hz)", -1000000, 1000000, 0);
 				else if (0 == key.compare(g_Keys.modem.txOffset))
@@ -224,13 +222,30 @@ bool CConfigure::ReadData(const std::string &path)
 				else
 					badParam(key);
 				break;
+			case ESection::log:
+				if (0 == key.compare(g_Keys.log.displayLevel))
+					data[g_Keys.log.displayLevel] = getUnsigned(value, "Display Level 0-6", 0u, 6u, 2u);
+				else if (0 == key.compare(g_Keys.log.fileLevel))
+					data[g_Keys.log.fileLevel] = getUnsigned(value, "File Level 0-6", 0u, 6u, 2u);
+				else if (0 == key.compare(g_Keys.log.fileName))
+					data[g_Keys.log.fileName] = value;
+				else if (0 == key.compare(g_Keys.log.filePath))
+					data[g_Keys.log.filePath] = value;
+				else if (0 == key.compare(g_Keys.log.rotate))
+					data[g_Keys.log.rotate] = IS_TRUE(value[0]);
+				else
+					badParam(key);
+				break;
 			case ESection::gateway:
 				if (0 == key.compare(g_Keys.gateway.ipv4))
 					data[g_Keys.gateway.ipv4] = IS_TRUE(value[0]);
-				if (0 == key.compare(g_Keys.gateway.ipv6))
+				else if (0 == key.compare(g_Keys.gateway.ipv6))
 					data[g_Keys.gateway.ipv6] = IS_TRUE(value[0]);
-				if (0 == key.compare(g_Keys.gateway.startupLink))
+				else if (0 == key.compare(g_Keys.gateway.startupLink))
 					data[g_Keys.gateway.startupLink] = value;
+				else
+					badParam(key);
+				break;
 			case ESection::none:
 			default:
 				std::cout << "WARNING: parameter '" << line << "' defined before any [section]" << std::endl;
@@ -282,8 +297,6 @@ bool CConfigure::ReadData(const std::string &path)
 			}
 		}
 	}
-	isDefined(ErrorLevel::fatal, g_Keys.general.section, g_Keys.general.rxfreq,    rval);
-	isDefined(ErrorLevel::fatal, g_Keys.general.section, g_Keys.general.txfreq,    rval);
 	isDefined(ErrorLevel::fatal, g_Keys.general.section, g_Keys.general.can,       rval);
 	isDefined(ErrorLevel::fatal, g_Keys.general.section, g_Keys.general.isprivate, rval);
 
@@ -291,7 +304,7 @@ bool CConfigure::ReadData(const std::string &path)
 	if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.protocol, rval))
 	{
 		const auto protocol = GetString(g_Keys.modem.protocol);
-		if (protocol.compare("uart"))
+		if (0 == protocol.compare("uart"))
 		{
 			if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.uartPort, rval))
 			{
@@ -361,6 +374,9 @@ bool CConfigure::ReadData(const std::string &path)
 	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.rxInvert,   rval);
 	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.txInvert,   rval);
 
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.rxFreq,     rval);
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.txFreq,     rval);
+
 	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.rxOffset,   rval);
 	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.txOffset,   rval);
 
@@ -378,6 +394,17 @@ bool CConfigure::ReadData(const std::string &path)
 	}
 	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.trace, rval);
 	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.debug, rval);
+
+	// Log section
+	isDefined(ErrorLevel::fatal, g_Keys.log.section, g_Keys.log.displayLevel, rval);
+	isDefined(ErrorLevel::fatal, g_Keys.log.section, g_Keys.log.fileLevel,    rval);
+	isDefined(ErrorLevel::fatal, g_Keys.log.section, g_Keys.log.fileName,     rval);
+	if(isDefined(ErrorLevel::fatal, g_Keys.log.section, g_Keys.log.filePath,  rval))
+	{
+		const std::string path = GetString(g_Keys.log.filePath);
+		checkFile(g_Keys.log.section, g_Keys.log.filePath, path);
+	}
+	isDefined(ErrorLevel::fatal, g_Keys.log.section, g_Keys.log.rotate,       rval);
 
 	// Gateway section
 	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.ipv4, rval);
@@ -546,18 +573,44 @@ bool CConfigure::IsString(const std::string &key) const
 }
 
 #ifdef INICHECK
-SJsonKeys g_Keys;
+
+static void PrintUsage(const char *name)
+{
+	std::cout << "Usage: " << name << " [-l] PathToIniFile" << std::endl;
+}
+
 int main(int argc, char *argv[])
 {
-	if (3 == argc && strlen(argv[1]) > 1 && '-' == argv[1][0])
+	bool rval = false;
+	std::string arg;
+	CConfigure cfg;
+	switch (argc)
 	{
-		CConfigure d;
-		auto rval = d.ReadData(argv[2]);
-		if ('q' != argv[1][1])
-			d.Dump(('n' == argv[1][1]) ? true : false);
-		return rval ? EXIT_FAILURE : EXIT_SUCCESS;
+		case 1:
+			PrintUsage(argv[0]);
+			break;
+		case 2:
+			rval = cfg.ReadData(argv[1]);
+			break;
+		case 3:
+			if (strcmp(argv[1], "-l"))
+			{
+				rval = true;
+				PrintUsage(argv[0]);
+			}
+			else
+			{
+				rval = cfg.ReadData(argv[2]);
+				if (!rval)
+					cfg.Dump(false);
+			}
+			break;
+		default:
+			rval = true;
+			PrintUsage(argv[1]);
+			break;
 	}
-	std::cerr << "Usage: " << argv[0] << " -(q|n|v) FILENAME\nWhere:\n\t-q just prints warnings and errors.\n\t-n also prints keys that begin with an uppercase letter.\n\t-v prints all keys, warnings and errors." << std::endl;
-	return EXIT_SUCCESS;
+	return rval ? EXIT_FAILURE : EXIT_SUCCESS;
 }
+
 #endif
