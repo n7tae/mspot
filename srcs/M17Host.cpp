@@ -1,21 +1,13 @@
-/*
- *   Copyright (C) 2015-2021,2023,2024 by Jonathan Naylor G4KLX
- *   Copyright (C) 2024 by Thomas A. Early N7TAE
- *
- *   This program is free software; you can redistribute it and/or modify
- *   it under the terms of the GNU General Public License as published by
- *   the Free Software Foundation; either version 2 of the License, or
- *   (at your option) any later version.
- *
- *   This program is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with this program; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- */
+//  Copyright (C) 2015-2021,2023,2024 by Jonathan Naylor G4KLX
+/****************************************************************
+ *                                                              *
+ *             More - An M17-only Repeater/HotSpot              *
+ *                                                              *
+ *         Copyright (c) 2024 by Thomas A. Early N7TAE          *
+ *                                                              *
+ * See the LICENSE file for details about the software license. *
+ *                                                              *
+ ****************************************************************/
 
 #include <cstdio>
 #include <cstdlib>
@@ -25,6 +17,7 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <pwd.h>
+#include <chrono>
 
 #include "M17Host.h"
 #include "RSSIInterpolator.h"
@@ -203,6 +196,10 @@ bool CM17Host::Run()
 
 	LogInfo("M17Host-%s is running", g_Version.GetString());
 
+	m_gateway = std::make_unique<CM17Gateway>();
+	if (m_gateway->Start())
+		return true;
+
 	keep_running = true;
 
 	while (keep_running) {
@@ -281,6 +278,9 @@ bool CM17Host::Run()
 		if (ms < 5U)
 			std::this_thread::sleep_for(std::chrono::milliseconds(5));
 	}
+
+	m_gateway->Stop();
+	m_gateway.reset();
 
 	setMode(MODE_QUIT);
 

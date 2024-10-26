@@ -13,6 +13,7 @@
 #include <atomic>
 #include <string>
 #include <mutex>
+#include <future>
 
 #include "UnixDgramSocket.h"
 #include "SockAddress.h"
@@ -39,16 +40,14 @@ using SM17Link = struct sm17link_tag
 using SStream = struct stream_tag
 {
 	CSteadyTimer lastPacketTime;
-	SM17Frame header;
+	SIPFrame header;
 };
 
 class CM17Gateway
 {
 public:
-	bool Initialize();
-	void Process();
-	void Stop() { keep_running = false; }
-	void Close();
+	bool Start();
+	void Stop();
 
 private:
 	CCallsign thisCS;
@@ -63,7 +62,9 @@ private:
 	std::mutex streamLock;
 	std::string qnvoice_file;
 	CSockAddress from17k, destination;
+	std::future<void> gateFuture;
 
+	void Process();
 	void linkCheck();
 	ELinkState getLinkState() const { return mlink.state; }
 	void writePacket(const void *buf, const size_t size, const CSockAddress &addr) const;

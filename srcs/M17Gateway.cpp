@@ -28,14 +28,17 @@ extern CConfigure g_Cfg;
 extern SJsonKeys  g_Keys;
 extern CCRC       g_Crc;
 
-void CM17Gateway::Close()
+void CM17Gateway::Stop()
 {
+	keep_running = false;
+	if (gateFuture.valid())
+		gateFuture.get();
 	Host2Gate.Close();
 	ipv4.Close();
 	ipv6.Close();
 }
 
-bool CM17Gateway::Initialize()
+bool CM17Gateway::Start()
 {
 	std::string cs(g_Cfg.GetString(g_Keys.general.callsign));
 	cs.resize(8, ' ');
@@ -78,8 +81,13 @@ bool CM17Gateway::Initialize()
 			return true;
 	}
 	keep_running = true;
-	currentStream.header.streamid = 0;
-	CConfigure config;
+	currentStream.header.data.streamid = 0;
+	gateFuture = std::async(std::launch::async, &CM17Gateway::Process, this);
+	if (! gateFuture.valid())
+	{
+		LogError("Could not start CM17Gateway::Process()");
+		return true;
+	}
 	return false;
 }
 
@@ -104,25 +112,25 @@ void CM17Gateway::streamTimeout()
 	case 0x4u:
 		{ //3200
 			uint8_t silent[] = { 0x01u, 0x00u, 0x09u, 0x43u, 0x9cu, 0xe4u, 0x21u, 0x08u };
-			memcpy(currentStream.header.payload,   silent, 8);
-			memcpy(currentStream.header.payload+8, silent, 8);
+			memcpy(currentStream.header.data.payload,   silent, 8);
+			memcpy(currentStream.header.data.payload+8, silent, 8);
 		}
 		break;
 	case 0x6u:
 		{ // 1600
 			uint8_t silent[] = { 0x01u, 0x00u, 0x04u, 0x00u, 0x25u, 0x75u, 0xddu, 0xf2u };
-			memcpy(currentStream.header.payload, silent, 8);
+			memcpy(currentStream.header.data.payload, silent, 8);
 		}
 		break;
 	default:
 		break;
 	}
 	// calculate the crc
-	g_Crc.setCRC(currentStream.header.magic, sizeof(SM17Frame));
+	g_Crc.setCRC(currentStream.header.data.magic, IPFRAMESIZE);
 	// send the packet
-	Gate2Host.Write(currentStream.header.magic, sizeof(SM17Frame));
+	Gate2Host.Write(currentStream.header.data.magic, IPFRAMESIZE);
 	// close the stream;
-	currentStream.header.streamid = 0;
+	currentStream.header.data.streamid = 0;
 	streamLock.unlock();
 }
 
@@ -133,13 +141,13 @@ void CM17Gateway::Process()
 	int max_nfds = 0;
 	const auto ip4fd = ipv4.GetSocket();
 	const auto ip6fd = ipv6.GetSocket();
-	const auto amfd = Host2Gate.GetFD();
+	const auto hostfd = Host2Gate.GetFD();
 	if ((EInternetType::ipv6only != internetType) && (ip4fd > max_nfds))
 		max_nfds = ip4fd;
 	if ((EInternetType::ipv4only != internetType) && (ip6fd > max_nfds))
 		max_nfds = ip6fd;
-	if (amfd > max_nfds)
-		max_nfds = amfd;
+	if (hostfd > max_nfds)
+		max_nfds = hostfd;
 	while (keep_running)
 	{
 		if (ELinkState::linked == mlink.state)
@@ -155,7 +163,7 @@ void CM17Gateway::Process()
 			}
 		}
 
-		if (currentStream.header.streamid && currentStream.lastPacketTime.time() >= 2.0)
+		if (currentStream.header.data.streamid && currentStream.lastPacketTime.time() >= 2.0)
 		{
 			streamTimeout(); // current stream has timed out
 		}
@@ -166,13 +174,13 @@ void CM17Gateway::Process()
 			FD_SET(ip4fd, &fdset);
 		if (EInternetType::ipv4only != internetType)
 			FD_SET(ip6fd, &fdset);
-		FD_SET(amfd, &fdset);
+		FD_SET(hostfd, &fdset);
 		tv.tv_sec = 0;
 		tv.tv_usec = 40000;	// wait up to 40 ms for something to happen
 		auto rval = select(max_nfds + 1, &fdset, 0, 0, &tv);
 		if (0 > rval)
 		{
-			std::cerr << "select() error: " << strerror(errno) << std::endl;
+			LogError("gateway select() error: %s", strerror(errno));
 			return;
 		}
 
@@ -247,7 +255,7 @@ void CM17Gateway::Process()
 					}
 				}
 				break;
-			case sizeof(SM17Frame):	// An M17 frame
+			case IPFRAMESIZE:	// An M17 frame
 				is_packet = processFrame(buf);
 				break;
 			default:
@@ -258,11 +266,11 @@ void CM17Gateway::Process()
 				Dump("Unknown packet", buf, length);
 		}
 
-		if (keep_running && FD_ISSET(amfd, &fdset))
+		if (keep_running && FD_ISSET(hostfd, &fdset))
 		{
-			SM17Frame frame;
-			length = Host2Gate.Read(frame.magic, sizeof(SM17Frame));
-			const CCallsign dest(frame.lich.addr_dst);
+			SIPFrame frame;
+			length = Host2Gate.Read(frame.data.magic, IPFRAMESIZE);
+			const CCallsign dest(frame.data.lich.addr_dst);
 			if (0==dest.GetCS(3).compare("M17") || 0==dest.GetCS(3).compare("URF")) // Linking a reflector
 			{
 				switch (mlink.state)
@@ -270,7 +278,7 @@ void CM17Gateway::Process()
 				case ELinkState::linked:
 					if (mlink.cs == dest) // this is heading in to the correct desination
 					{
-						writePacket(frame.magic, sizeof(SM17Frame), mlink.addr);
+						writePacket(frame.data.magic, IPFRAMESIZE, mlink.addr);
 					}
 					break;
 				case ELinkState::unlinked:
@@ -293,10 +301,12 @@ void CM17Gateway::Process()
 				memcpy(disc.magic, "DISC", 4);
 				thisCS.CodeOut(disc.cscode);
 				writePacket(disc.magic, 10, mlink.addr);
-			} else {
-				writePacket(frame.magic, sizeof(SM17Frame), destination);
 			}
-			FD_CLR(amfd, &fdset);
+			else
+			{
+				writePacket(frame.data.magic, IPFRAMESIZE, destination);
+			}
+			FD_CLR(hostfd, &fdset);
 		}
 	}
 }
@@ -332,20 +342,20 @@ void CM17Gateway::sendLinkRequest(const CCallsign &ref)
 
 bool CM17Gateway::processFrame(const uint8_t *buf)
 {
-	SM17Frame frame;
-	memcpy(frame.magic, buf, sizeof(SM17Frame));
-	if (currentStream.header.streamid)
+	SIPFrame frame;
+	memcpy(frame.data.magic, buf, IPFRAMESIZE);
+	if (currentStream.header.data.streamid)
 	{
-		if (currentStream.header.streamid == frame.streamid)
+		if (currentStream.header.data.streamid == frame.data.streamid)
 		{
-			Gate2Host.Write(frame.magic, sizeof(SM17Frame));
+			Gate2Host.Write(frame.data.magic, IPFRAMESIZE);
 			currentStream.header.SetFrameNumber(frame.GetFrameNumber());
 			uint16_t fn = frame.GetFrameNumber();
 			if (fn & 0x8000u)
 			{
 				LogInfo("Close stream id=0x%04x, duration=%.2f sec\n", frame.GetStreamID(), 0.04f * (0x7fffu & fn));
 				currentStream.header.SetFrameNumber(0); // close the stream
-				currentStream.header.streamid = 0;
+				currentStream.header.data.streamid = 0;
 				streamLock.unlock();
 			}
 			else
@@ -364,11 +374,11 @@ bool CM17Gateway::processFrame(const uint8_t *buf)
 		if (streamLock.try_lock())
 		{
 			// then init the currentStream
-			if (g_Crc.checkCRC(frame.magic, sizeof(SM17Frame)))
+			if (g_Crc.checkCRC(frame.data.magic, IPFRAMESIZE))
 				LogWarning("CRC of frame# %u doesn't match", frame.GetFrameNumber());
-			memcpy(currentStream.header.magic, frame.magic, sizeof(SM17Frame));
-			Gate2Host.Write(frame.magic, sizeof(SM17Frame));
-			const CCallsign call(frame.lich.addr_src);
+			memcpy(currentStream.header.data.magic, frame.data.magic, IPFRAMESIZE);
+			Gate2Host.Write(frame.data.magic, IPFRAMESIZE);
+			const CCallsign call(frame.data.lich.addr_src);
 			LogInfo("Open stream id=0x%04x from %s at %s\n", frame.GetStreamID(), call.GetCS().c_str(), from17k.GetAddress());
 			currentStream.lastPacketTime.start();
 		}

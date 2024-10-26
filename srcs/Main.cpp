@@ -73,7 +73,6 @@ int main(int argc, char** argv)
 
 	do {
 		m_signal = 0;
-		host.Stop();
 
 		auto host = std::make_unique<CM17Host>();
 		ret = host->Run();
