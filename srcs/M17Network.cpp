@@ -9,6 +9,7 @@
  *                                                              *
  ****************************************************************/
 
+#include "SafePacketQueue.h"
 #include "M17Network.h"
 #include "M17Defines.h"
 #include "M17Utils.h"
@@ -19,6 +20,9 @@
 #include <cstdio>
 #include <cassert>
 #include <cstring>
+
+extern IPFrameFIFO Host2Gate;
+extern IPFrameFIFO Gate2Host;
 
 const unsigned int BUFFER_LENGTH = 200U;
 
@@ -43,9 +47,6 @@ bool CM17Network::open()
 {
 	LogMessage("Opening M17 network connection");
 
-	if (Gate2Host.Open("gate2host"))
-		return false;
-	Host2Gate.SetUp("host2gate");
 	return true;
 }
 
@@ -53,69 +54,60 @@ bool CM17Network::write(const unsigned char* data)
 {
 	assert(data != NULL);
 
-	unsigned char buffer[54U];
+	auto frame = std::make_unique<SIPFrame>();
 
-	buffer[0U] = 'M';
-	buffer[1U] = '1';
-	buffer[2U] = '7';
-	buffer[3U] = ' ';
+	memcpy(frame->data.magic, "M17 ", 4u);
+	memcpy(frame->data.magic+6, data, 46u);
+	frame->SetCRC(0u);	// dummy CRC
 
 	// Create a random id for this transmission if needed
 	if (m_outId == 0U) {
 		std::uniform_int_distribution<uint16_t> dist(0x0001, 0xFFFE);
 		m_outId = dist(m_random);
 	}
-
-	buffer[4U] = m_outId / 256U;	// Unique session id
-	buffer[5U] = m_outId % 256U;
-
-	::memcpy(buffer + 6U, data, 46U);
-
-	// Dummy CRC
-	buffer[52U] = 0x00U;
-	buffer[53U] = 0x00U;
+	frame->SetStreamID(m_outId);
 
 	if (m_debug)
-		CUtils::dump(1U, "M17 Network Transmitted", buffer, 54U);
+		CUtils::dump(1U, "M17 Network Transmitted", frame->data.magic, 54U);
 
-	return 54 != Host2Gate.Write(buffer, 54);
+	Host2Gate.Push(std::move(frame));
 }
 
 void CM17Network::clock(unsigned int ms)
 {
-	unsigned char buffer[BUFFER_LENGTH];
 
-	auto length = Gate2Host.Read(buffer, BUFFER_LENGTH);
-	if (length <= 0)
+	auto Frame = Gate2Host.Pop();
+	if (nullptr == Frame)
 		return;
 
 	if (m_debug)
-		CUtils::dump(1U, "M17 Network Received", buffer, length);
+		CUtils::dump(1U, "M17 Network Received", Frame->data.magic, 54u);
 
-	else if (0 != ::memcmp(buffer + 0U, "M17 ", 4U))
+	else if (0 != ::memcmp(Frame->data.magic, "M17 ", 4U))
 	{
-		CUtils::dump(2U, "M17, received unknown packet", buffer, length);
+		CUtils::dump(2U, "M17, received unknown packet", Frame->data.magic, 54u);
+		Frame.reset();
 		return;
 	}
 
 	if (!m_enabled)
 		return;
 
-	uint16_t id = (buffer[4U] << 8) + (buffer[5U] << 0);
+	uint16_t id = Frame->GetStreamID();
 	if (m_inId == 0U)
 	{
 		m_inId = id;
 	}
-	else
+	else if (id != m_inId)
 	{
-		if (id != m_inId)
-			return;
+		Frame.reset();
+		return;
 	}
 
-	unsigned char c = length - 6U;
+	unsigned char c = 48u;
 	m_buffer.addData(&c, 1U);
 
-	m_buffer.addData(buffer + 6U, length - 6U);
+	m_buffer.addData(Frame->data.magic+6, 42u);
 }
 
 bool CM17Network::read(unsigned char* data)
@@ -136,7 +128,6 @@ bool CM17Network::read(unsigned char* data)
 void CM17Network::close()
 {
 	LogMessage("Closing M17 network connection");
-	Gate2Host.Close();
 }
 
 void CM17Network::reset()

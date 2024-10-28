@@ -9,12 +9,10 @@
  *                                                              *
  ****************************************************************/
 
-#ifndef	M17Network_H
-#define	M17Network_H
+#pragma once
 
 #include "M17Defines.h"
 #include "RingBuffer.h"
-#include "UnixDgramSocket.h"
 #include "Timer.h"
 
 #include <random>
@@ -40,8 +38,6 @@ public:
 	void clock(unsigned int ms);
 
 private:
-	CUnixDgramReader Gate2Host;
-	CUnixDgramWriter Host2Gate;
 	bool             m_debug;
 	bool             m_enabled;
 	uint16_t         m_outId;
@@ -49,5 +45,3 @@ private:
 	CRingBuffer<unsigned char> m_buffer;
 	std::mt19937     m_random;
 };
-
-#endif

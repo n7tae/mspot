@@ -15,12 +15,12 @@
 #include <mutex>
 #include <future>
 
-#include "UnixDgramSocket.h"
+#include "SteadyTimer.h"
 #include "SockAddress.h"
 #include "Configure.h"
 #include "UDPSocket.h"
 #include "Callsign.h"
-#include "SteadyTimer.h"
+#include "GateState.h"
 #include "Packet.h"
 #include "CRC.h"
 
@@ -53,19 +53,17 @@ private:
 	CCallsign thisCS;
 	EInternetType internetType;
 	std::atomic<bool> keep_running;
-	CUnixDgramReader Host2Gate;
-	CUnixDgramWriter Gate2Host;
 	CUDPSocket ipv4, ipv6;
 	SM17Link mlink;
 	CSteadyTimer linkingTime;
 	SStream currentStream;
-	std::mutex streamLock;
+	std::mutex stateLock;
 	std::string qnvoice_file;
 	CSockAddress from17k, destination;
 	std::future<void> gateFuture;
+	CGateState gateState;
 
 	void Process();
-	void linkCheck();
 	ELinkState getLinkState() const { return mlink.state; }
 	void writePacket(const void *buf, const size_t size, const CSockAddress &addr) const;
 	void streamTimeout();

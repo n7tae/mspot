@@ -18,6 +18,7 @@
 #include <fstream>
 #include <cstring>
 
+#include "SafePacketQueue.h"
 #include "M17Gateway.h"
 #include "Configure.h"
 #include "JsonKeys.h"
@@ -27,13 +28,14 @@
 extern CConfigure g_Cfg;
 extern SJsonKeys  g_Keys;
 extern CCRC       g_Crc;
+extern IPFrameFIFO Host2Gate;
+extern IPFrameFIFO Gate2Host;
 
 void CM17Gateway::Stop()
 {
 	keep_running = false;
 	if (gateFuture.valid())
 		gateFuture.get();
-	Host2Gate.Close();
 	ipv4.Close();
 	ipv6.Close();
 }
@@ -60,9 +62,6 @@ bool CM17Gateway::Start()
 	}
 
 	mlink.state = ELinkState::unlinked;
-	if (Host2Gate.Open("host2gate"))
-		return true;
-	Gate2Host.SetUp("gate2host");
 
 	if (EInternetType::ipv6only != internetType)
 	{
@@ -77,7 +76,7 @@ bool CM17Gateway::Start()
 		CSockAddress addr;
 		if (addr.Initialize(AF_INET6, 0, "any")) // use ephemeral port
 			return true;
-		if (ipv6.Open(addr)) // use ephemeral port
+		if (ipv6.Open(addr))
 			return true;
 	}
 	keep_running = true;
@@ -91,47 +90,38 @@ bool CM17Gateway::Start()
 	return false;
 }
 
-void CM17Gateway::linkCheck()
-{
-	if (mlink.receivePingTimer.time() > 30) // is the reflector okay?
-	{
-		// looks like we lost contact
-		LogInfo("Disconnected from %s, TIMEOUT...\n", mlink.cs.GetCS().c_str());
-		mlink.state = ELinkState::unlinked;
-		mlink.addr.Clear();
-	}
-}
-
 void CM17Gateway::streamTimeout()
 {
+	auto Frame = std::make_unique<SIPFrame>();
+	memcpy(Frame->data.magic, currentStream.header.data.magic, IPFRAMESIZE);
 	// set the frame number
 	uint16_t fn = (currentStream.header.GetFrameNumber() + 1) % 0x8000u;
-	currentStream.header.SetFrameNumber(fn | 0x8000u);
+	Frame->SetFrameNumber(fn | 0x8000u);
 	// fill in a silent codec2
-	switch (currentStream.header.GetFrameType() & 0x6u) {
+	switch (Frame->GetFrameType() & 0x6u) {
 	case 0x4u:
 		{ //3200
 			uint8_t silent[] = { 0x01u, 0x00u, 0x09u, 0x43u, 0x9cu, 0xe4u, 0x21u, 0x08u };
-			memcpy(currentStream.header.data.payload,   silent, 8);
-			memcpy(currentStream.header.data.payload+8, silent, 8);
+			memcpy(Frame->data.payload,   silent, 8);
+			memcpy(Frame->data.payload+8, silent, 8);
 		}
 		break;
 	case 0x6u:
 		{ // 1600
 			uint8_t silent[] = { 0x01u, 0x00u, 0x04u, 0x00u, 0x25u, 0x75u, 0xddu, 0xf2u };
-			memcpy(currentStream.header.data.payload, silent, 8);
+			memcpy(Frame->data.payload, silent, 8);
 		}
 		break;
 	default:
 		break;
 	}
 	// calculate the crc
-	g_Crc.setCRC(currentStream.header.data.magic, IPFRAMESIZE);
+	g_Crc.setCRC(Frame->data.magic, IPFRAMESIZE);
 	// send the packet
-	Gate2Host.Write(currentStream.header.data.magic, IPFRAMESIZE);
+	Gate2Host.Push(std::move(Frame));
 	// close the stream;
 	currentStream.header.data.streamid = 0;
-	streamLock.unlock();
+	gateState.Idle();
 }
 
 void CM17Gateway::Process()
@@ -141,18 +131,21 @@ void CM17Gateway::Process()
 	int max_nfds = 0;
 	const auto ip4fd = ipv4.GetSocket();
 	const auto ip6fd = ipv6.GetSocket();
-	const auto hostfd = Host2Gate.GetFD();
 	if ((EInternetType::ipv6only != internetType) && (ip4fd > max_nfds))
 		max_nfds = ip4fd;
 	if ((EInternetType::ipv4only != internetType) && (ip6fd > max_nfds))
 		max_nfds = ip6fd;
-	if (hostfd > max_nfds)
-		max_nfds = hostfd;
 	while (keep_running)
 	{
 		if (ELinkState::linked == mlink.state)
 		{
-			linkCheck();
+			if (mlink.receivePingTimer.time() > 30) // is the reflector okay?
+			{
+				// looks like we lost contact
+				LogInfo("Disconnected from %s, TIMEOUT...\n", mlink.cs.GetCS().c_str());
+				mlink.state = ELinkState::unlinked;
+				mlink.addr.Clear();
+			}
 		}
 		else if (ELinkState::linking == mlink.state)
 		{
@@ -174,9 +167,8 @@ void CM17Gateway::Process()
 			FD_SET(ip4fd, &fdset);
 		if (EInternetType::ipv4only != internetType)
 			FD_SET(ip6fd, &fdset);
-		FD_SET(hostfd, &fdset);
 		tv.tv_sec = 0;
-		tv.tv_usec = 40000;	// wait up to 40 ms for something to happen
+		tv.tv_usec = 10000;	// wait up to 10 ms for something to happen
 		auto rval = select(max_nfds + 1, &fdset, 0, 0, &tv);
 		if (0 > rval)
 		{
