@@ -22,9 +22,9 @@
 #include <regex>
 
 #include "Configure.h"
-#include "JsonKeys.h"
 
-SJsonKeys g_Keys;	// the global definition
+// the global definition
+SJsonKeys  g_Keys;
 
 static inline void split(const std::string &s, char delim, std::vector<std::string> &v)
 {
@@ -149,8 +149,8 @@ bool CConfigure::ReadData(const std::string &path)
 					data[g_Keys.general.can] = getUnsigned(value, "Channel Access Number", 0u, 15u, 0u);
 				else if (0 == key.compare(g_Keys.general.isdaemon))
 					data[g_Keys.general.isdaemon] = IS_TRUE(value[0]);
-				else if (0 == key.compare(g_Keys.general.isduplex))
-					data[g_Keys.general.isduplex] = IS_TRUE(value[0]);
+				else if (0 == key.compare(g_Keys.general.allowEncrypt))
+					data[g_Keys.general.allowEncrypt] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.general.isprivate))
 					data[g_Keys.general.isprivate] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.general.module))
@@ -161,7 +161,9 @@ bool CConfigure::ReadData(const std::string &path)
 					badParam(key);
 				break;
 			case ESection::modem:
-				if (0 == key.compare(g_Keys.modem.protocol))
+				if (0 == key.compare(g_Keys.modem.isDuplex))
+					data[g_Keys.modem.isDuplex] = IS_TRUE(value[0]);
+				else if (0 == key.compare(g_Keys.modem.protocol))
 					data[g_Keys.modem.protocol] = value;
 
 				else if (0 == key.compare(g_Keys.modem.uartPort))
@@ -246,6 +248,14 @@ bool CConfigure::ReadData(const std::string &path)
 					data[g_Keys.gateway.ipv6] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.gateway.startupLink))
 					data[g_Keys.gateway.startupLink] = value;
+				else if (0 == key.compare(g_Keys.gateway.maintainLink))
+					data[g_Keys.gateway.maintainLink] = IS_TRUE(value[0]);
+				else if (0 == key.compare(g_Keys.gateway.hostPath))
+					data[g_Keys.gateway.hostPath] = value;
+				else if (0 == key.compare(g_Keys.gateway.myHostPath))
+					data[g_Keys.gateway.myHostPath] = value;
+				else if (0 == key.compare(g_Keys.gateway.allowNotTranscoded))
+					data[g_Keys.gateway.allowNotTranscoded] = IS_TRUE(value[0]);
 				else
 					badParam(key);
 				break;
@@ -260,6 +270,7 @@ bool CConfigure::ReadData(const std::string &path)
 
 	////////////////////////////// check the input
 	// General section
+	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.general.allowEncrypt, rval);
 	if (isDefined(ErrorLevel::fatal, g_Keys.general.section, g_Keys.general.callsign, rval))
 	{
 		auto cs = GetString(g_Keys.general.callsign);
@@ -286,7 +297,6 @@ bool CConfigure::ReadData(const std::string &path)
 			rval = true;
 		}
 	}
-	isDefined(ErrorLevel::fatal, g_Keys.general.section, g_Keys.general.isduplex,  rval);
 	if (isDefined(ErrorLevel::fatal, g_Keys.general.section, g_Keys.general.isdaemon, rval))
 	{
 		if (isDefined(ErrorLevel::fatal, g_Keys.general.section, g_Keys.general.user, rval))
@@ -304,6 +314,7 @@ bool CConfigure::ReadData(const std::string &path)
 	isDefined(ErrorLevel::fatal, g_Keys.general.section, g_Keys.general.isprivate, rval);
 
 	// Modem section
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.isDuplex,     rval);
 	if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.protocol, rval))
 	{
 		const auto protocol = GetString(g_Keys.modem.protocol);
@@ -412,14 +423,26 @@ bool CConfigure::ReadData(const std::string &path)
 	// Gateway section
 	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.ipv4, rval);
 	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.ipv6, rval);
+	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.maintainLink, rval);
 	if (data.contains(g_Keys.gateway.startupLink))
 	{
 		const auto ref = GetString(g_Keys.gateway.startupLink);
 		if (not(std::regex_match(ref, MrefdCS) and not(std::regex_match(ref, UrfdCS))))
 		{
-			std::cout << "WARNING: [" << g_Keys.gateway.section << "]" << g_Keys.gateway.startupLink << "doesn't look like a reflector designator with module" << std::endl;
+			std::cout << "WARNING: [" << g_Keys.gateway.section << "]" << g_Keys.gateway.startupLink << "doesn't look like a reflector module" << std::endl;
 		}
 	}
+	if (isDefined(ErrorLevel::mild, g_Keys.gateway.section, g_Keys.gateway.hostPath,   rval))
+	{
+		const auto path = GetString(g_Keys.gateway.hostPath);
+		checkFile(g_Keys.gateway.section, g_Keys.gateway.hostPath, path);
+	}
+	if (isDefined(ErrorLevel::mild, g_Keys.gateway.section, g_Keys.gateway.myHostPath,    rval))
+	{
+		const auto path = GetString(g_Keys.gateway.myHostPath);
+		checkFile(g_Keys.gateway.section, g_Keys.gateway.myHostPath, path);
+	}
+	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.allowNotTranscoded, rval);
 
 	return rval;
 }

@@ -14,6 +14,5 @@
  #include "Packet.h"
 
 // global packet FIFO queues
-
 IPFrameFIFO Host2Gate;
 IPFrameFIFO Gate2Host;

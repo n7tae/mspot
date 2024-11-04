@@ -12,13 +12,14 @@
 #include <iostream>
 
 #include "Callsign.h"
+#include "Log.h"
 
 #define M17CHARACTERS " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/."
 
 CCallsign::CCallsign()
 {
-	memset(cs, 0, sizeof(cs));
-	memset(code, 0, sizeof(code));
+	memset(cs, 0u, sizeof(cs));
+	memset(code, 0u, sizeof(code));
 }
 
 CCallsign::CCallsign(const std::string &callsign)
@@ -33,20 +34,49 @@ CCallsign::CCallsign(const uint8_t *in)
 
 void CCallsign::CSIn(const std::string &callsign)
 {
-	const std::string m17_alphabet(M17CHARACTERS);
-	memset(cs, 0, sizeof(cs));
-	memcpy(cs, callsign.c_str(), (callsign.size()<10) ? callsign.size() : 9);
-	uint64_t encoded = 0;
-	for( int i=int(callsign.size()-1); i>=0; i-- ) {
-		auto pos = m17_alphabet.find(cs[i]);
-		if (pos == std::string::npos) {
-			pos = 0;
-		}
-		encoded *= 40;
-		encoded += pos;
+	memset(cs, 0u, sizeof(cs));
+
+	if (0 == callsign.compare("#ALL"))
+	{
+		memcpy(cs, callsign.c_str(), 4);
+		for (unsigned i=0u; i<6u; i++)
+			code[i] = 0xffu;
+		return;
 	}
-	for (int i=0; i<6; i++) {
-		code[i] = (encoded >> (8*(5-i)) & 0xFFU);
+
+	const std::string m17_alphabet(M17CHARACTERS);
+
+	memset(code, 0u, sizeof(code));
+
+	int i = int(callsign.length()) - 1;	// start at the end
+
+	while (i > -1)
+	{
+		// skip space or bad char
+		auto pos = m17_alphabet.find(cs[i]);
+		if (pos == std::string::npos)
+			pos = 0;
+		if (pos)
+			break;
+		i--;
+	}
+
+	uint64_t encoded = 0;
+	while (i > -1) // start calculating the encoded value
+	{
+		auto pos = m17_alphabet.find(cs[i]);
+		if (pos == std::string::npos)
+			pos = 0;
+		cs[i] = m17_alphabet[pos];	// set the cs character
+		encoded = 40u * encoded + pos;
+		i--;
+	}
+
+	i = 5;	// start at the end
+	while (encoded) // set the 6-byte coded value
+	{
+		code[i--] = encoded % 40u;
+		encoded /= 40u;
 	}
 }
 
@@ -60,7 +90,9 @@ void CCallsign::CodeIn(const uint8_t *in)
 		coded = (coded << 8) | in[i];
 
 	if (coded == 0xffffffffffffu) {
-		strcpy(cs, "ALL");
+		strcpy(cs, "#ALL");
+		for(int i=0; i<6; i++)
+			code[i] = 0xffu;
 		return;
 	}
 

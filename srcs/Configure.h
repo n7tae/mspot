@@ -10,13 +10,17 @@
 
 #pragma once
 
+#include <nlohmann/json.hpp>
 #include <cstdint>
 #include <string>
 #include <regex>
-#include <nlohmann/json.hpp>
+
+#include "JsonKeys.h"
+
+extern SJsonKeys g_Keys;
 
 enum class ErrorLevel { fatal, mild };
-enum class ESection { none, general, log, modem, gateway };
+enum class ESection { none, general, log, modem, dht, gateway };
 
 #define IS_TRUE(a) ((a)=='t' || (a)=='T' || (a)=='1')
 

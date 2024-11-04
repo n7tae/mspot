@@ -30,11 +30,9 @@
 #include "Defines.h"
 #include "Log.h"
 #include "Configure.h"
-#include "JsonKeys.h"
 #include "Version.h"
 
 extern CConfigure g_Cfg;
-extern SJsonKeys g_Keys;
 extern CVersion g_Version;
 
 const char* HEADER1 = "This software is for use on amateur radio networks only,";
@@ -194,11 +192,11 @@ bool CM17Host::Run()
 
 	setMode(MODE_M17);
 
-	LogInfo("M17Host-%s is running", g_Version.GetString());
-
 	m_gateway = std::make_unique<CM17Gateway>();
 	if (m_gateway->Start())
 		return true;
+
+	LogInfo("M17Host-%s is running", g_Version.GetString());
 
 	keep_running = true;
 
@@ -421,7 +419,7 @@ bool CM17Host::createM17Network()
 
 void CM17Host::readParams()
 {
-	m_duplex   = g_Cfg.GetBoolean(g_Keys.general.isduplex);
+	m_duplex   = g_Cfg.GetBoolean(g_Keys.modem.isDuplex);
 	m_callsign = g_Cfg.GetString(g_Keys.general.callsign);
 
 	LogInfo("General Parameters");

@@ -41,9 +41,6 @@ void CVersion::Set(uint8_t maj, uint8_t min, uint8_t rev)
 {
 	version = 0x10000*maj + 0x100*min + rev;
 	strversion.assign(std::to_string(maj) + '.' + std::to_string(min) + '.' + std::to_string(rev));
-#ifndef NO_DHT
-	strversion.append("-dht");
-#endif
 }
 
 bool CVersion::operator ==(const CVersion &v) const
@@ -80,8 +77,5 @@ bool CVersion::operator <(const CVersion &v) const
 std::ostream &operator <<(std::ostream &os, const CVersion &v)
 {
 	os << v.GetMajor() << '.' << v.GetMinor() << '.' << v.GetRevision();
-#ifndef NO_DHT
-	os << "-dht";
-#endif
 	return os;
 };

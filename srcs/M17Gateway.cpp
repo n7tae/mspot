@@ -8,9 +8,7 @@
  *                                                              *
  ****************************************************************/
 
-
-#include <sys/select.h>
-
+#include <poll.h>
 #include <string>
 #include <sstream>
 #include <iostream>
@@ -21,13 +19,9 @@
 #include "SafePacketQueue.h"
 #include "M17Gateway.h"
 #include "Configure.h"
-#include "JsonKeys.h"
-#include "CRC.h"
 #include "Log.h"
 
 extern CConfigure g_Cfg;
-extern SJsonKeys  g_Keys;
-extern CCRC       g_Crc;
 extern IPFrameFIFO Host2Gate;
 extern IPFrameFIFO Gate2Host;
 
@@ -46,6 +40,7 @@ bool CM17Gateway::Start()
 	cs.resize(8, ' ');
 	cs.append(1, g_Cfg.GetString(g_Keys.general.module).at(0));
 	thisCS.CSIn(cs);
+	LogInfo("Station Callsign: %s", cs.c_str());
 
 	if (g_Cfg.GetBoolean(g_Keys.gateway.ipv4))
 	{
@@ -60,8 +55,18 @@ bool CM17Gateway::Start()
 		LogError("Neither IPv4 or IPV6 is enabled!");
 		return true;
 	}
-
-	mlink.state = ELinkState::unlinked;
+	switch (internetType)
+	{
+	case EInternetType::ipv4only:
+		LogInfo("Gateway IP Type: IPv4 Only");
+		break;
+	case EInternetType::ipv6only:
+		LogInfo("Gateway IP Type: IPv6 Only");
+		break;
+	default:
+		LogInfo("Gateway IP Type: Dual Stack (IPv4+IPv6");
+		break;
+	}
 
 	if (EInternetType::ipv6only != internetType)
 	{
@@ -70,6 +75,7 @@ bool CM17Gateway::Start()
 			return true;
 		if (ipv4.Open(addr))
 			return true;
+		LogInfo("Gateway listening on %s", addr.GetAddress());
 	}
 	if (EInternetType::ipv4only != internetType)
 	{
@@ -78,9 +84,18 @@ bool CM17Gateway::Start()
 			return true;
 		if (ipv6.Open(addr))
 			return true;
+		LogInfo("Gateway listening on %s", addr.GetAddress());
 	}
+
+	mlink.state = ELinkState::unlinked;
 	keep_running = true;
 	currentStream.header.data.streamid = 0;
+	mlink.maintainLink = g_Cfg.GetBoolean(g_Keys.gateway.maintainLink);
+	LogInfo("Gateway will%s try to re-establish a dropped link", mlink.maintainLink ? "" : " NOT");
+	if (g_Cfg.IsString(g_Keys.gateway.startupLink))
+	{
+		mlink.cs.CSIn(g_Cfg.GetString(g_Keys.gateway.startupLink));
+	}
 	gateFuture = std::async(std::launch::async, &CM17Gateway::Process, this);
 	if (! gateFuture.valid())
 	{
@@ -115,8 +130,6 @@ void CM17Gateway::streamTimeout()
 	default:
 		break;
 	}
-	// calculate the crc
-	g_Crc.setCRC(Frame->data.magic, IPFRAMESIZE);
 	// send the packet
 	Gate2Host.Push(std::move(Frame));
 	// close the stream;
@@ -126,15 +139,14 @@ void CM17Gateway::streamTimeout()
 
 void CM17Gateway::Process()
 {
-	fd_set fdset;
-	timeval tv;
-	int max_nfds = 0;
-	const auto ip4fd = ipv4.GetSocket();
-	const auto ip6fd = ipv6.GetSocket();
-	if ((EInternetType::ipv6only != internetType) && (ip4fd > max_nfds))
-		max_nfds = ip4fd;
-	if ((EInternetType::ipv4only != internetType) && (ip6fd > max_nfds))
-		max_nfds = ip6fd;
+	struct pollfd pfds[2];
+	for (unsigned i=0; i<2; i++)
+	{
+		pfds[i].fd = i ? ipv6.GetSocket() : ipv4.GetSocket();
+		pfds[i].events = POLLIN;
+		pfds[i].revents = 0;
+	}
+
 	while (keep_running)
 	{
 		if (ELinkState::linked == mlink.state)
@@ -149,11 +161,15 @@ void CM17Gateway::Process()
 		}
 		else if (ELinkState::linking == mlink.state)
 		{
-			if (linkingTime.time() >= 5.0)
+			if (linkingTime.time() >= 30)
 			{
 				LogInfo("Link request to %s timeout.\n", mlink.cs.GetCS().c_str());
 				mlink.state = ELinkState::unlinked;
 			}
+		}
+		else // ELinkState is unlinked
+		{
+
 		}
 
 		if (currentStream.header.data.streamid && currentStream.lastPacketTime.time() >= 2.0)
@@ -162,17 +178,10 @@ void CM17Gateway::Process()
 		}
 		//PlayVoiceFile(); // play if there is any msg to play
 
-		FD_ZERO(&fdset);
-		if (EInternetType::ipv6only != internetType)
-			FD_SET(ip4fd, &fdset);
-		if (EInternetType::ipv4only != internetType)
-			FD_SET(ip6fd, &fdset);
-		tv.tv_sec = 0;
-		tv.tv_usec = 10000;	// wait up to 10 ms for something to happen
-		auto rval = select(max_nfds + 1, &fdset, 0, 0, &tv);
+		auto rval = poll(pfds, 2, 10);
 		if (0 > rval)
 		{
-			LogError("gateway select() error: %s", strerror(errno));
+			LogError("gateway poll() error: %s", strerror(errno));
 			return;
 		}
 
@@ -181,21 +190,32 @@ void CM17Gateway::Process()
 		socklen_t fromlen = sizeof(struct sockaddr_storage);
 		int length;
 
-		if (keep_running && (ip4fd >= 0) && FD_ISSET(ip4fd, &fdset))
+		if (rval)
 		{
-			length = recvfrom(ip4fd, buf, 100, 0, from17k.GetPointer(), &fromlen);
-			is_packet = true;
-			FD_CLR(ip4fd, &fdset);
+			if (pfds[0].revents & POLLIN)
+			{
+				length = recvfrom(pfds[0].fd, buf, 100, 0, from17k.GetPointer(), &fromlen);
+				pfds[0].revents &= ~POLLIN;
+				is_packet = true;
+			}
+			else if (pfds[1].revents & POLLIN)
+			{
+				length = recvfrom(pfds[1].fd, buf, 100, 0, from17k.GetPointer(), &fromlen);
+				pfds[1].revents &= ~POLLIN;
+				is_packet = true;
+			}
+
+			for (unsigned i=0; i<2; i++)	// check for errors
+			{
+				if (pfds[i].revents)
+				{
+					LogError("poll() returned revents %d from IPv%s port", pfds[i].revents, i ? '6' : '4');
+					return;
+				}
+			}
 		}
 
-		if (keep_running && (ip6fd >= 0) && FD_ISSET(ip6fd, &fdset))
-		{
-			length = recvfrom(ip6fd, buf, 100, 0, from17k.GetPointer(), &fromlen);
-			is_packet = true;
-			FD_CLR(ip6fd, &fdset);
-		}
-
-		if (keep_running && is_packet)
+		if (is_packet)
 		{
 			switch (length)
 			{
@@ -247,8 +267,15 @@ void CM17Gateway::Process()
 					}
 				}
 				break;
-			case IPFRAMESIZE:	// An M17 frame
-				is_packet = processFrame(buf);
+			case IPFRAMESIZE:
+				if (memcmp(buf, "M17 ", 4))
+				{
+					is_packet = false;
+					break;
+				}
+				// only process if we can set the GateState
+				if (gateState.TryState(EGateState::gatein))
+					processGate(buf);
 				break;
 			default:
 				is_packet = false;
@@ -258,49 +285,21 @@ void CM17Gateway::Process()
 				Dump("Unknown packet", buf, length);
 		}
 
-		if (keep_running && FD_ISSET(hostfd, &fdset))
-		{
-			SIPFrame frame;
-			length = Host2Gate.Read(frame.data.magic, IPFRAMESIZE);
-			const CCallsign dest(frame.data.lich.addr_dst);
-			if (0==dest.GetCS(3).compare("M17") || 0==dest.GetCS(3).compare("URF")) // Linking a reflector
-			{
-				switch (mlink.state)
-				{
-				case ELinkState::linked:
-					if (mlink.cs == dest) // this is heading in to the correct desination
-					{
-						writePacket(frame.data.magic, IPFRAMESIZE, mlink.addr);
-					}
-					break;
-				case ELinkState::unlinked:
-					if ('L' == dest.GetCS().at(7))
-					{
-						std::string ref(dest.GetCS(7));
-						ref.resize(8, ' ');
-						ref.resize(9, dest.GetModule());
-						const CCallsign d(ref);
-						sendLinkRequest(d);
-					}
-					break;
-				default:
-					break;
-				}
-			}
-			else if (0 == dest.GetCS().compare("U"))
-			{
-				SM17RefPacket disc;
-				memcpy(disc.magic, "DISC", 4);
-				thisCS.CodeOut(disc.cscode);
-				writePacket(disc.magic, 10, mlink.addr);
-			}
-			else
-			{
-				writePacket(frame.data.magic, IPFRAMESIZE, destination);
-			}
-			FD_CLR(hostfd, &fdset);
-		}
+		auto Frame = Host2Gate.Pop();
+
+		if (keep_running)
+			processHost();
 	}
+}
+
+void CM17Gateway::processHost()
+{
+	auto Frame = Host2Gate.Pop();
+	if (! Frame)
+		return; // nothing to process
+
+	const CCallsign dest(Frame->data.lich.addr_dst);
+
 }
 
 void CM17Gateway::setDestAddress(const std::string &address, uint16_t port)
@@ -332,23 +331,35 @@ void CM17Gateway::sendLinkRequest(const CCallsign &ref)
 	linkingTime.start();
 }
 
-bool CM17Gateway::processFrame(const uint8_t *buf)
+void CM17Gateway::processGate(const uint8_t *buf)
 {
-	SIPFrame frame;
-	memcpy(frame.data.magic, buf, IPFRAMESIZE);
-	if (currentStream.header.data.streamid)
+	auto Frame = std::make_unique<SIPFrame>();
+	memcpy(Frame->data.magic, buf, IPFRAMESIZE);
+	if (0 == currentStream.header.data.streamid)
 	{
-		if (currentStream.header.data.streamid == frame.data.streamid)
+		const CCallsign src(Frame->data.lich.addr_src);	// we need this for the log
+		const CCallsign dst("#ALL");	// set the destination to #ALL
+		dst.CodeOut(Frame->data.lich.addr_src);
+
+		memcpy(currentStream.header.data.magic, Frame->data.magic, IPFRAMESIZE);
+		LogInfo("Open stream id=0x%04x from %s at %s\n", Frame->GetStreamID(), src.GetCS().c_str(), from17k.GetAddress());
+		Gate2Host.Push(std::move(Frame));
+		currentStream.lastPacketTime.start();
+	}
+	else
+	{
+		if (currentStream.header.GetStreamID() == Frame->GetStreamID())
 		{
-			Gate2Host.Write(frame.data.magic, IPFRAMESIZE);
-			currentStream.header.SetFrameNumber(frame.GetFrameNumber());
-			uint16_t fn = frame.GetFrameNumber();
+			auto sid = Frame->GetStreamID();
+			auto fn = Frame->GetFrameNumber();
+			currentStream.header.SetFrameNumber(fn);
+			Gate2Host.Push(std::move(Frame));
 			if (fn & 0x8000u)
 			{
-				LogInfo("Close stream id=0x%04x, duration=%.2f sec\n", frame.GetStreamID(), 0.04f * (0x7fffu & fn));
+				LogInfo("Close stream id=0x%04x, duration=%.2f sec\n", sid, 0.04f * (0x7fffu & fn));
 				currentStream.header.SetFrameNumber(0); // close the stream
 				currentStream.header.data.streamid = 0;
-				streamLock.unlock();
+				gateState.Idle();
 			}
 			else
 			{
@@ -357,29 +368,10 @@ bool CM17Gateway::processFrame(const uint8_t *buf)
 		}
 		else
 		{
-			return false;
+			return;
 		}
 	}
-	else
-	{
-		// here comes a first packet, so try to lock it
-		if (streamLock.try_lock())
-		{
-			// then init the currentStream
-			if (g_Crc.checkCRC(frame.data.magic, IPFRAMESIZE))
-				LogWarning("CRC of frame# %u doesn't match", frame.GetFrameNumber());
-			memcpy(currentStream.header.data.magic, frame.data.magic, IPFRAMESIZE);
-			Gate2Host.Write(frame.data.magic, IPFRAMESIZE);
-			const CCallsign call(frame.data.lich.addr_src);
-			LogInfo("Open stream id=0x%04x from %s at %s\n", frame.GetStreamID(), call.GetCS().c_str(), from17k.GetAddress());
-			currentStream.lastPacketTime.start();
-		}
-		else
-		{
-			return false;
-		}
-	}
-	return true;
+	return;
 }
 
 void CM17Gateway::writePacket(const void *buf, const size_t size, const CSockAddress &addr) const

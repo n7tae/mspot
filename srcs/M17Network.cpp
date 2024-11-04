@@ -50,7 +50,7 @@ bool CM17Network::open()
 	return true;
 }
 
-bool CM17Network::write(const unsigned char* data)
+void CM17Network::write(const unsigned char* data)
 {
 	assert(data != NULL);
 

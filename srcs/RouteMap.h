@@ -1,4 +1,3 @@
-//   Copyright (C) 2020,2021 by Jonathan Naylor G4KLX
 /****************************************************************
  *                                                              *
  *             More - An M17-only Repeater/HotSpot              *
@@ -11,37 +10,31 @@
 
 #pragma once
 
-#include "M17Defines.h"
-#include "RingBuffer.h"
-#include "Timer.h"
-
-#include <random>
+#include <string>
+#include <map>
+#include <list>
 #include <cstdint>
 
-class CM17Network {
+struct SHost
+{
+	SHost() {}
+	std::string cs, ip4addr, ip6addr, mods, smods;
+	uint16_t port;
+};
+
+class CM17RouteMap
+{
 public:
-	CM17Network(bool debug);
-	~CM17Network();
-
-	bool open();
-
-	void enable(bool enabled);
-
-	void write(const unsigned char* data);
-
-	bool read(unsigned char* data);
-
-	void reset();
-
-	void close();
-
-	void clock(unsigned int ms);
+	CM17RouteMap();
+	~CM17RouteMap();
+	const SHost *Find(const std::string &cs) const;
+	void Update(const std::string &cs, const std::string &ip4addr, const std::string &ip6addr, const std::string &modules, const std::string &specialmodules, const uint16_t port);
+	void ReadAll();
+	const std::list<std::string> GetKeys() const;
+	size_t Size() const;
 
 private:
-	bool             m_debug;
-	bool             m_enabled;
-	uint16_t         m_outId;
-	uint16_t         m_inId;
-	CRingBuffer<unsigned char> m_buffer;
-	std::mt19937     m_random;
+	void Read(const std::string &file);
+	std::map<std::string, SHost> baseMap;
+	std::string hostpath, myhostpath;
 };

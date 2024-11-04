@@ -33,15 +33,16 @@ public:
 		currentState = newstate;
 	}
 
-	bool TryState(EGateState newstate)
-	// the currentState must be idle
 	// returns true if successful
+	bool TryState(EGateState newstate)
 	{
 		std::lock_guard<std::mutex> lg(mtx);
+		if (newstate == currentState)
+			return true;
 		if (EGateState::idle == currentState)
 		{
 			currentState = newstate;
-			return;
+			return true;
 		}
 		return false;
 	}

@@ -22,7 +22,6 @@
 #include "Callsign.h"
 #include "GateState.h"
 #include "Packet.h"
-#include "CRC.h"
 
 enum class ELinkState { unlinked, linking, linked };
 enum class EInternetType { ipv4only, ipv6only, both };
@@ -34,6 +33,7 @@ using SM17Link = struct sm17link_tag
 	CCallsign cs;
 	char from_mod;
 	std::atomic<ELinkState> state;
+	bool maintainLink;
 	CSteadyTimer receivePingTimer;
 };
 
@@ -64,11 +64,11 @@ private:
 	CGateState gateState;
 
 	void Process();
-	ELinkState getLinkState() const { return mlink.state; }
 	void writePacket(const void *buf, const size_t size, const CSockAddress &addr) const;
 	void streamTimeout();
 	void sendPacket(const void *buf, size_t size, const CSockAddress &addr) const;
-	bool processFrame(const uint8_t *buf);
+	void processGate(const uint8_t *buf);
+	void processHost();
 	void setDestAddress(const std::string &address, uint16_t port);
 	void sendLinkRequest(const CCallsign &ref);
 	void Dump(const char *title, const void *pointer, int length);
