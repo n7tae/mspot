@@ -22,6 +22,7 @@
 #include "Callsign.h"
 #include "GateState.h"
 #include "Packet.h"
+#include "HostMap.h"
 
 enum class ELinkState { unlinked, linking, linked };
 enum class EInternetType { ipv4only, ipv6only, both };
@@ -59,9 +60,10 @@ private:
 	SStream currentStream;
 	std::mutex stateLock;
 	std::string qnvoice_file;
-	CSockAddress from17k, destination;
+	CSockAddress from17k;
 	std::future<void> gateFuture;
 	CGateState gateState;
+	CHostMap destMap;
 
 	void Process();
 	void writePacket(const void *buf, const size_t size, const CSockAddress &addr) const;
@@ -69,7 +71,7 @@ private:
 	void sendPacket(const void *buf, size_t size, const CSockAddress &addr) const;
 	void processGate(const uint8_t *buf);
 	void processHost();
-	void setDestAddress(const std::string &address, uint16_t port);
-	void sendLinkRequest(const CCallsign &ref);
+	void sendLinkRequest();
+	bool setDestination(const std::string &cs);
 	void Dump(const char *title, const void *pointer, int length);
 };

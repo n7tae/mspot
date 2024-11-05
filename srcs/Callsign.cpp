@@ -8,18 +8,15 @@
  *                                                              *
  ****************************************************************/
 
-
-#include <iostream>
-
+#include <ctype.h>
 #include "Callsign.h"
 #include "Log.h"
 
-#define M17CHARACTERS " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/."
+const std::string m17_alphabet(" ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/.");
 
 CCallsign::CCallsign()
 {
-	memset(cs, 0u, sizeof(cs));
-	memset(code, 0u, sizeof(code));
+	Clear();
 }
 
 CCallsign::CCallsign(const std::string &callsign)
@@ -32,88 +29,94 @@ CCallsign::CCallsign(const uint8_t *in)
 	CodeIn(in);
 }
 
-void CCallsign::CSIn(const std::string &callsign)
+void CCallsign::Clear()
 {
-	memset(cs, 0u, sizeof(cs));
-
-	if (0 == callsign.compare("#ALL"))
-	{
-		memcpy(cs, callsign.c_str(), 4);
-		for (unsigned i=0u; i<6u; i++)
-			code[i] = 0xffu;
-		return;
-	}
-
-	const std::string m17_alphabet(M17CHARACTERS);
-
-	memset(code, 0u, sizeof(code));
-
-	int i = int(callsign.length()) - 1;	// start at the end
-
-	while (i > -1)
-	{
-		// skip space or bad char
-		auto pos = m17_alphabet.find(cs[i]);
-		if (pos == std::string::npos)
-			pos = 0;
-		if (pos)
-			break;
-		i--;
-	}
-
-	uint64_t encoded = 0;
-	while (i > -1) // start calculating the encoded value
-	{
-		auto pos = m17_alphabet.find(cs[i]);
-		if (pos == std::string::npos)
-			pos = 0;
-		cs[i] = m17_alphabet[pos];	// set the cs character
-		encoded = 40u * encoded + pos;
-		i--;
-	}
-
-	i = 5;	// start at the end
-	while (encoded) // set the 6-byte coded value
-	{
-		code[i--] = encoded % 40u;
-		encoded /= 40u;
-	}
+	memset(cs, 0, 10);
+	coded = 0;
 }
 
-void CCallsign::CodeIn(const uint8_t *in)
+void CCallsign::CSIn(const std::string &callsign)
 {
-	const std::string m17_alphabet(M17CHARACTERS);
-	memset(cs, 0, 10);
-
-	uint64_t coded = in[0];
-	for (int i=1; i<6; i++)
-		coded = (coded << 8) | in[i];
-
-	if (coded == 0xffffffffffffu) {
+	Clear();
+	if(0 == callsign.find("#ALL"))
+	{
 		strcpy(cs, "#ALL");
-		for(int i=0; i<6; i++)
-			code[i] = 0xffu;
+		coded = 0xffffffffffffu;
 		return;
 	}
 
-	if (coded > 0xee6b27ffffffu) {
-		std::cerr << "Callsign code is too large, 0x" << std::hex << coded << std::endl;
-		return;
-	}
-	memcpy(code, in, 6);
-	int i = 0;
-	while (coded) {
-		cs[i++] = m17_alphabet[coded % 40];
-		coded /= 40;
+	strncpy(cs, callsign.c_str(), 9);
+	coded = 0;
+	// 'skip' will be used to delay encoded until a char with pos > 0 is found;
+	bool skip = true;
+	for(int i=8; i>=0; i--)
+	{
+		while (0 == cs[i])
+			i--;
+		auto pos = m17_alphabet.find(cs[i]);
+		if (std::string::npos == pos)
+			pos = 0;
+		if (skip and 0 == pos)
+			continue;
+		skip = false;
+		cs[i] = m17_alphabet.at(pos);	// replace with valid character
+		coded *= 40;
+		coded += pos;
 	}
 }
 
 const std::string CCallsign::GetCS(unsigned len) const
 {
+	if (len > 9)
+		len = 9;
 	std::string rval(cs);
 	if (len)
 		rval.resize(len, ' ');
 	return rval;
+}
+
+void CCallsign::CodeIn(const uint8_t *in)
+{
+	Clear();
+	// input array of unsigned chars are in network byte order
+	for (int i=0; i<6; i++)
+	{
+		coded *= 0x100u;
+		coded += in[i];
+	}
+
+	if (coded == 0xffffffffffffu)
+	{
+		strcpy(cs, "#ALL");
+		return;
+	}
+
+	if (coded > 0xee6b27ffffffu)
+	{
+		LogWarning("Callsign code is too large, 0x%x", coded);
+		coded = 0;
+		return;
+	}
+
+	auto c = coded;
+	int i = 0;
+	while (c)
+	{
+		cs[i++] = m17_alphabet[c % 40u];
+		c /= 40u;
+	}
+}
+
+void CCallsign::CodeOut(uint8_t *out) const
+{
+	memset(out, 0, 6);
+	auto c = coded;
+	auto pout = out+5;
+	while (c)
+	{
+		*pout-- = c % 0x100u;
+		c /= 0x100u;
+	}
 }
 
 char CCallsign::GetModule() const
@@ -126,5 +129,28 @@ char CCallsign::GetModule() const
 
 bool CCallsign::operator==(const CCallsign &rhs) const
 {
-	return (0 == memcmp(code, rhs.code, 6));
+	return coded == rhs.coded;
+}
+
+bool CCallsign::operator!=(const CCallsign &rhs) const
+{
+	return coded != rhs.coded;
+}
+
+void CCallsign::SetModule(char m)
+{
+	if (islower(m))
+		m = toupper(m);
+	if (not isupper(m))
+	{
+		if (isprint(m))
+			LogWarning("'%c' is not a vaild module", m);
+		else
+			LogWarning("0x%02x is not a valid module character", unsigned(m));
+		return;
+	}
+	std::string call(cs);
+	call.resize(8, ' ');
+	call.append(1, m);
+	CSIn(call);
 }

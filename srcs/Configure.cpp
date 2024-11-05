@@ -59,9 +59,9 @@ static inline void trim(std::string &s)
 
 CConfigure::CConfigure()
 {
-	MoreCS  = std::regex("^[0-9]?[A-Z]{1,2}[0-9]{1,2}[A-Z]{1,4}[ ]*$", std::regex::extended);
-	MrefdCS = std::regex("^M17-[A-Z0-9]{3,3}( [A-Z])?$", std::regex::extended);
-	UrfdCS  = std::regex("^URF[A-Z0-9]{3,3}(  [A-Z])?$", std::regex::extended);
+	MoreCS  = std::regex("^[0-9]?[A-Z]{1,2}[0-9]{1,2}[A-Z]{1,4}([./-][0-9A-Z])?[ ]*$", std::regex::extended);
+	MrefdCS = std::regex("^M17-[A-Z0-9]{3,3} [A-Z]$", std::regex::extended);
+	UrfdCS  = std::regex("^URF[A-Z0-9]{3,3}  [A-Z]$", std::regex::extended);
 	IPv4RegEx = std::regex("^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3,3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9]){1,1}$", std::regex::extended);
 	IPv6RegEx = std::regex("^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}(:[0-9a-fA-F]{1,4}){1,1}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|([0-9a-fA-F]{1,4}:){1,1}(:[0-9a-fA-F]{1,4}){1,6}|:((:[0-9a-fA-F]{1,4}){1,7}|:))$", std::regex::extended);
 }
@@ -274,10 +274,9 @@ bool CConfigure::ReadData(const std::string &path)
 	if (isDefined(ErrorLevel::fatal, g_Keys.general.section, g_Keys.general.callsign, rval))
 	{
 		auto cs = GetString(g_Keys.general.callsign);
-		trim(cs);
-		if (not std::regex_match(cs, MoreCS))
+		if (not std::regex_match(cs, MoreCS) or cs.size()>8)
 		{
-			std::cerr << "Error: Callsign '" << cs << "' does not look like a valid callsign" << std::endl;
+			std::cerr << "ERROR: Callsign '" << cs << "' does not look like a valid callsign" << std::endl;
 			rval = true;
 		}
 		data[g_Keys.general.callsign] = cs;
@@ -289,13 +288,13 @@ bool CConfigure::ReadData(const std::string &path)
 		{
 			std::cout << "WARNING: '" << mod << "' is not uppercase, converting" << std::endl;
 			mod = 'A' + (mod - 'a');
-			data[g_Keys.general.module] = std::string(1, mod);
 		}
 		if (not('A' <= mod and mod <= 'Z'))
 		{
 			std::cerr << "ERROR: '" << mod << "' has to be an upper case letter A-Z" << std::endl;
 			rval = true;
 		}
+		data[g_Keys.general.module] = std::string(1, mod);
 	}
 	if (isDefined(ErrorLevel::fatal, g_Keys.general.section, g_Keys.general.isdaemon, rval))
 	{

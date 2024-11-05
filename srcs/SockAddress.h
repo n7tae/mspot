@@ -181,19 +181,6 @@ public:
 		}
 	}
 
-	void ClearAddress()
-	{
-		if (AF_INET == addr.ss_family) {
-			auto addr4 = (struct sockaddr_in *)&addr;
-			addr4->sin_addr.s_addr = 0U;
-			strcpy(straddr, "0.0.0.0");
-		} else {
-			auto addr6 = (struct sockaddr_in6 *)&addr;
-			memset(&(addr6->sin6_addr.s6_addr), 0, 16);
-			strcpy(straddr, "::");
-		}
-	}
-
 	const char *GetAddress() const
 	{
 		if (straddr[0])

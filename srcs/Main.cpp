@@ -40,29 +40,25 @@ static void usage(const std::string &exename)
 
 int main(int argc, char** argv)
 {
-	if (argc == 2) {
-		const std::string arg(argv[1]);
-		if ((arg == "-v") || (arg == "--version"))
-		{
-			std::cout << argv[0] << " version " << g_Version << std::endl;
-			return EXIT_SUCCESS;
-		}
-		else if (arg == "--help")
-		{
-			usage(argv[0]);
-			EXIT_SUCCESS;
-		}
-		else
-		{
-			if (g_Cfg.ReadData(arg))
-				return EXIT_FAILURE;
-		}
-	}
-	else
+	if (argc != 2)
 	{
 		usage(argv[0]);
-		EXIT_FAILURE;
+		return EXIT_FAILURE;
 	}
+	const std::string arg(argv[1]);
+	if (0 == arg.compare("-v") || 0 == arg.compare("--version"))
+	{
+		std::cout << argv[0] << " version " << g_Version << std::endl;
+		return EXIT_SUCCESS;
+	}
+	if (0 == arg.compare("--help"))
+	{
+		usage(argv[0]);
+		return EXIT_SUCCESS;
+	}
+
+	if (g_Cfg.ReadData(arg))
+		return EXIT_FAILURE;
 
 	std::signal(SIGINT,  sigHandler);
 	std::signal(SIGTERM, sigHandler);
@@ -70,7 +66,10 @@ int main(int argc, char** argv)
 
 	bool ret;
 
-	do {
+	std::unique_ptr<CM17Host> host;
+
+	do
+	{
 		m_signal = 0;
 
 		auto host = std::make_unique<CM17Host>();
@@ -96,6 +95,8 @@ int main(int argc, char** argv)
 				break;
 		}
 	} while (m_reload || (m_signal == 1));
+
+	host.reset();
 
 	::LogFinalise();
 

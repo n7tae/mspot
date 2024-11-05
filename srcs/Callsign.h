@@ -20,14 +20,17 @@ public:
 	CCallsign();
 	CCallsign(const std::string &cs);
 	CCallsign(const uint8_t *code);
+	void Clear();
 	void CSIn(const std::string &cs);
 	void CodeIn(const uint8_t *code);
 	const std::string GetCS(unsigned len = 0) const;
-	void CodeOut(uint8_t *out) const { memcpy(out, code, 6); };
+	void CodeOut(uint8_t *out) const;
+	uint64_t Hash() const { return coded; }
 	bool operator==(const CCallsign &rhs) const;
+	bool operator!=(const CCallsign &rhs) const;
 	char GetModule(void) const;
-
+	void SetModule(char m);
 private:
-	uint8_t code[6];
+	uint64_t coded;
 	char cs[10];
 };

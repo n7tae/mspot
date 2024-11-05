@@ -36,6 +36,7 @@ void CM17Gateway::Stop()
 
 bool CM17Gateway::Start()
 {
+	destMap.ReadAll();
 	std::string cs(g_Cfg.GetString(g_Keys.general.callsign));
 	cs.resize(8, ' ');
 	cs.append(1, g_Cfg.GetString(g_Keys.general.module).at(0));
@@ -58,13 +59,13 @@ bool CM17Gateway::Start()
 	switch (internetType)
 	{
 	case EInternetType::ipv4only:
-		LogInfo("Gateway IP Type: IPv4 Only");
+		LogInfo("Gateway supports IPv4 Only");
 		break;
 	case EInternetType::ipv6only:
-		LogInfo("Gateway IP Type: IPv6 Only");
+		LogInfo("Gateway supports IPv6 Only");
 		break;
 	default:
-		LogInfo("Gateway IP Type: Dual Stack (IPv4+IPv6");
+		LogInfo("Gateway supports Dual Stack (IPv4 and IPv6");
 		break;
 	}
 
@@ -75,7 +76,7 @@ bool CM17Gateway::Start()
 			return true;
 		if (ipv4.Open(addr))
 			return true;
-		LogInfo("Gateway listening on %s", addr.GetAddress());
+		LogInfo("Gateway listening on %s:%u", addr.GetAddress(), ipv4.GetPort());
 	}
 	if (EInternetType::ipv4only != internetType)
 	{
@@ -84,7 +85,7 @@ bool CM17Gateway::Start()
 			return true;
 		if (ipv6.Open(addr))
 			return true;
-		LogInfo("Gateway listening on %s", addr.GetAddress());
+		LogInfo("Gateway listening on [%s]:%u", addr.GetAddress(), ipv6.GetPort());
 	}
 
 	mlink.state = ELinkState::unlinked;
@@ -94,7 +95,7 @@ bool CM17Gateway::Start()
 	LogInfo("Gateway will%s try to re-establish a dropped link", mlink.maintainLink ? "" : " NOT");
 	if (g_Cfg.IsString(g_Keys.gateway.startupLink))
 	{
-		mlink.cs.CSIn(g_Cfg.GetString(g_Keys.gateway.startupLink));
+		setDestination(g_Cfg.GetString(g_Keys.gateway.startupLink));
 	}
 	gateFuture = std::async(std::launch::async, &CM17Gateway::Process, this);
 	if (! gateFuture.valid())
@@ -169,7 +170,10 @@ void CM17Gateway::Process()
 		}
 		else // ELinkState is unlinked
 		{
-
+			if (mlink.maintainLink and not mlink.addr.AddressIsZero())
+			{
+				sendLinkRequest();
+			}
 		}
 
 		if (currentStream.header.data.streamid && currentStream.lastPacketTime.time() >= 2.0)
@@ -302,25 +306,15 @@ void CM17Gateway::processHost()
 
 }
 
-void CM17Gateway::setDestAddress(const std::string &address, uint16_t port)
+void CM17Gateway::sendLinkRequest()
 {
-	if (std::string::npos == address.find(':'))
-		destination.Initialize(AF_INET, port, address.c_str());
-	else
-		destination.Initialize(AF_INET6, port, address.c_str());
-}
-
-void CM17Gateway::sendLinkRequest(const CCallsign &ref)
-{
-	mlink.addr = destination;
-	mlink.cs = ref;
 	mlink.from_mod = thisCS.GetModule();
 
 	// make a CONN packet
 	SM17RefPacket conn;
 	memcpy(conn.magic, "CONN", 4);
 	thisCS.CodeOut(conn.cscode);
-	conn.mod = ref.GetModule();
+	conn.mod = mlink.cs.GetModule();
 	writePacket(conn.magic, 11, mlink.addr);	// send the link request
 	// go ahead and make the pong packet
 	memcpy(mlink.pongPacket.magic, "PONG", 4);
@@ -431,4 +425,43 @@ void CM17Gateway::Dump(const char *title, const void *pointer, int length)
 		else
 			length = 0;
 	}
+}
+
+// returns false if successful
+bool CM17Gateway::setDestination(const std::string &cs)
+{
+	auto phost = destMap.Find(cs);
+
+	if (phost)
+	{
+		// prefer IPv6
+		if (EInternetType::ipv4only != internetType and not phost->ip6addr.empty())
+		{
+			mlink.addr.Initialize(phost->ip6addr, phost->port);
+			mlink.cs.CSIn(cs);
+			return false;
+		}
+
+		// if this is IPv6 only, we're done
+		if (EInternetType::ipv6only == internetType)
+		{
+			LogWarning("This IPv6-only system could not find an IPv6 address for '%s'", cs.c_str());
+			return true;
+		}
+
+		// if the host is IPv6 only, were also done
+		if (phost->ip4addr.empty())
+		{
+			LogWarning("There is no IPv4 address for '%s'", cs.c_str());
+			return true;
+		}
+
+		// this is the default IPv4 address
+		mlink.addr.Initialize(phost->ip4addr, phost->port);
+		mlink.cs.CSIn(cs);
+		return false;
+	}
+
+	LogWarning("Host '%s' not found", cs.c_str());
+	return true;
 }

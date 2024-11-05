@@ -22,11 +22,11 @@ struct SHost
 	uint16_t port;
 };
 
-class CM17RouteMap
+class CHostMap
 {
 public:
-	CM17RouteMap();
-	~CM17RouteMap();
+	CHostMap();
+	~CHostMap();
 	const SHost *Find(const std::string &cs) const;
 	void Update(const std::string &cs, const std::string &ip4addr, const std::string &ip6addr, const std::string &modules, const std::string &specialmodules, const uint16_t port);
 	void ReadAll();
@@ -35,6 +35,7 @@ public:
 
 private:
 	void Read(const std::string &file);
+	bool getBase(const std::string &cs, std::string &base) const;
 	std::map<std::string, SHost> baseMap;
-	std::string hostpath, myhostpath;
+	bool hasIPv4, hasIPv6;
 };
