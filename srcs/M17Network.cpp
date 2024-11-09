@@ -70,7 +70,7 @@ void CM17Network::write(const unsigned char* data)
 	if (m_debug)
 		CUtils::dump(1U, "M17 Network Transmitted", frame->data.magic, 54U);
 
-	Host2Gate.Push(std::move(frame));
+	Host2Gate.Push(frame);
 }
 
 void CM17Network::clock(unsigned int ms)

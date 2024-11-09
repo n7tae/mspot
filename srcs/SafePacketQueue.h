@@ -25,7 +25,7 @@ public:
 
 	~CSafePacketQueue(void) {}
 
-	void Push(T t)
+	void Push(T &t)
 	{
 		std::lock_guard<std::mutex> lock(m);
 		q.push(std::move(t));
@@ -59,9 +59,19 @@ public:
 		return val;
 	}
 
-	bool IsEmpty(void)
+	// wait for some time, or until an element is available.
+	T PopWaitFor(int ms)
 	{
 		std::unique_lock<std::mutex> lock(m);
+
+		if (q.empty())
+			c.wait_for(lock, std::chrono::milliseconds(ms));
+		return Pop();
+	}
+
+	bool IsEmpty(void)
+	{
+		std::lock_guard<std::mutex> lock(m);
 		return q.empty();
 	}
 

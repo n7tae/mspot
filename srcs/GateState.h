@@ -11,7 +11,7 @@
 
 #include <mutex>
 
-enum class EGateState { idle, gatein, modemin, record, play, linking };
+enum class EGateState { idle, gatein, modemin };
 
 class CGateState
 {

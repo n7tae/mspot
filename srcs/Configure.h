@@ -47,6 +47,6 @@ private:
 	unsigned getUnsigned(const std::string &value, const std::string &label, unsigned min, unsigned max, unsigned defaultvalue) const;
 	int getInt(const std::string &value, const std::string &label, int min, int max, int defaultvalue) const;
 	void badParam(const std::string &param) const;
-	void checkFile(const std::string &section, const std::string &key, const std::string &filepath) const;
+	void checkPath(const std::string &section, const std::string &key, const std::string &filepath, const std::filesystem::file_type type) const;
 	bool isDefined(ErrorLevel level, const std::string &section, const std::string &key, bool &rval);
 };

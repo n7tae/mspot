@@ -17,13 +17,13 @@
 #define IPFRAMESIZE 54
 
 // M17 Packet
-//all structures must be big endian on the wire, so you'll want htonl (man byteorder 3) and such.
+
 using SMLich = struct __attribute__((__packed__)) lich_tag
 {
 	uint8_t  addr_dst[6]; //48 bit int - you'll have to assemble it yourself unfortunately
 	uint8_t  addr_src[6];
-	uint16_t frametype; //frametype flag field per the M17 spec
-	uint8_t  meta[14]; //meta data (IVs and GNSS)
+	uint16_t frametype;   //frametype flag field per the M17 spec
+	uint8_t  meta[14];    //meta data (IVs and GNSS)
 }; // 6 + 6 + 2 + 14 = 28 bytes = 224 bits
 
 // the one and only frame

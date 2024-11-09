@@ -14,6 +14,7 @@
 #include <string>
 #include <mutex>
 #include <future>
+#include <random>
 
 #include "SteadyTimer.h"
 #include "SockAddress.h"
@@ -52,26 +53,39 @@ public:
 
 private:
 	CCallsign thisCS;
+	uint16_t can;
+	std::string audioPath;
 	EInternetType internetType;
 	std::atomic<bool> keep_running;
 	CUDPSocket ipv4, ipv6;
 	SM17Link mlink;
-	CSteadyTimer linkingTime;
+	CSteadyTimer linkingTime, lastLinkSent;
 	SStream currentStream;
 	std::mutex stateLock;
-	std::string qnvoice_file;
 	CSockAddress from17k;
-	std::future<void> gateFuture;
+	std::future<void> gateFuture, hostFuture;
 	CGateState gateState;
 	CHostMap destMap;
+	std::mt19937 m_random;
 
-	void Process();
+	void ProcessGateway();
 	void writePacket(const void *buf, const size_t size, const CSockAddress &addr) const;
 	void streamTimeout();
 	void sendPacket(const void *buf, size_t size, const CSockAddress &addr) const;
-	void processGate(const uint8_t *buf);
-	void processHost();
+	void processGatePacket(const uint8_t *buf);
+	void ProcessHost();
 	void sendLinkRequest();
 	bool setDestination(const std::string &cs);
 	void Dump(const char *title, const void *pointer, int length);
+
+	// for executing rf based commands!
+	uint16_t makeStreamID();
+	void doLink(std::unique_ptr<SIPFrame> &);
+	void doUnlink(std::unique_ptr<SIPFrame> &);
+	void doEcho(std::unique_ptr<SIPFrame> &);
+	void doRecord(std::unique_ptr<SIPFrame> &);
+	void doRecord(char, uint16_t);
+	void doPlay(std::unique_ptr<SIPFrame> &);
+	void doPlay(char c);
+	void wait4end(std::unique_ptr<SIPFrame> &);
 };

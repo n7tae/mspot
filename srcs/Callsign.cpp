@@ -57,19 +57,22 @@ void CCallsign::CSIn(const std::string &callsign)
 		if (std::string::npos == pos)
 			pos = 0;
 		if (skip and 0 == pos)
+		{
+			cs[i] = 0;
 			continue;
+		}
 		skip = false;
 		cs[i] = m17_alphabet.at(pos);	// replace with valid character
-		coded *= 40;
+		coded *= 40u;
 		coded += pos;
 	}
 }
 
 const std::string CCallsign::GetCS(unsigned len) const
 {
+	std::string rval(cs);
 	if (len > 9)
 		len = 9;
-	std::string rval(cs);
 	if (len)
 		rval.resize(len, ' ');
 	return rval;
@@ -125,6 +128,16 @@ char CCallsign::GetModule() const
 		return cs[8];
 	else
 		return ' ';
+}
+
+uint64_t CCallsign::GetBase() const
+{
+	if (cs[8])
+	{
+		auto pos = m17_alphabet.find(cs[8]);
+		return coded - (pos * 0x5f5e1000000u); // 0x5f5e1000000 = 40^8
+	}
+	return coded;
 }
 
 bool CCallsign::operator==(const CCallsign &rhs) const

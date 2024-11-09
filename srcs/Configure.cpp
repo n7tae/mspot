@@ -8,8 +8,7 @@
  *                                                              *
  ****************************************************************/
 
-#include <sys/stat.h>
-#include <sys/types.h>
+#include <filesystem>
 #include <pwd.h>
 #include <stdlib.h>
 #include <iostream>
@@ -256,6 +255,8 @@ bool CConfigure::ReadData(const std::string &path)
 					data[g_Keys.gateway.myHostPath] = value;
 				else if (0 == key.compare(g_Keys.gateway.allowNotTranscoded))
 					data[g_Keys.gateway.allowNotTranscoded] = IS_TRUE(value[0]);
+				else if (0 == key.compare(g_Keys.gateway.audioFolder))
+					data[g_Keys.gateway.audioFolder] = value;
 				else
 					badParam(key);
 				break;
@@ -322,7 +323,7 @@ bool CConfigure::ReadData(const std::string &path)
 			if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.uartPort, rval))
 			{
 				const auto path = GetString(g_Keys.modem.uartPort);
-				checkFile(g_Keys.modem.section, g_Keys.modem.uartPort, path);
+				checkPath(g_Keys.modem.section, g_Keys.modem.uartPort, path, std::filesystem::file_type::character);
 			}
 			if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.uartSpeed, rval))
 			{
@@ -371,7 +372,7 @@ bool CConfigure::ReadData(const std::string &path)
 			if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.i2cAddress, rval))
 			{
 				const auto path = GetString(g_Keys.modem.i2cAddress);
-				checkFile(g_Keys.modem.section, g_Keys.modem.i2cAddress, path);
+				checkPath(g_Keys.modem.section, g_Keys.modem.i2cAddress, path, std::filesystem::file_type::character);
 			}
 			isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.i2cPort, rval);
 		}
@@ -403,7 +404,7 @@ bool CConfigure::ReadData(const std::string &path)
 	if (isDefined(ErrorLevel::mild, g_Keys.modem.section, g_Keys.modem.rssiMapFile, rval))
 	{
 		const auto path = GetString(g_Keys.modem.rssiMapFile);
-		checkFile(g_Keys.modem.section, g_Keys.modem.rssiMapFile, path);
+		checkPath(g_Keys.modem.section, g_Keys.modem.rssiMapFile, path, std::filesystem::file_type::regular);
 	}
 	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.trace, rval);
 	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.debug, rval);
@@ -415,7 +416,7 @@ bool CConfigure::ReadData(const std::string &path)
 	if(isDefined(ErrorLevel::fatal, g_Keys.log.section, g_Keys.log.filePath,  rval))
 	{
 		const std::string path = GetString(g_Keys.log.filePath);
-		checkFile(g_Keys.log.section, g_Keys.log.filePath, path);
+		checkPath(g_Keys.log.section, g_Keys.log.filePath, path, std::filesystem::file_type::directory);
 	}
 	isDefined(ErrorLevel::fatal, g_Keys.log.section, g_Keys.log.rotate,       rval);
 
@@ -434,14 +435,19 @@ bool CConfigure::ReadData(const std::string &path)
 	if (isDefined(ErrorLevel::mild, g_Keys.gateway.section, g_Keys.gateway.hostPath,   rval))
 	{
 		const auto path = GetString(g_Keys.gateway.hostPath);
-		checkFile(g_Keys.gateway.section, g_Keys.gateway.hostPath, path);
+		checkPath(g_Keys.gateway.section, g_Keys.gateway.hostPath, path, std::filesystem::file_type::regular);
 	}
 	if (isDefined(ErrorLevel::mild, g_Keys.gateway.section, g_Keys.gateway.myHostPath,    rval))
 	{
 		const auto path = GetString(g_Keys.gateway.myHostPath);
-		checkFile(g_Keys.gateway.section, g_Keys.gateway.myHostPath, path);
+		checkPath(g_Keys.gateway.section, g_Keys.gateway.myHostPath, path, std::filesystem::file_type::regular);
 	}
 	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.allowNotTranscoded, rval);
+	if (isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.audioFolder, rval))
+	{
+		const auto path = GetString(g_Keys.gateway.audioFolder);
+		checkPath(g_Keys.gateway.section, g_Keys.gateway.audioFolder, path, std::filesystem::file_type::directory);
+	}
 
 	return rval;
 }
@@ -491,13 +497,39 @@ void CConfigure::badParam(const std::string &key) const
 	std::cout << "WARNING: line #" << counter << ": Unexpected parameter: '" << key << "'" << std::endl;
 }
 
-void CConfigure::checkFile(const std::string &section, const std::string &key, const std::string &filepath) const
+void CConfigure::checkPath(const std::string &section, const std::string &key, const std::string &filepath, const std::filesystem::file_type desired_type) const
 {
-	struct stat sstat;
-	auto rval = stat(filepath.c_str(), &sstat);
-	if (rval)
+	std::filesystem::path p(filepath);
+	std::filesystem::file_type rtype;
+	// follow as many symbolic links as needed
+	while (std::filesystem::file_type::symlink == (rtype = std::filesystem::status(p).type()))
+		p = std::filesystem::read_symlink(p);
+
+	if (p.is_relative())
+		std::cout << "WARNING: [" << section << "]" << key << " '" << filepath << "' is a relative path" << std::endl;
+
+	if (desired_type != rtype)
 	{
-		std::cout << "WARNING: [" << section << ']' << key << " \"" << filepath << "\": " << strerror(errno) << std::endl;
+		std::cout << "WARNING: [" << section << ']' << key << " '" << filepath << "' ";
+		switch(desired_type)
+		{
+		case std::filesystem::file_type::not_found:
+			std::cout << "doesn't exist";
+			break;
+		case std::filesystem::file_type::regular:
+			std::cout << "is not a regular file";
+			break;
+		case std::filesystem::file_type::directory:
+			std::cout << "is not a directory";
+			break;
+		case std::filesystem::file_type::character:
+			std::cout << "is not a modem (character) device";
+			break;
+		default:
+			std::cout << "ia not an expected file type";
+			break;
+		}
+		std::cout << std::endl;
 	}
 }
 
