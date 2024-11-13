@@ -10,7 +10,12 @@
 
 include mhost.mk
 
-CFLAGS  = -g -std=c++17 -Wall -Isrcs
+ifeq ($(DEBUG), true)
+CPPFLAGS = -g -gddb -std=c++17 -Wall -Isrcs
+else
+CPPFLAGS  = -g -std=c++17 -Wall -Isrcs
+endif
+
 LIBS    = -pthread
 
 SRCS = $(wildcard srcs/*.cpp)
@@ -20,15 +25,15 @@ DEPS = $(SRCS:.cpp=.d)
 all : mhost inicheck
 
 mhost : $(OBJS)
-	$(CXX) $(CFLAGS) $(OBJS) $(LIBS) -o $@
+	$(CXX) $(CPPFLAGS) $(OBJS) $(LIBS) -o $@
 
 inicheck : srcs/Configure.h srcs/Configure.cpp srcs/JsonKeys.h
-	$(CXX) $(CFLAGS) -DINICHECK srcs/Configure.cpp -o $@
+	$(CXX) $(CPPFLAGS) -DINICHECK srcs/Configure.cpp -o $@
 
 -include $(DEPS)
 
 %.o: %.cpp
-		$(CXX) $(CFLAGS) -MMD -MP -c -o $@ $<
+		$(CXX) $(CPPFLAGS) -MMD -MP -c -o $@ $<
 
 clean :
 	$(RM) $(all) srcs/*.o srcs/*.d

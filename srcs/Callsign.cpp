@@ -29,6 +29,13 @@ CCallsign::CCallsign(const uint8_t *in)
 	CodeIn(in);
 }
 
+CCallsign &CCallsign::operator=(const CCallsign &rhs)
+{
+	coded = rhs.coded;
+	memcpy(cs, rhs.cs, sizeof(cs));
+	return *this;
+}
+
 void CCallsign::Clear()
 {
 	memset(cs, 0, 10);

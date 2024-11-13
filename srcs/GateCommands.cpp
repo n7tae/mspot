@@ -51,6 +51,9 @@ void CM17Gateway::wait4end(std::unique_ptr<SIPFrame> &Frame)
 		return;
 
 	CSteadyTimer ptime;
+
+	// we're only going to reset the packet timer if subsequent incoming packets have this SID
+	// this is all internal, so we don't need to convert the SID from network byte order.
 	auto streamid = Frame->data.streamid;
 
 	while (keep_running)
@@ -62,7 +65,7 @@ void CM17Gateway::wait4end(std::unique_ptr<SIPFrame> &Frame)
 			if (0x8000 & Frame->GetFrameNumber())
 				break;
 		}
-		if (ptime.time() > 2.0)
+		if (ptime.time() > 1.6)
 		{
 			break;
 		}
@@ -70,17 +73,28 @@ void CM17Gateway::wait4end(std::unique_ptr<SIPFrame> &Frame)
 	return;
 }
 
-void CM17Gateway::doLink(std::unique_ptr<SIPFrame> &Frame)
-{}
-
 void CM17Gateway::doUnlink(std::unique_ptr<SIPFrame> &Frame)
-{}
+{
+	wait4end(Frame);
+	if (ELinkState::unlinked == mlink.state)
+	{
+		LogInfo("%s is already unlinked", thisCS.c_str());
+	}
+	else
+	{
+		// make and send the DISConnect packet
+		SM17RefPacket disc;
+		memcpy(disc.magic, "DISC", 4);
+		thisCS.CodeOut(disc.cscode);
+		sendPacket(disc.magic, 10, mlink.addr);
+		// the gateway proccess loop will disconnect when is receives the confirming DISC packet.
+	}
+}
 
 void CM17Gateway::doEcho(std::unique_ptr<SIPFrame> &Frame)
 {
 	if (Frame->GetFrameNumber() & 0x8000)
 	{
-		gateState.Idle();
 		return;
 	}
 	auto streamID = Frame->data.streamid;
@@ -92,7 +106,6 @@ void CM17Gateway::doRecord(std::unique_ptr<SIPFrame> &Frame)
 {
 	if (Frame->GetFrameNumber() & 0x8000u)
 	{
-		gateState.Idle();
 		return;
 	}
 	CCallsign dest(Frame->data.lich.addr_dst);
@@ -135,7 +148,6 @@ void CM17Gateway::doRecord(char c, uint16_t streamID)
 		while (not fifo.IsEmpty())
 			fifo.Pop().reset();
 		LogInfo("Only recorded %d milliseconds, not saved", 40 * fn);
-		gateState.Idle();
 		return;
 	}
 
@@ -176,7 +188,6 @@ void CM17Gateway::doRecord(char c, uint16_t streamID)
 	// after a short wait
 	std::this_thread::sleep_for(std::chrono::milliseconds(500));
 	doPlay(c);
-	gateState.Idle();
 }
 
 void CM17Gateway::doPlay(std::unique_ptr<SIPFrame> &Frame)
@@ -198,7 +209,6 @@ void CM17Gateway::doPlay(char c)
 			LogError("'%c' is not a valid M17 character", c);
 		else
 			LogError("0x%02x is not a valid M17 character", unsigned(c));
-		gateState.Idle();
 		return;
 	}
 	pathname /= fnames[pos];
@@ -213,7 +223,6 @@ void CM17Gateway::doPlay(char c)
 		if ((count % 16) or (count / 16 < 25) or (count / 16 > 3000))
 		{
 			LogError("'%s' has an unexpected file size of %lu", pathname.c_str(), count);
-			gateState.Idle();
 			return;
 		}
 	}
@@ -246,5 +255,4 @@ void CM17Gateway::doPlay(char c)
 	}
 	else
 		LogError("Could not open file '%s'", pathname.c_str());
-	gateState.Idle();
 }

@@ -18,12 +18,14 @@ class CCallsign
 {
 public:
 	CCallsign();
+	CCallsign &operator=(const CCallsign &rhs);
 	CCallsign(const std::string &cs);
 	CCallsign(const uint8_t *code);
 	void Clear();
 	void CSIn(const std::string &cs);
 	void CodeIn(const uint8_t *code);
 	const std::string GetCS(unsigned len = 0) const;
+	const char *c_str() const { return cs; }
 	void CodeOut(uint8_t *out) const;
 	uint64_t GetBase(void) const;
 	uint64_t Hash() const { return coded; }
