@@ -2,6 +2,5 @@
 
 BINDIR = /usr/local/bin
 
-
 # for software debugging support
-DEGUB = true
+DEBUG = true

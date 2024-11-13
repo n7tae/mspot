@@ -11,7 +11,7 @@
 include mhost.mk
 
 ifeq ($(DEBUG), true)
-CPPFLAGS = -g -gddb -std=c++17 -Wall -Isrcs
+CPPFLAGS = -g -ggdb -std=c++17 -Wall -Isrcs
 else
 CPPFLAGS  = -g -std=c++17 -Wall -Isrcs
 endif
