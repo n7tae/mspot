@@ -102,11 +102,11 @@ void CHostMap::Read(const std::string &path)
 			trim(line);
 			if (0==line.size() || '#'==line[0]) continue;
 			std::vector<std::string> elem;
-			split(line, ' ', elem);
-			if (6 == elem.size())
+			auto vsize = split(line, elem);
+			if (6 == vsize)
 				Update(elem[0], elem[1], elem[2], elem[3], elem[4], std::stoul(elem[5]));
 			else
-				LogWarning("Line #%u of %s doesn't have 5 elements", count, path.c_str());
+				LogWarning("Line #%u of %s has %u elements, needs 6", count, path.c_str(), vsize);
 
 		}
 		file.close();

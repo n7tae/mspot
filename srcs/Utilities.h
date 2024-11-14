@@ -23,12 +23,11 @@
 #include <cctype>
 #include <locale>
 
-static inline void split(const std::string &s, char delim, std::vector<std::string> &v)
+static inline std::size_t split(std::string const &line, std::vector<std::string> &v)
 {
-	std::istringstream iss(s);
-	std::string item;
-	while (std::getline(iss, item, delim))
-		v.push_back(item);
+	std::istringstream buffer(line);
+	std::copy(std::istream_iterator<std::string>(buffer), std::istream_iterator<std::string>(), std::back_inserter(v));
+	return v.size();
 }
 
 // trim from start (in place)
