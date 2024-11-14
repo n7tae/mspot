@@ -376,7 +376,11 @@ bool CConfigure::ReadData(const std::string &path)
 			}
 			isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.i2cPort, rval);
 		}
-		else if (protocol.compare("null"))
+		else if (0 == protocol.compare("null"))
+		{
+			;
+		}
+		else
 		{
 			std::cerr << "ERROR: Unknown Protocol '" << protocol << "'" << std::endl;
 			rval = true;
@@ -511,22 +515,22 @@ void CConfigure::checkPath(const std::string &section, const std::string &key, c
 	if (desired_type != rtype)
 	{
 		std::cout << "WARNING: [" << section << ']' << key << " '" << filepath << "' ";
-		switch(desired_type)
+		switch(rtype)
 		{
 		case std::filesystem::file_type::not_found:
 			std::cout << "doesn't exist";
 			break;
 		case std::filesystem::file_type::regular:
-			std::cout << "is not a regular file";
+			std::cout << "is a regular file";
 			break;
 		case std::filesystem::file_type::directory:
-			std::cout << "is not a directory";
+			std::cout << "is a directory";
 			break;
 		case std::filesystem::file_type::character:
-			std::cout << "is not a modem (character) device";
+			std::cout << "is a modem (character) device";
 			break;
 		default:
-			std::cout << "ia not an expected file type";
+			std::cout << "ia an expected file type";
 			break;
 		}
 		std::cout << std::endl;
