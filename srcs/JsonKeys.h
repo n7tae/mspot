@@ -40,7 +40,7 @@ struct SJsonKeys
 	}
 	modem
 	{
-		"Modem", "IsDuplex", "Protocol", "UartPort", "UartSpeed", "I2CPort", "I2CAddress", "ModemAddress", "ModemPort", "LocalAddress", "LocalPort", "RXFrequency", "TXFrequency", "RXOffset", "TXOffset", "RXDCOffset", "TXDCOffset", "RXInvert", "TXInvert", "PTTInvert", "TXHang", "TXDelay", "TXLevel", "RXLevel", "RFLevel", "RssiMapFilePath", "Trace", "Debug"
+		"Modem", "Protocol", "IsDuplex", "UartPort", "UartSpeed", "I2CPort", "I2CAddress", "ModemAddress", "ModemPort", "LocalAddress", "LocalPort", "RXFrequency", "TXFrequency", "RXOffset", "TXOffset", "RXDCOffset", "TXDCOffset", "RXInvert", "TXInvert", "PTTInvert", "TXHang", "TXDelay", "TXLevel", "RXLevel", "RFLevel", "RssiMapFilePath", "Trace", "Debug"
 	};
 
 	struct GATEWAY
