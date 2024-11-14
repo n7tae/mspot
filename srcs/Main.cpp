@@ -29,6 +29,7 @@ static bool m_reload = false;
 
 static void sigHandler(int signum)
 {
+	std::cout << "Caught signal #" << signum << std::endl;
 	host.Stop();
 	m_signal = signum;
 }

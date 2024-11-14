@@ -57,6 +57,7 @@ CM17Host::~CM17Host()
 
 void CM17Host::Stop()
 {
+	LogInfo("Stopping CM17Host...");
 	keep_running = false;
 }
 
@@ -139,6 +140,7 @@ bool CM17Host::Run()
 	LogInfo(HEADER2);
 	LogInfo(HEADER3);
 	LogInfo(HEADER4);
+	LogInfo(HEADER5);
 
 	LogInfo("mhost-%s is starting", g_Version.GetString());
 	LogInfo("Built %s %s", __TIME__, __DATE__);
