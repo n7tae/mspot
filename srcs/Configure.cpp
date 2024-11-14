@@ -269,7 +269,7 @@ bool CConfigure::ReadData(const std::string &path)
 	}
 	cfgfile.close();
 
-	////////////////////////////// check the input
+	////////////////////////////// check the input //////////////////////////////
 	// General section
 	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.general.allowEncrypt, rval);
 	if (isDefined(ErrorLevel::fatal, g_Keys.general.section, g_Keys.general.callsign, rval))
@@ -405,7 +405,7 @@ bool CConfigure::ReadData(const std::string &path)
 	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.rxDCOffset, rval);
 	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.txDCOffset, rval);
 
-	if (isDefined(ErrorLevel::mild, g_Keys.modem.section, g_Keys.modem.rssiMapFile, rval))
+	if (Contains(g_Keys.modem.rssiMapFile))
 	{
 		const auto path = GetString(g_Keys.modem.rssiMapFile);
 		checkPath(g_Keys.modem.section, g_Keys.modem.rssiMapFile, path, std::filesystem::file_type::regular);
@@ -514,20 +514,57 @@ void CConfigure::checkPath(const std::string &section, const std::string &key, c
 
 	if (desired_type != rtype)
 	{
-		std::cout << "WARNING: [" << section << ']' << key << " '" << filepath << "' ";
-		switch(rtype)
+		std::cout << "WARNING: [" << section << ']' << key << " '" << filepath << "' was expected to be ";
+		switch(desired_type)
 		{
-		case std::filesystem::file_type::not_found:
-			std::cout << "doesn't exist";
+		case std::filesystem::file_type::block:
+			std::cout << "a block device";
+			break;
+		case std::filesystem::file_type::character:
+			std::cout << "a character device";
+			break;
+		case std::filesystem::file_type::directory:
+			std::cout << "a directory";
+			break;
+		case std::filesystem::file_type::fifo:
+			std::cout << "a fifo";
 			break;
 		case std::filesystem::file_type::regular:
-			std::cout << "is a regular file";
+			std::cout << "a regular file";
+			break;
+		case std::filesystem::file_type::socket:
+			std::cout << "a socket";
+			break;
+		case std::filesystem::file_type::symlink:
+			std::cout << "a symbolic link";
+			break;
+		default:
+			std::cout << "an unknown type";
+			break;
+		}
+		std::cout << ", but it ";
+		switch(rtype)
+		{
+		case std::filesystem::file_type::block:
+			std::cout << "a block device";
 			break;
 		case std::filesystem::file_type::directory:
 			std::cout << "is a directory";
 			break;
 		case std::filesystem::file_type::character:
 			std::cout << "is a modem (character) device";
+			break;
+		case std::filesystem::file_type::fifo:
+			std::cout << "is a fifo";
+			break;
+		case std::filesystem::file_type::not_found:
+			std::cout << "doesn't exist";
+			break;
+		case std::filesystem::file_type::regular:
+			std::cout << "is a regular file";
+			break;
+		case std::filesystem::file_type::socket:
+			std::cout << "a socket";
 			break;
 		default:
 			std::cout << "ia an expected file type";

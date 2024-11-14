@@ -162,7 +162,9 @@ bool CM17Host::Run()
 		return true;
 
 	// For all modes we handle RSSI
-	const std::string rssiMappingFile(g_Cfg.GetString(g_Keys.modem.rssiMapFile));
+	std::string rssiMappingFile;
+	if (g_Cfg.Contains(g_Keys.modem.rssiMapFile))
+		rssiMappingFile.assign(g_Cfg.GetString(g_Keys.modem.rssiMapFile));
 
 	auto rssi = std::make_unique<CRSSIInterpolator>();
 	if (!rssiMappingFile.empty())
@@ -179,12 +181,12 @@ bool CM17Host::Run()
 
 	bool selfOnly          = g_Cfg.GetBoolean(g_Keys.general.isprivate);
 	unsigned int can       = g_Cfg.GetUnsigned(g_Keys.general.can);
-	bool allowEncryption   = false;
+	bool allowEncryption   = g_Cfg.GetBoolean(g_Keys.general.allowEncrypt);
 
 	LogInfo("M17 RF Parameters");
 	LogInfo("    Self Only: %s", selfOnly ? "true" : "false");
 	LogInfo("    CAN: %u", can);
-	//LogInfo("    Allow Encryption: %s", allowEncryption ? "true" : "false");
+	LogInfo("    Allow Encryption: %s", allowEncryption ? "true" : "false");
 
 	m_m17 = std::make_unique<CM17Control>(m_callsign, can, selfOnly, allowEncryption, m_m17Network, m_timeout, m_duplex, rssi.get());
 
