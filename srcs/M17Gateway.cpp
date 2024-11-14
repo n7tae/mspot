@@ -292,7 +292,7 @@ void CM17Gateway::ProcessGateway()
 					if (0 == memcmp(buf, "ACKN", 4))
 					{
 						mlink.state = ELinkState::linked;
-						LogInfo("Connected to %s\n", mlink.cs.GetCS().c_str());
+						LogInfo("Connected to %s", mlink.cs.GetCS().c_str());
 						mlink.receivePingTimer.start();
 					}
 					else if (0 == memcmp(buf, "NACK", 4))

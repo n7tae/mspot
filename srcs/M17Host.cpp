@@ -57,8 +57,8 @@ CM17Host::~CM17Host()
 
 void CM17Host::Stop()
 {
-	LogInfo("Stopping CM17Host...");
 	keep_running = false;
+	if (not keep_running) LogInfo("CM17Host::keep_running is false...");
 }
 
 bool CM17Host::Run()
