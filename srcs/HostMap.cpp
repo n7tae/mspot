@@ -103,7 +103,7 @@ void CHostMap::Read(const std::string &path)
 			if (0==line.size() || '#'==line[0]) continue;
 			std::vector<std::string> elem;
 			split(line, ' ', elem);
-			if (5 == elem.size())
+			if (6 == elem.size())
 				Update(elem[0], elem[1], elem[2], elem[3], elem[4], std::stoul(elem[5]));
 			else
 				LogWarning("Line #%u of %s doesn't have 5 elements", count, path.c_str());
