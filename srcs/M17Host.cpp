@@ -215,6 +215,11 @@ void CM17Host::Run()
 
 void CM17Host::Stop()
 {
+	LogInfo("Closing M17Host");
+	keep_running = false;
+	if (hostFuture.valid())
+		hostFuture.get();
+	LogInfo("Closing Gateway");
 	m_gateway->Stop();
 	m_gateway.reset();
 
