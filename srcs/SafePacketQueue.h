@@ -34,7 +34,7 @@ public:
 
 	T Pop(void)
 	{
-		std::lock_guard<std::mutex> lock(m);
+		std::unique_lock<std::mutex> lock(m);
 		if (q.empty())
 			return nullptr;
 		else
@@ -66,12 +66,16 @@ public:
 
 		if (q.empty())
 			c.wait_for(lock, std::chrono::milliseconds(ms));
-		return Pop();
+		if (q.empty())
+			return nullptr;
+		T val = std::move(q.front());
+		q.pop();
+		return val;
 	}
 
 	bool IsEmpty(void)
 	{
-		std::lock_guard<std::mutex> lock(m);
+		std::unique_lock<std::mutex> lock(m);
 		return q.empty();
 	}
 
