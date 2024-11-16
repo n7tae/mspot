@@ -14,7 +14,9 @@
 #include <string>
 #include <atomic>
 #include <memory>
+#include <future>
 
+#include "RSSIInterpolator.h"
 #include "M17Control.h"
 #include "M17Network.h"
 #include "M17Gateway.h"
@@ -24,28 +26,31 @@
 class CM17Host
 {
 public:
-  CM17Host();
-  ~CM17Host();
+	CM17Host();
+	~CM17Host();
 
-  bool Run();
-  void Stop();
+	bool Start();
+	void Stop();
 
 private:
-  std::unique_ptr<CModem>      m_modem;
-  std::unique_ptr<CM17Control> m_m17;
-  std::shared_ptr<CM17Network> m_m17Network;
-  std::unique_ptr<CM17Gateway> m_gateway;
+	std::unique_ptr<CModem>      m_modem;
+	std::unique_ptr<CM17Control> m_m17;
+	std::shared_ptr<CM17Network> m_m17Network;
+	std::unique_ptr<CM17Gateway> m_gateway;
+	std::unique_ptr<CRSSIInterpolator> rssi;
 
-  unsigned char   m_mode;
-  unsigned int    m_m17NetModeHang;
-  bool            m_duplex;
-  unsigned int    m_timeout;
-  std::string     m_callsign;
-  std::atomic<bool> keep_running;
+	unsigned char   m_mode;
+	unsigned int    m_m17NetModeHang;
+	bool            m_duplex;
+	unsigned int    m_timeout;
+	std::string     m_callsign;
+	std::atomic<bool> keep_running;
+	std::future<void> hostFuture;
 
-  void readParams();
-  bool createModem();
-  bool createM17Network();
+	void Run();
+	void readParams();
+	bool createModem();
+	bool createM17Network();
 
-  void setMode(uint8_t mode);
+	void setMode(uint8_t mode);
 };

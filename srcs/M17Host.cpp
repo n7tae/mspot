@@ -20,7 +20,6 @@
 #include <chrono>
 
 #include "M17Host.h"
-#include "RSSIInterpolator.h"
 #include "NullController.h"
 #include "UARTController.h"
 #include "I2CController.h"
@@ -33,7 +32,7 @@
 #include "Version.h"
 
 extern CConfigure g_Cfg;
-extern CVersion g_Version;
+extern CVersion   g_Version;
 
 const char* HEADER1 = "This software is for use on amateur radio networks only,";
 const char* HEADER2 = "it is to be used for educational purposes only. Its use on";
@@ -55,87 +54,8 @@ CM17Host::~CM17Host()
 {
 }
 
-void CM17Host::Stop()
+bool CM17Host::Start()
 {
-	keep_running = false;
-	if (not keep_running) LogInfo("CM17Host::keep_running is false...");
-}
-
-bool CM17Host::Run()
-{
-	auto isDaemon = g_Cfg.GetBoolean(g_Keys.general.isdaemon);
-	if (isDaemon) {
-		// Create new process
-		pid_t pid = ::fork();
-		if (pid == -1)
-		{
-			::fprintf(stderr, "Couldn't fork() , exiting\n");
-			return true;
-		} else if (pid != 0)
-		{
-			exit(EXIT_SUCCESS);
-		}
-
-		// Create new session and process group
-		if (::setsid() == -1)
-		{
-			::fprintf(stderr, "Couldn't setsid(), exiting\n");
-			return true;
-		}
-
-		// Set the working directory to the root directory
-		if (::chdir("/") == -1)
-		{
-			::fprintf(stderr, "Couldn't cd /, exiting\n");
-			return true;
-		}
-
-		// If we are currently root...
-		if (getuid() == 0)
-		{
-			struct passwd* user = ::getpwnam(g_Cfg.GetString(g_Keys.general.user).c_str());
-			if (user == NULL)
-			{
-				::fprintf(stderr, "Could not get the mmdvm user, exiting\n");
-				return true;
-			}
-
-			uid_t mmdvm_uid = user->pw_uid;
-			gid_t mmdvm_gid = user->pw_gid;
-
-			// Set user and group ID's to mmdvm:mmdvm
-			if (::setgid(mmdvm_gid) != 0)
-			{
-				::fprintf(stderr, "Could not set mmdvm GID, exiting\n");
-				return true;
-			}
-
-			if (::setuid(mmdvm_uid) != 0)
-			{
-				::fprintf(stderr, "Could not set mmdvm UID, exiting\n");
-				return true;
-			}
-
-			// Double check it worked (AKA Paranoia)
-			if (::setuid(0) != -1)
-			{
-				::fprintf(stderr, "It's possible to regain root - something is wrong!, exiting\n");
-				return true;
-			}
-		}
-	}
-
-	auto ret = ::LogInitialise(isDaemon, g_Cfg.GetString(g_Keys.log.filePath), g_Cfg.GetString(g_Keys.log.fileName), g_Cfg.GetUnsigned(g_Keys.log.fileLevel), g_Cfg.GetUnsigned(g_Keys.log.displayLevel), g_Cfg.GetBoolean(g_Keys.log.rotate));
-	if (!ret) {
-		::fprintf(stderr, "M17Host: unable to open the log file\n");
-		return true;
-	}
-
-	if (isDaemon) {
-		::close(STDIN_FILENO);
-		::close(STDOUT_FILENO);
-	}
-
 	LogInfo(HEADER1);
 	LogInfo(HEADER2);
 	LogInfo(HEADER3);
@@ -147,7 +67,7 @@ bool CM17Host::Run()
 
 	readParams();
 
-	ret = createModem();
+	auto ret = createModem();
 	if (!ret)
 		return true;
 
@@ -168,7 +88,7 @@ bool CM17Host::Run()
 	if (g_Cfg.Contains(g_Keys.modem.rssiMapFile))
 		rssiMappingFile.assign(g_Cfg.GetString(g_Keys.modem.rssiMapFile));
 
-	auto rssi = std::make_unique<CRSSIInterpolator>();
+	rssi = std::make_unique<CRSSIInterpolator>();
 	if (!rssiMappingFile.empty())
 	{
 		LogInfo("RSSI");
@@ -177,9 +97,6 @@ bool CM17Host::Run()
 	}
 
 	LogInfo("Starting protocol handlers");
-
-	CStopWatch stopWatch;
-	stopWatch.start();
 
 	bool selfOnly          = g_Cfg.GetBoolean(g_Keys.general.isprivate);
 	unsigned int can       = g_Cfg.GetUnsigned(g_Keys.general.can);
@@ -200,9 +117,23 @@ bool CM17Host::Run()
 	if (m_gateway->Start())
 		return true;
 
-	LogInfo("M17Host-%s is running", g_Version.GetString());
+	hostFuture = std::async(std::launch::async, &CM17Host::Run, this);
+	if (not hostFuture.valid())
+	{
+		LogError("Could not create host thread");
+		return true;
+	}
 
+	LogInfo("M17Host-%s is running", g_Version.GetString());
+	return false;
+}
+
+void CM17Host::Run()
+{
 	keep_running = true;
+
+	CStopWatch stopWatch;
+	stopWatch.start();
 
 	while (keep_running) {
 		bool lockout = m_modem->hasLockout();
@@ -280,7 +211,10 @@ bool CM17Host::Run()
 		if (ms < 5U)
 			std::this_thread::sleep_for(std::chrono::milliseconds(5));
 	}
+}
 
+void CM17Host::Stop()
+{
 	m_gateway->Stop();
 	m_gateway.reset();
 
@@ -303,8 +237,6 @@ bool CM17Host::Run()
 	m_modem->close();
 	m_modem.reset();
 	rssi.reset();
-
-	return false;
 }
 
 bool CM17Host::createModem()

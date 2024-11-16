@@ -12,6 +12,8 @@
 #include <iostream>
 #include <csignal>
 
+#include <pwd.h>
+
 #include "Version.h"
 #include "Configure.h"
 #include "M17Host.h"
@@ -22,16 +24,78 @@
 CVersion   g_Version(0, 0, 0);
 CConfigure g_Cfg;
 CCRC       g_Crc;
-CM17Host   host;
 
-static int  m_signal = 0;
-static bool m_reload = false;
+static int  caught_signal = 0;
 
 static void sigHandler(int signum)
 {
 	std::cout << "Caught signal #" << signum << std::endl;
-	host.Stop();
-	m_signal = signum;
+	caught_signal = signum;
+}
+
+static bool daemonize()
+{
+	// Create new process
+	pid_t pid = fork();
+	if (pid == -1)
+	{
+		fprintf(stderr, "Couldn't fork() , exiting\n");
+		return true;
+	} else if (pid != 0)
+	{
+		exit(EXIT_SUCCESS);
+	}
+
+	// Create new session and process group
+	if (setsid() == -1)
+	{
+		fprintf(stderr, "Couldn't setsid(), exiting\n");
+		return true;
+	}
+
+	// Set the working directory to the root directory
+	if (chdir("/") == -1)
+	{
+		fprintf(stderr, "Couldn't cd /, exiting\n");
+		return true;
+	}
+
+	// If we are currently root...
+	if (getuid() == 0)
+	{
+		struct passwd* user = ::getpwnam(g_Cfg.GetString(g_Keys.general.user).c_str());
+		if (user == NULL)
+		{
+			fprintf(stderr, "Could not get the mmdvm user, exiting\n");
+			return true;
+		}
+
+		uid_t mmdvm_uid = user->pw_uid;
+		gid_t mmdvm_gid = user->pw_gid;
+
+		// Set user and group ID's to mmdvm:mmdvm
+		if (setgid(mmdvm_gid) != 0)
+		{
+			fprintf(stderr, "Could not set mmdvm GID, exiting\n");
+			return true;
+		}
+
+		if (setuid(mmdvm_uid) != 0)
+		{
+			fprintf(stderr, "Could not set mmdvm UID, exiting\n");
+			return true;
+		}
+
+		// Double check it worked (AKA Paranoia)
+		if (setuid(0) != -1)
+		{
+			fprintf(stderr, "It's possible to regain root - something is wrong!, exiting\n");
+			return true;
+		}
+	}
+	close(STDIN_FILENO);
+	close(STDOUT_FILENO);
+	return false;
 }
 
 static void usage(const std::string &exename)
@@ -41,6 +105,9 @@ static void usage(const std::string &exename)
 
 int main(int argc, char** argv)
 {
+	std::signal(SIGINT,  sigHandler);
+	std::signal(SIGTERM, sigHandler);
+	std::signal(SIGHUP,  sigHandler);
 	if (argc != 2)
 	{
 		usage(argv[0]);
@@ -61,24 +128,41 @@ int main(int argc, char** argv)
 	if (g_Cfg.ReadData(arg))
 		return EXIT_FAILURE;
 
-	std::signal(SIGINT,  sigHandler);
-	std::signal(SIGTERM, sigHandler);
-	std::signal(SIGHUP,  sigHandler);
+	auto isDaemon = g_Cfg.GetBoolean(g_Keys.general.isdaemon);
 
-	bool ret;
+	auto ret = LogInitialise(isDaemon,
+		g_Cfg.GetString(g_Keys.log.filePath),
+		g_Cfg.GetString(g_Keys.log.fileName),
+		g_Cfg.GetUnsigned(g_Keys.log.fileLevel),
+		g_Cfg.GetUnsigned(g_Keys.log.displayLevel),
+		g_Cfg.GetBoolean(g_Keys.log.rotate));
+	if (!ret)
+	{
+		::fprintf(stderr, "M17Host: unable to open the log file\n");
+		return EXIT_FAILURE;
+	}
 
-	std::unique_ptr<CM17Host> host;
+	if (isDaemon)
+	{
+		if (daemonize())
+			return EXIT_FAILURE;
+	}
 
 	do
 	{
-		m_signal = 0;
+		caught_signal = 0;
 
-		auto host = std::make_unique<CM17Host>();
-		ret = host->Run();
+		CM17Host host;
 
-		host.reset();
+		if (host.Start())
+			return EXIT_FAILURE;
 
-		switch (m_signal) {
+		pause();
+
+		host.Stop();
+
+
+		switch (caught_signal) {
 			case 0:
 				break;
 			case 2:
@@ -89,15 +173,12 @@ int main(int argc, char** argv)
 				break;
 			case 1:
 				::LogInfo("M17Host is restarting on receipt of SIGHUP");
-				m_reload = true;
 				break;
 			default:
 				::LogInfo("M17Host exited on receipt of an unknown signal");
 				break;
 		}
-	} while (m_reload || (m_signal == 1));
-
-	host.reset();
+	} while (caught_signal == SIGHUP);
 
 	::LogFinalise();
 
