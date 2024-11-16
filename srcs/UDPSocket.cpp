@@ -86,7 +86,7 @@ void CUDPSocket::Close(void)
 {
 	if ( m_fd >= 0 )
 	{
-		LogInfo("Closing socket d on %s", m_fd, m_addr.GetAddress());
+		LogInfo("Closing socket %d on %s", m_fd, m_addr.GetAddress());
 		close(m_fd);
 		m_fd = -1;
 	}
