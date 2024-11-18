@@ -107,7 +107,7 @@ void CM17Network::clock(unsigned int ms)
 	unsigned char c = 48u;
 	m_buffer.addData(&c, 1U);
 
-	m_buffer.addData(Frame->data.magic+6, 42u);
+	m_buffer.addData(Frame->data.magic+6, 48u);
 }
 
 bool CM17Network::read(unsigned char* data)
