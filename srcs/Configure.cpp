@@ -197,7 +197,7 @@ bool CConfigure::ReadData(const std::string &path)
 				else if (0 == key.compare(g_Keys.modem.txHang))
 					data[g_Keys.modem.section][g_Keys.modem.txHang] = getUnsigned(value, "Transmit Hang ms 0-255", 0u, 255u, 5u);
 				else if (0 == key.compare(g_Keys.modem.txDelay))
-					data[g_Keys.modem.section][g_Keys.modem.txDelay] = getUnsigned(value, "Transmit Delay (ms)", 10u, 2550u, 100u);
+					data[g_Keys.modem.section][g_Keys.modem.txDelay] = getUnsigned(value, "Transmit Delay (in 10ms units)", 1u, 255u, 10u);
 				else if (0 == key.compare(g_Keys.modem.pttInvert))
 					data[g_Keys.modem.section][g_Keys.modem.pttInvert] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.modem.rxInvert))
