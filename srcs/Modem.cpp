@@ -16,19 +16,24 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#include <cmath>
+#include <cstdio>
+#include <cassert>
+#include <cstdint>
+#include <ctime>
+#include <chrono>
+#include <thread>
 
 #include "M17Defines.h"
 #include "Modem.h"
 #include "Utils.h"
 #include "Log.h"
 
-#include <cmath>
-#include <cstdio>
-#include <cassert>
-#include <cstdint>
-#include <ctime>
-#include <thread>
+#if defined(_WIN32) || defined(_WIN64)
+#include <Windows.h>
+#else
 #include <unistd.h>
+#endif
 
 const unsigned char MMDVM_FRAME_START = 0xE0U;
 
@@ -38,14 +43,21 @@ const unsigned char MMDVM_SET_CONFIG  = 0x02U;
 const unsigned char MMDVM_SET_MODE    = 0x03U;
 const unsigned char MMDVM_SET_FREQ    = 0x04U;
 
+const unsigned char MMDVM_SEND_CWID   = 0x0AU;
+
+const unsigned char MMDVM_ACK         = 0x70U;
+const unsigned char MMDVM_NAK         = 0x7FU;
+
 const unsigned char MMDVM_M17_LINK_SETUP = 0x45U;
 const unsigned char MMDVM_M17_STREAM     = 0x46U;
 const unsigned char MMDVM_M17_PACKET     = 0x47U;
 const unsigned char MMDVM_M17_LOST       = 0x48U;
 const unsigned char MMDVM_M17_EOT        = 0x49U;
 
-const unsigned char MMDVM_ACK         = 0x70U;
-const unsigned char MMDVM_NAK         = 0x7FU;
+const unsigned char MMDVM_SERIAL_DATA = 0x80U;
+
+const unsigned char MMDVM_TRANSPARENT = 0x90U;
+const unsigned char MMDVM_QSO_INFO    = 0x91U;
 
 const unsigned char MMDVM_DEBUG1      = 0xF1U;
 const unsigned char MMDVM_DEBUG2      = 0xF2U;
@@ -58,24 +70,58 @@ const unsigned int MAX_RESPONSES = 30U;
 
 const unsigned int BUFFER_LENGTH = 2000U;
 
+const unsigned char CAP1_DSTAR  = 0x01U;
+const unsigned char CAP1_DMR    = 0x02U;
+const unsigned char CAP1_YSF    = 0x04U;
+const unsigned char CAP1_P25    = 0x08U;
+const unsigned char CAP1_NXDN   = 0x10U;
 const unsigned char CAP1_M17    = 0x20U;
+const unsigned char CAP1_FM     = 0x40U;
+const unsigned char CAP2_POCSAG = 0x01U;
+const unsigned char CAP2_AX25   = 0x02U;
 
 
 CModem::CModem(bool duplex, bool rxInvert, bool txInvert, bool pttInvert, unsigned int txDelay, bool trace, bool debug) :
 m_protocolVersion(0U),
-m_txHang(5U),
+m_dmrColorCode(0U),
+m_ysfLoDev(false),
+m_ysfTXHang(4U),
+m_p25TXHang(5U),
+m_nxdnTXHang(5U),
+m_m17TXHang(5U),
 m_duplex(duplex),
 m_rxInvert(rxInvert),
 m_txInvert(txInvert),
 m_pttInvert(pttInvert),
 m_txDelay(txDelay),
-m_rxLevel(0),
-m_txLevel(0),
-m_rfLevel(0),
+m_dmrDelay(0),
+m_rxLevel(0.0F),
+m_cwIdTXLevel(0.0F),
+m_dstarTXLevel(0.0F),
+m_dmrTXLevel(0.0F),
+m_ysfTXLevel(0.0F),
+m_p25TXLevel(0.0F),
+m_nxdnTXLevel(0.0F),
+m_m17TXLevel(0.0F),
+m_pocsagTXLevel(0.0F),
+m_fmTXLevel(0.0F),
+m_ax25TXLevel(0.0F),
+m_rfLevel(0.0F),
+m_useCOSAsLockout(false),
 m_trace(trace),
 m_debug(debug),
 m_rxFrequency(0U),
 m_txFrequency(0U),
+m_pocsagFrequency(0U),
+m_dstarEnabled(false),
+m_dmrEnabled(false),
+m_ysfEnabled(false),
+m_p25Enabled(false),
+m_nxdnEnabled(false),
+m_m17Enabled(false),
+m_pocsagEnabled(false),
+m_fmEnabled(false),
+m_ax25Enabled(false),
 m_rxDCOffset(0),
 m_txDCOffset(0),
 m_buffer(NULL),
@@ -85,16 +131,32 @@ m_state(SS_START),
 m_type(0U),
 m_rxM17Data(1000U, "Modem RX M17"),
 m_txM17Data(1000U, "Modem TX M17"),
+m_rxSerialData(1000U, "Modem RX Serial"),
+m_txSerialData(1000U, "Modem TX Serial"),
+m_sendTransparentDataFrameType(0U),
 m_statusTimer(1000U, 0U, 250U),
 m_inactivityTimer(1000U, 2U),
 m_playoutTimer(1000U, 0U, 10U),
+m_dstarSpace(0U),
+m_dmrSpace1(0U),
+m_dmrSpace2(0U),
+m_ysfSpace(0U),
+m_p25Space(0U),
+m_nxdnSpace(0U),
 m_m17Space(0U),
+m_pocsagSpace(0U),
+m_fmSpace(0U),
+m_ax25Space(0U),
 m_tx(false),
 m_cd(false),
 m_lockout(false),
 m_error(false),
-m_mode(MODE_M17),
+m_mode(MODE_IDLE),
 m_hwType(HWT_UNKNOWN),
+m_ax25RXTwist(0),
+m_ax25TXDelay(300U),
+m_ax25SlotTime(30U),
+m_ax25PPersist(128U),
 m_capabilities1(0x00U),
 m_capabilities2(0x00U)
 {
@@ -107,29 +169,59 @@ CModem::~CModem()
 	delete[] m_buffer;
 }
 
-void CModem::setPort(std::unique_ptr<ISerialPort> port)
+void CModem::setPort(std::unique_ptr<CBasePort> port)
 {
-	m_port = std::move(port);
+	assert(port != nullptr);
+
+	m_port =std::move(port);
 }
 
-void CModem::setRFParams(unsigned rxFrequency, int rxOffset, unsigned txFrequency, int txOffset, int txDCOffset, int rxDCOffset, unsigned rfLevel)
+void CModem::setRFParams(unsigned int rxFrequency, int rxOffset, unsigned int txFrequency, int txOffset, int txDCOffset, int rxDCOffset, float rfLevel, unsigned int pocsagFrequency)
 {
 	m_rxFrequency     = rxFrequency + rxOffset;
 	m_txFrequency     = txFrequency + txOffset;
 	m_txDCOffset      = txDCOffset;
 	m_rxDCOffset      = rxDCOffset;
 	m_rfLevel         = rfLevel;
+	m_pocsagFrequency = pocsagFrequency + txOffset;
 }
 
-void CModem::setLevels(unsigned rxLevel, unsigned txLevel)
+void CModem::setModeParams(bool dstarEnabled, bool dmrEnabled, bool ysfEnabled, bool p25Enabled, bool nxdnEnabled, bool m17Enabled, bool pocsagEnabled, bool fmEnabled, bool ax25Enabled)
 {
-	m_rxLevel = rxLevel;
-	m_txLevel = txLevel;
+	m_dstarEnabled  = dstarEnabled;
+	m_dmrEnabled    = dmrEnabled;
+	m_ysfEnabled    = ysfEnabled;
+	m_p25Enabled    = p25Enabled;
+	m_nxdnEnabled   = nxdnEnabled;
+	m_m17Enabled    = m17Enabled;
+	m_pocsagEnabled = pocsagEnabled;
+	m_fmEnabled     = fmEnabled;
+	m_ax25Enabled   = ax25Enabled;
 }
 
-void CModem::setM17Params(unsigned txHang)
+void CModem::setLevels(float rxLevel, float cwIdTXLevel, float dstarTXLevel, float dmrTXLevel, float ysfTXLevel, float p25TXLevel, float nxdnTXLevel, float m17TXLevel, float pocsagTXLevel, float fmTXLevel, float ax25TXLevel)
 {
-	m_txHang = txHang;
+	m_rxLevel       = rxLevel;
+	m_cwIdTXLevel   = cwIdTXLevel;
+	m_dstarTXLevel  = dstarTXLevel;
+	m_dmrTXLevel    = dmrTXLevel;
+	m_ysfTXLevel    = ysfTXLevel;
+	m_p25TXLevel    = p25TXLevel;
+	m_nxdnTXLevel   = nxdnTXLevel;
+	m_m17TXLevel    = m17TXLevel;
+	m_pocsagTXLevel = pocsagTXLevel;
+	m_fmTXLevel     = fmTXLevel;
+	m_ax25TXLevel   = ax25TXLevel;
+}
+
+void CModem::setM17Params(unsigned int txHang)
+{
+	m_m17TXHang = txHang;
+}
+
+void CModem::setTransparentDataParams(unsigned int sendFrameType)
+{
+    m_sendTransparentDataFrameType = sendFrameType;
 }
 
 bool CModem::open()
@@ -144,6 +236,7 @@ bool CModem::open()
 	if (!ret) {
 		m_port->close();
 		m_port.reset();
+		m_port = NULL;
 		return false;
 	} else {
 		/* Stopping the inactivity timer here when a firmware version has been
@@ -155,6 +248,7 @@ bool CModem::open()
 	if (!ret) {
 		m_port->close();
 		m_port.reset();
+		m_port = NULL;
 		return false;
 	}
 
@@ -162,6 +256,7 @@ bool CModem::open()
 	if (!ret) {
 		m_port->close();
 		m_port.reset();
+		m_port = NULL;
 		return false;
 	}
 
@@ -204,7 +299,8 @@ void CModem::clock(unsigned int ms)
 	} else {
 		// type == RTM_OK
 		switch (m_type) {
-			case MMDVM_M17_LINK_SETUP: {
+			case MMDVM_M17_LINK_SETUP:
+			{
 				if (m_trace)
 					CUtils::dump(1U, "RX M17 Link Setup", m_buffer, m_length);
 
@@ -218,7 +314,8 @@ void CModem::clock(unsigned int ms)
 			}
 			break;
 
-			case MMDVM_M17_STREAM: {
+			case MMDVM_M17_STREAM:
+			{
 				if (m_trace)
 					CUtils::dump(1U, "RX M17 Stream Data", m_buffer, m_length);
 
@@ -232,7 +329,8 @@ void CModem::clock(unsigned int ms)
 			}
 			break;
 
-			case MMDVM_M17_EOT: {
+			case MMDVM_M17_EOT:
+			{
 				if (m_trace)
 					CUtils::dump(1U, "RX M17 EOT", m_buffer, m_length);
 
@@ -244,7 +342,8 @@ void CModem::clock(unsigned int ms)
 			}
 			break;
 
-			case MMDVM_M17_LOST: {
+			case MMDVM_M17_LOST:
+			{
 				if (m_trace)
 					CUtils::dump(1U, "RX M17 Lost", m_buffer, m_length);
 
@@ -260,7 +359,8 @@ void CModem::clock(unsigned int ms)
 				// if (m_trace)
 				//	CUtils::dump(1U, "GET_STATUS", m_buffer, m_length);
 
-				switch (m_protocolVersion) {
+				switch (m_protocolVersion)
+				{
 				case 1U: {
 						m_mode = m_buffer[m_offset + 1U];
 
@@ -280,9 +380,25 @@ void CModem::clock(unsigned int ms)
 							LogError("MMDVM DAC levels have overflowed");
 						m_cd = (m_buffer[m_offset + 2U] & 0x40U) == 0x40U;
 
+						m_p25Space    = 0U;
+						m_nxdnSpace   = 0U;
 						m_m17Space    = 0U;
+						m_pocsagSpace = 0U;
+						m_fmSpace     = 0U;
+						m_ax25Space   = 0U;
+
+						m_dstarSpace = m_buffer[m_offset + 3U];
+						m_dmrSpace1  = m_buffer[m_offset + 4U];
+						m_dmrSpace2  = m_buffer[m_offset + 5U];
+						m_ysfSpace   = m_buffer[m_offset + 6U];
 
 						// The following depend on the version of the firmware
+						if (m_length > (m_offset + 7U))
+							m_p25Space    = m_buffer[m_offset + 7U];
+						if (m_length > (m_offset + 8U))
+							m_nxdnSpace   = m_buffer[m_offset + 8U];
+						if (m_length > (m_offset + 9U))
+							m_pocsagSpace = m_buffer[m_offset + 9U];
 						if (m_length > (m_offset + 10U))
 							m_m17Space    = m_buffer[m_offset + 10U];
 					}
@@ -307,12 +423,30 @@ void CModem::clock(unsigned int ms)
 							LogError("MMDVM DAC levels have overflowed");
 						m_cd = (m_buffer[m_offset + 1U] & 0x40U) == 0x40U;
 
+						m_dstarSpace  = m_buffer[m_offset + 3U];
+						m_dmrSpace1   = m_buffer[m_offset + 4U];
+						m_dmrSpace2   = m_buffer[m_offset + 5U];
+						m_ysfSpace    = m_buffer[m_offset + 6U];
+						m_p25Space    = m_buffer[m_offset + 7U];
+						m_nxdnSpace   = m_buffer[m_offset + 8U];
 						m_m17Space    = m_buffer[m_offset + 9U];
+						m_fmSpace     = m_buffer[m_offset + 10U];
+						m_pocsagSpace = m_buffer[m_offset + 11U];
+						m_ax25Space   = m_buffer[m_offset + 12U];
 					}
 					break;
 
 				default:
+					m_dstarSpace  = 0U;
+					m_dmrSpace1   = 0U;
+					m_dmrSpace2   = 0U;
+					m_ysfSpace    = 0U;
+					m_p25Space    = 0U;
+					m_nxdnSpace   = 0U;
 					m_m17Space    = 0U;
+					m_pocsagSpace = 0U;
+					m_fmSpace     = 0U;
+					m_ax25Space   = 0U;
 					break;
 				}
 
@@ -336,6 +470,12 @@ void CModem::clock(unsigned int ms)
 			case MMDVM_DEBUG5:
 			case MMDVM_DEBUG_DUMP:
 				printDebug();
+				break;
+
+			case MMDVM_SERIAL_DATA:
+				if (m_trace)
+					CUtils::dump(1U, "RX Serial Data", m_buffer, m_length);
+				m_rxSerialData.addData(m_buffer + m_offset, m_length - m_offset);
 				break;
 
 			default:
@@ -377,6 +517,19 @@ void CModem::clock(unsigned int ms)
 
 		m_m17Space--;
 	}
+
+	if (!m_txSerialData.isEmpty()) {
+		unsigned char len = 0U;
+		m_txSerialData.getData(&len, 1U);
+		m_txSerialData.getData(m_buffer, len);
+
+		if (m_trace)
+			CUtils::dump(1U, "TX Serial Data", m_buffer, len);
+
+		int ret = m_port->write(m_buffer, len);
+		if (ret != int(len))
+			LogWarning("Error when writing Serial data to the MMDVM");
+	}
 }
 
 void CModem::close()
@@ -400,6 +553,20 @@ unsigned int CModem::readM17Data(unsigned char* data)
 	m_rxM17Data.getData(data, len);
 
 	return len;
+}
+
+unsigned int CModem::readSerial(unsigned char* data, unsigned int length)
+{
+	assert(data != NULL);
+	assert(length > 0U);
+
+	unsigned int n = 0U;
+	while (!m_rxSerialData.isEmpty() && n < length) {
+		m_rxSerialData.getData(data + n, 1U);
+		n++;
+	}
+
+	return n;
 }
 
 bool CModem::hasM17Space() const
@@ -439,6 +606,72 @@ bool CModem::writeM17Data(const unsigned char* data, unsigned int length)
 	unsigned char len = length + 2U;
 	m_txM17Data.addData(&len, 1U);
 	m_txM17Data.addData(buffer, len);
+
+	return true;
+}
+
+bool CModem::writeM17Info(const char* source, const char* dest, const char* type)
+{
+	assert(m_port != NULL);
+	assert(source != NULL);
+	assert(dest != NULL);
+	assert(type != NULL);
+
+	unsigned char buffer[40U];
+
+	buffer[0U] = MMDVM_FRAME_START;
+	buffer[1U] = 31U;
+	buffer[2U] = MMDVM_QSO_INFO;
+
+	buffer[3U] = MODE_M17;
+
+	::sprintf((char*)(buffer + 4U), "%9.9s", source);
+
+	::sprintf((char*)(buffer + 13U), "%9.9s", dest);
+
+	::memcpy(buffer + 22U, type, 1U);
+
+	return m_port->write(buffer, 23U) != 23;
+}
+
+bool CModem::writeIPInfo(const std::string& address)
+{
+	assert(m_port != NULL);
+
+	size_t length = address.size();
+
+	unsigned char buffer[25U];
+
+	buffer[0U] = MMDVM_FRAME_START;
+	buffer[1U] = (unsigned char)length + 4U;
+	buffer[2U] = MMDVM_QSO_INFO;
+
+	buffer[3U] = 250U;
+
+	::memcpy(buffer + 4U, address.c_str(), length);
+
+	int ret = m_port->write(buffer, (unsigned int)length + 4U);
+
+	return ret != int(length + 4U);
+}
+
+bool CModem::writeSerial(const unsigned char* data, unsigned int length)
+{
+	assert(m_port != NULL);
+	assert(data != NULL);
+	assert(length > 0U);
+
+	unsigned char buffer[255U];
+
+	buffer[0U] = MMDVM_FRAME_START;
+	buffer[1U] = length + 3U;
+	buffer[2U] = MMDVM_SERIAL_DATA;
+
+	::memcpy(buffer + 3U, data, length);
+
+	unsigned char len = length + 3U;
+	m_txSerialData.addData(&len, 1U);
+	m_txSerialData.addData(buffer, len);
 
 	return true;
 }
@@ -492,7 +725,8 @@ bool CModem::readVersion()
 		if (ret != 3)
 			return false;
 
-		for (unsigned int count = 0U; count < MAX_RESPONSES; count++) {
+		for (unsigned int count = 0U; count < MAX_RESPONSES; count++)
+		{
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 			RESP_TYPE_MMDVM resp = getResponse();
 			if (resp == RTM_OK && m_buffer[2U] == MMDVM_GET_VERSION) {
@@ -526,8 +760,8 @@ bool CModem::readVersion()
 				switch (m_protocolVersion) {
 				case 1U:
 					LogInfo("MMDVM protocol version: 1, description: %.*s", m_length - 4U, m_buffer + 4U);
-					m_capabilities1 = CAP1_M17;
-					m_capabilities2 = 0;
+					m_capabilities1 = CAP1_DSTAR | CAP1_DMR | CAP1_YSF | CAP1_P25 | CAP1_NXDN | CAP1_M17;
+					m_capabilities2 = CAP2_POCSAG;
 					return true;
 
 				case 2U:
@@ -602,7 +836,7 @@ bool CModem::setConfig1()
 {
 	assert(m_port != NULL);
 
-	unsigned char buffer[30U] = { 0 };
+	unsigned char buffer[30U];
 
 	buffer[0U] = MMDVM_FRAME_START;
 
@@ -617,27 +851,68 @@ bool CModem::setConfig1()
 		buffer[3U] |= 0x02U;
 	if (m_pttInvert)
 		buffer[3U] |= 0x04U;
+	if (m_ysfLoDev)
+		buffer[3U] |= 0x08U;
 	if (m_debug)
 		buffer[3U] |= 0x10U;
+	if (m_useCOSAsLockout)
+		buffer[3U] |= 0x20U;
 	if (!m_duplex)
 		buffer[3U] |= 0x80U;
 
-	buffer[4U] = 0x40U;	// M17 only!
+	buffer[4U] = 0x00U;
+	if (m_dstarEnabled)
+		buffer[4U] |= 0x01U;
+	if (m_dmrEnabled)
+		buffer[4U] |= 0x02U;
+	if (m_ysfEnabled)
+		buffer[4U] |= 0x04U;
+	if (m_p25Enabled)
+		buffer[4U] |= 0x08U;
+	if (m_nxdnEnabled)
+		buffer[4U] |= 0x10U;
+	if (m_pocsagEnabled)
+		buffer[4U] |= 0x20U;
+	if (m_m17Enabled)
+		buffer[4U] |= 0x40U;
 
 	buffer[5U] = m_txDelay / 10U;		// In 10ms units
 
-	buffer[6U] = MODE_M17;
+	buffer[6U] = MODE_IDLE;
 
-	buffer[7U] = m_rxLevel;
+	buffer[7U] = (unsigned char)(m_rxLevel * 2.55F + 0.5F);
+
+	buffer[8U] = (unsigned char)(m_cwIdTXLevel * 2.55F + 0.5F);
+
+	buffer[9U] = m_dmrColorCode;
+
+	buffer[10U] = m_dmrDelay;
 
 	buffer[11U] = 128U;           // Was OscOffset
 
-	buffer[16U] = m_txDCOffset + 128;
-	buffer[17U] = m_rxDCOffset + 128;
+	buffer[12U] = (unsigned char)(m_dstarTXLevel * 2.55F + 0.5F);
+	buffer[13U] = (unsigned char)(m_dmrTXLevel * 2.55F + 0.5F);
+	buffer[14U] = (unsigned char)(m_ysfTXLevel * 2.55F + 0.5F);
+	buffer[15U] = (unsigned char)(m_p25TXLevel * 2.55F + 0.5F);
 
-	buffer[24U] = m_txLevel;
+	buffer[16U] = (unsigned char)(m_txDCOffset + 128);
+	buffer[17U] = (unsigned char)(m_rxDCOffset + 128);
 
-	buffer[25U] = m_txHang;
+	buffer[18U] = (unsigned char)(m_nxdnTXLevel * 2.55F + 0.5F);
+
+	buffer[19U] = (unsigned char)m_ysfTXHang;
+
+	buffer[20U] = (unsigned char)(m_pocsagTXLevel * 2.55F + 0.5F);
+
+	buffer[21U] = (unsigned char)(m_fmTXLevel * 2.55F + 0.5F);
+
+	buffer[22U] = (unsigned char)m_p25TXHang;
+
+	buffer[23U] = (unsigned char)m_nxdnTXHang;
+
+	buffer[24U] = (unsigned char)(m_m17TXLevel * 2.55F + 0.5F);
+
+	buffer[25U] = (unsigned char)m_m17TXHang;
 
 	// CUtils::dump(1U, "Written", buffer, 26U);
 
@@ -647,7 +922,8 @@ bool CModem::setConfig1()
 
 	unsigned int count = 0U;
 	RESP_TYPE_MMDVM resp;
-	do {
+	do
+	{
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
 		resp = getResponse();
@@ -676,7 +952,7 @@ bool CModem::setConfig2()
 {
 	assert(m_port != NULL);
 
-	unsigned char buffer[50U] = { 0 };
+	unsigned char buffer[50U];
 
 	buffer[0U] = MMDVM_FRAME_START;
 
@@ -691,33 +967,79 @@ bool CModem::setConfig2()
 		buffer[3U] |= 0x02U;
 	if (m_pttInvert)
 		buffer[3U] |= 0x04U;
+	if (m_ysfLoDev)
+		buffer[3U] |= 0x08U;
 	if (m_debug)
 		buffer[3U] |= 0x10U;
+	if (m_useCOSAsLockout)
+		buffer[3U] |= 0x20U;
 	if (!m_duplex)
 		buffer[3U] |= 0x80U;
 
-	buffer[4U] = 0x40U;	// M17 only!
+	buffer[4U] = 0x00U;
+	if (m_dstarEnabled)
+		buffer[4U] |= 0x01U;
+	if (m_dmrEnabled)
+		buffer[4U] |= 0x02U;
+	if (m_ysfEnabled)
+		buffer[4U] |= 0x04U;
+	if (m_p25Enabled)
+		buffer[4U] |= 0x08U;
+	if (m_nxdnEnabled)
+		buffer[4U] |= 0x10U;
+	if (m_fmEnabled)
+		buffer[4U] |= 0x20U;
+	if (m_m17Enabled)
+		buffer[4U] |= 0x40U;
 
 	buffer[5U] = 0x00U;
+	if (m_pocsagEnabled)
+		buffer[5U] |= 0x01U;
+	if (m_ax25Enabled)
+		buffer[5U] |= 0x02U;
 
 	buffer[6U] = m_txDelay / 10U;		// In 10ms units
 
-	buffer[7U] = MODE_M17;
+	buffer[7U] = MODE_IDLE;
 
-	buffer[8U] = m_txDCOffset + 128;
-	buffer[9U] = m_rxDCOffset + 128;
+	buffer[8U] = (unsigned char)(m_txDCOffset + 128);
+	buffer[9U] = (unsigned char)(m_rxDCOffset + 128);
 
-	buffer[10U] = m_rxLevel;
+	buffer[10U] = (unsigned char)(m_rxLevel * 2.55F + 0.5F);
 
-
-	buffer[17U] = m_txLevel;
-
+	buffer[11U] = (unsigned char)(m_cwIdTXLevel * 2.55F + 0.5F);
+	buffer[12U] = (unsigned char)(m_dstarTXLevel * 2.55F + 0.5F);
+	buffer[13U] = (unsigned char)(m_dmrTXLevel * 2.55F + 0.5F);
+	buffer[14U] = (unsigned char)(m_ysfTXLevel * 2.55F + 0.5F);
+	buffer[15U] = (unsigned char)(m_p25TXLevel * 2.55F + 0.5F);
+	buffer[16U] = (unsigned char)(m_nxdnTXLevel * 2.55F + 0.5F);
+	buffer[17U] = (unsigned char)(m_m17TXLevel * 2.55F + 0.5F);
+	buffer[18U] = (unsigned char)(m_pocsagTXLevel * 2.55F + 0.5F);
+	buffer[19U] = (unsigned char)(m_fmTXLevel * 2.55F + 0.5F);
+	buffer[20U] = (unsigned char)(m_ax25TXLevel * 2.55F + 0.5F);
 	buffer[21U] = 0x00U;
 	buffer[22U] = 0x00U;
 
-	buffer[26U] = m_txHang;
+	buffer[23U] = (unsigned char)m_ysfTXHang;
+	buffer[24U] = (unsigned char)m_p25TXHang;
+	buffer[25U] = (unsigned char)m_nxdnTXHang;
+	buffer[26U] = (unsigned char)m_m17TXHang;
 	buffer[27U] = 0x00U;
 	buffer[28U] = 0x00U;
+
+	buffer[29U] = m_dmrColorCode;
+	buffer[30U] = m_dmrDelay;
+
+	buffer[31U] = (unsigned char)(m_ax25RXTwist + 128);
+	buffer[32U] = m_ax25TXDelay / 10U;		// In 10ms units
+	buffer[33U] = m_ax25SlotTime / 10U;		// In 10ms units
+	buffer[34U] = m_ax25PPersist;
+
+	buffer[35U] = 0x00U;
+	buffer[36U] = 0x00U;
+	buffer[37U] = 0x00U;
+	buffer[38U] = 0x00U;
+	buffer[39U] = 0x00U;
 
 	// CUtils::dump(1U, "Written", buffer, 40U);
 
@@ -760,6 +1082,9 @@ bool CModem::setFrequency()
 	unsigned char len;
 	unsigned int  pocsagFrequency = 433000000U;
 
+	if (m_pocsagEnabled)
+		pocsagFrequency = m_pocsagFrequency;
+
 	if (m_hwType == HWT_DVMEGA)
 		len = 12U;
 	else {
@@ -799,7 +1124,8 @@ bool CModem::setFrequency()
 
 	unsigned int count = 0U;
 	RESP_TYPE_MMDVM resp;
-	do {
+	do
+	{
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
 		resp = getResponse();
@@ -866,7 +1192,7 @@ RESP_TYPE_MMDVM CModem::getResponse()
 	}
 
 	if (m_state == SS_LENGTH2) {
-		// Get the length of the frame, 2/2
+		// Get the length of the frane, 2/2
 		int ret = m_port->read(m_buffer + 2U, 1U);
 		if (ret < 0) {
 			LogError("Error when reading from the modem");
@@ -948,6 +1274,28 @@ bool CModem::setMode(unsigned char mode)
 	// CUtils::dump(1U, "Written", buffer, 4U);
 
 	return m_port->write(buffer, 4U) == 4;
+}
+
+bool CModem::sendCWId(const std::string& callsign)
+{
+	assert(m_port != NULL);
+
+	unsigned int length = (unsigned int)callsign.length();
+	if (length > 200U)
+		length = 200U;
+
+	unsigned char buffer[205U];
+
+	buffer[0U] = MMDVM_FRAME_START;
+	buffer[1U] = length + 3U;
+	buffer[2U] = MMDVM_SEND_CWID;
+
+	for (unsigned int i = 0U; i < length; i++)
+		buffer[i + 3U] = callsign.at(i);
+
+	// CUtils::dump(1U, "Written", buffer, length + 3U);
+
+	return m_port->write(buffer, length + 3U) == int(length + 3U);
 }
 
 void CModem::printDebug()

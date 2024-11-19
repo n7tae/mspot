@@ -63,7 +63,7 @@ static bool daemonize()
 	// If we are currently root...
 	if (getuid() == 0)
 	{
-		struct passwd* user = ::getpwnam(g_Cfg.GetString(g_Keys.general.user).c_str());
+		struct passwd* user = ::getpwnam(g_Cfg.GetString(g_Keys.reflector.section, g_Keys.reflector.user).c_str());
 		if (user == NULL)
 		{
 			fprintf(stderr, "Could not get the mmdvm user, exiting\n");
@@ -128,14 +128,14 @@ int main(int argc, char** argv)
 	if (g_Cfg.ReadData(arg))
 		return EXIT_FAILURE;
 
-	auto isDaemon = g_Cfg.GetBoolean(g_Keys.general.isdaemon);
+	auto isDaemon = g_Cfg.GetBoolean(g_Keys.reflector.section, g_Keys.reflector.isDaemon);
 
 	auto ret = LogInitialise(isDaemon,
-		g_Cfg.GetString(g_Keys.log.filePath),
-		g_Cfg.GetString(g_Keys.log.fileName),
-		g_Cfg.GetUnsigned(g_Keys.log.fileLevel),
-		g_Cfg.GetUnsigned(g_Keys.log.displayLevel),
-		g_Cfg.GetBoolean(g_Keys.log.rotate));
+		g_Cfg.GetString(g_Keys.log.section, g_Keys.log.filePath),
+		g_Cfg.GetString(g_Keys.log.section, g_Keys.log.fileName),
+		g_Cfg.GetUnsigned(g_Keys.log.section, g_Keys.log.fileLevel),
+		g_Cfg.GetUnsigned(g_Keys.log.section, g_Keys.log.displayLevel),
+		g_Cfg.GetBoolean(g_Keys.log.section, g_Keys.log.rotate));
 	if (!ret)
 	{
 		::fprintf(stderr, "M17Host: unable to open the log file\n");

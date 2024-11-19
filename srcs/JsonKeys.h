@@ -16,13 +16,13 @@
 // the string values have to be unique within struct SJsonKeys
 struct SJsonKeys
 {
-	struct GENERAL
+	struct REFLECTOR
 	{
-		const std::string section, callsign, module, isdaemon, allowEncrypt, user, can, isprivate;
+		const std::string section, callsign, module, timeOut, isDuplex, isDaemon, allowEncrypt, user, can, isprivate, netModeHang, rfModeHang, debug;
 	}
-	general
+	reflector
 	{
-		"General", "Callsign", "Module", "IsDaemon", "AllowEncrypt", "UserName", "CAN", "IsPrivate"
+		"Reflector", "Callsign", "Module", "Timeout", "IsDuplex", "IsDaemon", "AllowEncrypt", "UserName", "CAN", "IsPrivate", "NetModeHang", "RFModeHang", "Debug"
 	};
 
 	struct LOG
@@ -34,13 +34,22 @@ struct SJsonKeys
 		"Log", "DisplayLevel", "FileLevel", "FilePath", "FileName", "FileRotate"
 	};
 
+	struct CWID
+	{
+		const std::string section, enable, time, callsign;
+	}
+	cwid
+	{
+		"CW Id", "CWEnable", "CWTime", "CWCallsign"
+	};
+
 	struct MODEM
 	{
-		const std::string section, protocol, isDuplex, uartPort, uartSpeed, i2cPort, i2cAddress, modemAddress, modemPort, localAddress, localPort, rxFreq, txFreq, rxOffset, txOffset, rxDCOffset, txDCOffset, rxInvert, txInvert, pttInvert, txHang, txDelay, txLevel, rxLevel, rfLevel, rssiMapFile, trace, debug;
+		const std::string section, protocol, uartPort, uartSpeed, i2cPort, i2cAddress, modemAddress, modemPort, localAddress, localPort, rxFreq, txFreq, rxOffset, txOffset, rxDCOffset, txDCOffset, rxInvert, txInvert, pttInvert, txHang, txDelay, txLevel, rxLevel, rfLevel, cwLevel, rssiMapFile, trace, debug;
 	}
 	modem
 	{
-		"Modem", "Protocol", "IsDuplex", "UartPort", "UartSpeed", "I2CPort", "I2CAddress", "ModemAddress", "ModemPort", "LocalAddress", "LocalPort", "RXFrequency", "TXFrequency", "RXOffset", "TXOffset", "RXDCOffset", "TXDCOffset", "RXInvert", "TXInvert", "PTTInvert", "TXHang", "TXDelay", "TXLevel", "RXLevel", "RFLevel", "RssiMapFilePath", "Trace", "Debug"
+		"Modem", "Protocol", "UartPort", "UartSpeed", "I2CPort", "I2CAddress", "ModemAddress", "ModemPort", "LocalAddress", "LocalPort", "RXFrequency", "TXFrequency", "RXOffset", "TXOffset", "RXDCOffset", "TXDCOffset", "RXInvert", "TXInvert", "PTTInvert", "TXHang", "TXDelay", "TXLevel", "RXLevel", "RFLevel", "CWLevel", "RssiMapFilePath", "Trace", "Debug"
 	};
 
 	struct GATEWAY

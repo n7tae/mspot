@@ -12,11 +12,11 @@
 
 #pragma once
 
-#include "SerialPort.h"
+#include "BasePort.h"
 
 #include "RingBuffer.h"
 
-class CNullController : public ISerialPort
+class CNullController : public CBasePort
 {
 public:
 	CNullController();

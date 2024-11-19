@@ -11,13 +11,13 @@
  ****************************************************************/
 #pragma once
 
-#include "SerialPort.h"
+#include "BasePort.h"
 #include "RingBuffer.h"
 #include "UDPSocket.h"
 
 #include <string>
 
-class CUDPController : public ISerialPort
+class CUDPController : public CBasePort
 {
 public:
 	CUDPController(const std::string& modemAddress, unsigned modemPort, const std::string& localAddress, unsigned localPort);

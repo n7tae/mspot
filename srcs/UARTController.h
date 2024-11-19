@@ -16,11 +16,11 @@
 
 #pragma once
 
-#include "SerialPort.h"
+#include "BasePort.h"
 
 #include <string>
 
-class CUARTController : public ISerialPort
+class CUARTController : public CBasePort
 {
 public:
 	CUARTController(const std::string& device, unsigned int speed, bool assertRTS = false);

@@ -1,4 +1,5 @@
-//  Copyright (C) 2015-2021,2023,2024 by Jonathan Naylor G4KLX
+// Copyright (C) 2015-2021,2023,2024 by Jonathan Naylor G4KLX
+
 /****************************************************************
  *                                                              *
  *             More - An M17-only Repeater/HotSpot              *
@@ -10,16 +11,18 @@
  ****************************************************************/
 
 #include <cstdio>
+#include <vector>
 #include <cstdlib>
-#include <thread>
 #include <sys/types.h>
 #include <unistd.h>
 #include <signal.h>
 #include <fcntl.h>
 #include <pwd.h>
+#include <thread>
 #include <chrono>
 
 #include "M17Host.h"
+#include "RSSIInterpolator.h"
 #include "NullController.h"
 #include "UARTController.h"
 #include "I2CController.h"
@@ -40,13 +43,19 @@ const char* HEADER3 = "commercial networks is strictly prohibited.";
 const char* HEADER4 = "Copyright(C) 2015-2024 by Jonathan Naylor, G4KLX and others";
 const char* HEADER5 = "Copyright(C) 2024 by Thomas A. Early, N7TAE";
 
-CM17Host::CM17Host()
-	: m_mode(MODE_M17)
-	, m_m17NetModeHang(3U)
-	, m_duplex(false)
-	, m_timeout(180U)
-	, m_callsign()
-	, keep_running(false)
+CM17Host::CM17Host() :
+m_mode(MODE_IDLE),
+m_m17RFModeHang(10U),
+m_m17NetModeHang(3U),
+m_modeTimer(1000U),
+m_cwIdTimer(1000U),
+m_duplex(false),
+m_timeout(180U),
+m_cwIdTime(0U),
+m_callsign(),
+m_id(0U),
+m_cwCallsign(),
+m_fixedMode(false)
 {
 }
 
@@ -62,35 +71,61 @@ bool CM17Host::Start()
 	LogInfo(HEADER4);
 	LogInfo(HEADER5);
 
-	LogInfo("mhost-%s is starting", g_Version.GetString());
+	LogInfo("MMDVMHost-%s is starting", g_Version.GetString());
 	LogInfo("Built %s %s", __TIME__, __DATE__);
 
-	readParams();
+	m_duplex = g_Cfg.GetBoolean(g_Keys.reflector.section, g_Keys.reflector.isDuplex);
+	m_callsign.assign(g_Cfg.GetString(g_Keys.reflector.section, g_Keys.reflector.callsign));
+	m_timeout = g_Cfg.GetUnsigned(g_Keys.reflector.section, g_Keys.reflector.timeOut);
+	const bool selfOnly = g_Cfg.GetBoolean(g_Keys.reflector.section, g_Keys.reflector.isprivate);
+	const unsigned int can = g_Cfg.GetUnsigned(g_Keys.reflector.section, g_Keys.reflector.can);
+	const bool allowEncryption = g_Cfg.GetBoolean(g_Keys.reflector.section, g_Keys.reflector.allowEncrypt);
+	m_m17RFModeHang = g_Cfg.GetUnsigned(g_Keys.reflector.section, g_Keys.reflector.rfModeHang);
+	m_m17NetModeHang = g_Cfg.GetUnsigned(g_Keys.reflector.section, g_Keys.reflector.netModeHang);
 
-	auto ret = createModem();
-	if (!ret)
+	LogInfo("Reflector Parameters");
+	LogInfo("    Callsign: %s", m_callsign.c_str());
+	LogInfo("    Duplex: %s", m_duplex ? "yes" : "no");
+	LogInfo("    Timeout: %us", m_timeout);
+	LogInfo("    Self Only: %s", selfOnly ? "true" : "false");
+	LogInfo("    CAN: %u", can);
+	LogInfo("    Allow Encryption: %s", allowEncryption ? "true" : "false");
+	LogInfo("    RF Mode Hang: %us", m_m17RFModeHang);
+	LogInfo("    Net Mode Hang: %us", m_m17NetModeHang);
+
+	if (createModem())
 		return true;
 
-	if (!m_modem->hasM17())
-	{
-		LogError("M17 enabled in the host but not in the modem firmware");
+	if (not m_modem->hasM17()) {
+		LogError("M17 enabled in the host but not in the modem firmware, disabling");
 		return true;
 	}
 
 	LogInfo("Opening network connections");
 
-	ret = createM17Network();
-	if (!ret)
+	if (createM17Network())
 		return true;
 
-	// For all modes we handle RSSI
-	std::string rssiMappingFile;
-	if (g_Cfg.Contains(g_Keys.modem.rssiMapFile))
-		rssiMappingFile.assign(g_Cfg.GetString(g_Keys.modem.rssiMapFile));
-
-	rssi = std::make_unique<CRSSIInterpolator>();
-	if (!rssiMappingFile.empty())
+	if (g_Cfg.GetBoolean(g_Keys.cwid.section, g_Keys.cwid.enable))
 	{
+		const unsigned int time = g_Cfg.GetUnsigned(g_Keys.cwid.section, g_Keys.cwid.time);
+		m_cwCallsign.assign(g_Cfg.GetString(g_Keys.cwid.section, g_Keys.cwid.callsign));
+
+		LogInfo("CW Id Parameters");
+		LogInfo("    Time: %u mins", time);
+		LogInfo("    Callsign: %s", m_cwCallsign.c_str());
+
+		m_cwIdTime = time * 60U;
+
+		m_cwIdTimer.setTimeout(m_cwIdTime / 4U);
+		m_cwIdTimer.start();
+	}
+
+	// For all modes we handle RSSI
+	const std::string rssiMappingFile(g_Cfg.GetString(g_Keys.modem.section, g_Keys.modem.rssiMapFile));
+
+	CRSSIInterpolator* rssi = new CRSSIInterpolator;
+	if (!rssiMappingFile.empty()) {
 		LogInfo("RSSI");
 		LogInfo("    Mapping File: %s", rssiMappingFile.c_str());
 		rssi->load(rssiMappingFile);
@@ -98,40 +133,16 @@ bool CM17Host::Start()
 
 	LogInfo("Starting protocol handlers");
 
-	bool selfOnly          = g_Cfg.GetBoolean(g_Keys.general.isprivate);
-	unsigned int can       = g_Cfg.GetUnsigned(g_Keys.general.can);
-	bool allowEncryption   = g_Cfg.GetBoolean(g_Keys.general.allowEncrypt);
+	m_m17 = std::make_unique<CM17Control>(m_callsign, can, selfOnly, allowEncryption, m_m17Network, m_timeout, m_duplex, rssi);
 
-	LogInfo("M17 RF Parameters");
-	LogInfo("    Self Only: %s", selfOnly ? "true" : "false");
-	LogInfo("    CAN: %u", can);
-	LogInfo("    Allow Encryption: %s", allowEncryption ? "true" : "false");
+	setMode(MODE_IDLE);
 
-	m_m17 = std::make_unique<CM17Control>(m_callsign, can, selfOnly, allowEncryption, m_m17Network, m_timeout, m_duplex, rssi.get());
-
-	CTimer pocsagTimer(1000U, 30U);
-
-	setMode(MODE_M17);
-
-	m_gateway = std::make_unique<CM17Gateway>();
-	if (m_gateway->Start())
-		return true;
-
-	hostFuture = std::async(std::launch::async, &CM17Host::Run, this);
-	if (not hostFuture.valid())
-	{
-		LogError("Could not create host thread");
-		return true;
-	}
-
-	LogInfo("M17Host-%s is running", g_Version.GetString());
+	LogInfo("M27Host-%s is running", g_Version.GetString());
 	return false;
 }
 
 void CM17Host::Run()
 {
-	keep_running = true;
-
 	CStopWatch stopWatch;
 	stopWatch.start();
 
@@ -141,57 +152,53 @@ void CM17Host::Run()
 		if (lockout && m_mode != MODE_LOCKOUT)
 			setMode(MODE_LOCKOUT);
 		else if (!lockout && m_mode == MODE_LOCKOUT)
-			setMode(MODE_M17);
+			setMode(MODE_IDLE);
 
 		bool error = m_modem->hasError();
 		if (error && m_mode != MODE_ERROR)
 			setMode(MODE_ERROR);
 		else if (!error && m_mode == MODE_ERROR)
-			setMode(MODE_M17);
+			setMode(MODE_IDLE);
 
-		uint8_t data[500U];
+		unsigned char data[500U];
 		unsigned int len;
 		bool ret;
 
 		len = m_modem->readM17Data(data);
-		if (m_m17 != NULL && len > 0U)
-		{
-			if (m_mode == MODE_IDLE)
-			{
+		if (m_m17 != NULL && len > 0U) {
+			if (m_mode == MODE_IDLE) {
 				bool ret = m_m17->writeModem(data, len);
-				if (ret)
-				{
+				if (ret) {
+					m_modeTimer.setTimeout(m_m17RFModeHang);
 					setMode(MODE_M17);
 				}
-			}
-			else if (m_mode == MODE_M17)
-			{
-				m_m17->writeModem(data, len);
-			}
-			else if (m_mode != MODE_LOCKOUT)
-			{
+			} else if (m_mode == MODE_M17) {
+				bool ret = m_m17->writeModem(data, len);
+				if (ret)
+					m_modeTimer.start();
+			} else if (m_mode != MODE_LOCKOUT) {
 				LogWarning("M17 modem data received when in mode %u", m_mode);
 			}
 		}
 
-		if (m_m17 != NULL)
-		{
+		if (!m_fixedMode) {
+			if (m_modeTimer.isRunning() && m_modeTimer.hasExpired())
+				setMode(MODE_IDLE);
+		}
+
+		if (m_m17 != NULL) {
 			ret = m_modem->hasM17Space();
-			if (ret)
-			{
+			if (ret) {
 				len = m_m17->readModem(data);
-				if (len > 0U)
-				{
-					if (m_mode == MODE_IDLE)
-					{
+				if (len > 0U) {
+					if (m_mode == MODE_IDLE) {
+						m_modeTimer.setTimeout(m_m17NetModeHang);
 						setMode(MODE_M17);
 					}
-					if (m_mode == MODE_M17)
-					{
+					if (m_mode == MODE_M17) {
 						m_modem->writeM17Data(data, len);
-					}
-					else if (m_mode != MODE_LOCKOUT)
-					{
+						m_modeTimer.start();
+					} else if (m_mode != MODE_LOCKOUT) {
 						LogWarning("M17 data received when in mode %u", m_mode);
 					}
 				}
@@ -203,10 +210,24 @@ void CM17Host::Run()
 
 		m_modem->clock(ms);
 
-		if (m_m17)
+		if (!m_fixedMode)
+			m_modeTimer.clock(ms);
+
+		if (m_m17 != NULL)
 			m_m17->clock(ms);
-		if (m_m17Network)
+		if (m_m17Network != NULL)
 			m_m17Network->clock(ms);
+
+		m_cwIdTimer.clock(ms);
+		if (m_cwIdTimer.isRunning() && m_cwIdTimer.hasExpired()) {
+			if (!m_modem->hasTX()){
+				LogDebug("sending CW ID");
+				m_modem->sendCWId(m_cwCallsign);
+
+				m_cwIdTimer.setTimeout(m_cwIdTime);
+				m_cwIdTimer.start();
+			}
+		}
 
 		if (ms < 5U)
 			std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -215,62 +236,53 @@ void CM17Host::Run()
 
 void CM17Host::Stop()
 {
-	LogInfo("Closing M17Host");
-	keep_running = false;
-	if (hostFuture.valid())
-		hostFuture.get();
-	LogInfo("Closing Gateway");
-	m_gateway->Stop();
-	m_gateway.reset();
-
 	setMode(MODE_QUIT);
 
 	LogInfo("Closing network connections");
 
-	if (m_m17Network != NULL)
-	{
+	if (m_m17Network != NULL) {
 		m_m17Network->close();
 		m_m17Network.reset();
 	}
 
 	LogInfo("Stopping protocol handlers");
 
-	m_m17.reset();
+	m_m17.release();
 
 	LogInfo("M17Host-%s has stopped", g_Version.GetString());
 
 	m_modem->close();
 	m_modem.reset();
-	rssi.reset();
 }
 
 bool CM17Host::createModem()
 {
-	std::string protocol     = g_Cfg.GetString(g_Keys.modem.protocol);
-	std::string uartPort     = g_Cfg.GetString(g_Keys.modem.uartPort);
-	unsigned uartSpeed       = g_Cfg.GetUnsigned(g_Keys.modem.uartSpeed);
-	std::string i2cPort      = g_Cfg.GetString(g_Keys.modem.i2cPort);
-	unsigned i2cAddress      = g_Cfg.GetUnsigned(g_Keys.modem.i2cAddress);
-	std::string modemAddress = g_Cfg.GetString(g_Keys.modem.modemAddress);
-	unsigned modemPort       = g_Cfg.GetUnsigned(g_Keys.modem.modemPort);
-	std::string localAddress = g_Cfg.GetString(g_Keys.modem.localAddress);
-	unsigned localPort       = g_Cfg.GetUnsigned(g_Keys.modem.localPort);
-	bool rxInvert            = g_Cfg.GetBoolean(g_Keys.modem.rxInvert);
-	bool txInvert            = g_Cfg.GetBoolean(g_Keys.modem.txInvert);
-	bool pttInvert           = g_Cfg.GetBoolean(g_Keys.modem.pttInvert);
-	bool trace               = g_Cfg.GetBoolean(g_Keys.modem.trace);
-	bool debug               = g_Cfg.GetBoolean(g_Keys.modem.debug);
-	unsigned txDelay         = g_Cfg.GetUnsigned(g_Keys.modem.txDelay);
-	unsigned rxLevel         = g_Cfg.GetUnsigned(g_Keys.modem.rxLevel);
-	unsigned txLevel         = g_Cfg.GetUnsigned(g_Keys.modem.txLevel);
-	unsigned rfLevel         = g_Cfg.GetUnsigned(g_Keys.modem.rfLevel);
-	unsigned txHang          = g_Cfg.GetUnsigned(g_Keys.modem.txHang);
-	unsigned rxFrequency     = g_Cfg.GetUnsigned(g_Keys.modem.rxFreq);
-	unsigned txFrequency     = g_Cfg.GetUnsigned(g_Keys.modem.txFreq);
-	int rxOffset             = g_Cfg.GetInt(g_Keys.modem.rxOffset);
-	int txOffset             = g_Cfg.GetInt(g_Keys.modem.txOffset);
-	int rxDCOffset           = g_Cfg.GetInt(g_Keys.modem.rxDCOffset);
-	int txDCOffset           = g_Cfg.GetInt(g_Keys.modem.txDCOffset);
+	const std::string     protocol(g_Cfg.GetString(g_Keys.modem.section, g_Keys.modem.protocol));
+	const std::string     uartPort(g_Cfg.GetString(g_Keys.modem.section, g_Keys.modem.uartPort));
+	const std::string      i2cPort(g_Cfg.GetString(g_Keys.modem.section, g_Keys.modem.i2cPort));
+	const std::string modemAddress(g_Cfg.GetString(g_Keys.modem.section, g_Keys.modem.modemAddress));
+	const std::string localAddress(g_Cfg.GetString(g_Keys.modem.section, g_Keys.modem.localAddress));
+	const int rxOffset   = g_Cfg.GetInt(g_Keys.modem.section, g_Keys.modem.rxOffset);
+	const int txOffset   = g_Cfg.GetInt(g_Keys.modem.section, g_Keys.modem.txOffset);
+	const int rxDCOffset = g_Cfg.GetInt(g_Keys.modem.section, g_Keys.modem.rxDCOffset);
+	const int txDCOffset = g_Cfg.GetInt(g_Keys.modem.section, g_Keys.modem.txDCOffset);
+	const bool rxInvert  = g_Cfg.GetBoolean(g_Keys.modem.section, g_Keys.modem.rxInvert);
+	const bool txInvert  = g_Cfg.GetBoolean(g_Keys.modem.section, g_Keys.modem.txInvert);
+	const bool pttInvert = g_Cfg.GetBoolean(g_Keys.modem.section, g_Keys.modem.pttInvert);
+	const bool trace     = g_Cfg.GetBoolean(g_Keys.modem.section, g_Keys.modem.trace);
+	const bool debug     = g_Cfg.GetBoolean(g_Keys.modem.section, g_Keys.modem.debug);
+	const float rfLevel     = g_Cfg.GetFloat(g_Keys.modem.section, g_Keys.modem.rfLevel);
+	const float rxLevel     = g_Cfg.GetFloat(g_Keys.modem.section, g_Keys.modem.rxLevel);
+	const float m17TXLevel  = g_Cfg.GetFloat(g_Keys.modem.section, g_Keys.modem.txLevel);
+	const float cwIdTXLevel = g_Cfg.GetFloat(g_Keys.modem.section, g_Keys.modem.cwLevel);
+	const unsigned int   uartSpeed = g_Cfg.GetUnsigned(g_Keys.modem.section, g_Keys.modem.uartSpeed);
+	const unsigned int  i2cAddress = g_Cfg.GetUnsigned(g_Keys.modem.section, g_Keys.modem.i2cAddress);
+	const unsigned int     txDelay = g_Cfg.GetUnsigned(g_Keys.modem.section, g_Keys.modem.txDelay);
+	const unsigned int   m17TXHang = g_Cfg.GetUnsigned(g_Keys.modem.section, g_Keys.modem.txHang);
+	const unsigned int rxFrequency = g_Cfg.GetUnsigned(g_Keys.modem.section, g_Keys.modem.rxFreq);
+	const unsigned int txFrequency = g_Cfg.GetUnsigned(g_Keys.modem.section, g_Keys.modem.txFreq);
+	const unsigned short modemPort = g_Cfg.GetUnsigned(g_Keys.modem.section, g_Keys.modem.modemPort);
+	const unsigned short localPort = g_Cfg.GetUnsigned(g_Keys.modem.section, g_Keys.modem.localPort);
 
 	LogInfo("Modem Parameters");
 	LogInfo("    Protocol: %s", protocol.c_str());
@@ -279,103 +291,83 @@ bool CM17Host::createModem()
 	{
 		LogInfo("    UART Port: %s", uartPort.c_str());
 		LogInfo("    UART Speed: %u", uartSpeed);
-	} else if (protocol == "udp")
+	}
+	else if (protocol == "udp")
 	{
 		LogInfo("    Modem Address: %s", modemAddress.c_str());
-		LogInfo("    Modem Port: %u", modemPort);
+		LogInfo("    Modem Port: %hu", modemPort);
 		LogInfo("    Local Address: %s", localAddress.c_str());
-		LogInfo("    Local Port: %u", localPort);
+		LogInfo("    Local Port: %hu", localPort);
 	}
-#if defined(__linux__)
 	else if (protocol == "i2c")
 	{
 		LogInfo("    I2C Port: %s", i2cPort.c_str());
-		LogInfo("    I2C Address: 0x%02x", i2cAddress);
+		LogInfo("    I2C Address: %02X", i2cAddress);
 	}
-#endif
 
 	LogInfo("    RX Invert: %s", rxInvert ? "true" : "false");
 	LogInfo("    TX Invert: %s", txInvert ? "true" : "false");
 	LogInfo("    PTT Invert: %s", pttInvert ? "true" : "false");
-	LogInfo("    TX Delay: %u ms", txDelay);
-	LogInfo("    RX Offset: %d Hz", rxOffset);
-	LogInfo("    TX Offset: %d Hz", txOffset);
+	LogInfo("    TX Delay: %ums", txDelay);
+	LogInfo("    RX Offset: %dHz", rxOffset);
+	LogInfo("    TX Offset: %dHz", txOffset);
 	LogInfo("    RX DC Offset: %d", rxDCOffset);
 	LogInfo("    TX DC Offset: %d", txDCOffset);
-	LogInfo("    RF Level: %u", rfLevel);
-	LogInfo("    RX Level: %u", rxLevel);
-	LogInfo("    TX Level: %u", txLevel);
-	LogInfo("    RX Frequency: %u Hz (%u Hz)", rxFrequency, unsigned(rxFrequency + rxOffset));
-	LogInfo("    TX Frequency: %u Hz (%u Hz)", txFrequency, unsigned(txFrequency + txOffset));
+	LogInfo("    RF Level: %.1f%%", rfLevel);
+	LogInfo("    RX Level: %.1f%%", rxLevel);
+	LogInfo("    CW Id TX Level: %.1f%%", cwIdTXLevel);
+	LogInfo("    M17 TX Level: %.1f%%", m17TXLevel);
+	LogInfo("    TX Frequency: %uHz (%uHz)", txFrequency, txFrequency + txOffset);
 
 	m_modem = std::make_unique<CModem>(m_duplex, rxInvert, txInvert, pttInvert, txDelay, trace, debug);
-
-	std::unique_ptr<ISerialPort> port;
+	std::unique_ptr<CBasePort> port;
 	if (protocol == "uart")
 		port = std::make_unique<CUARTController>(uartPort, uartSpeed, true);
 	else if (protocol == "udp")
 		port = std::make_unique<CUDPController>(modemAddress, modemPort, localAddress, localPort);
-#if defined(__linux__)
 	else if (protocol == "i2c")
 		port = std::make_unique<CI2CController>(i2cPort, i2cAddress);
-#endif
 	else if (protocol == "null")
 		port = std::make_unique<CNullController>();
 	else
-		return false;
+		return true;
 
 	m_modem->setPort(std::move(port));
-	m_modem->setLevels(rxLevel, txLevel);
-	m_modem->setRFParams(rxFrequency, rxOffset, txFrequency, txOffset, txDCOffset, rxDCOffset, rfLevel);
-	m_modem->setM17Params(txHang);
+	m_modem->setLevels(rxLevel, cwIdTXLevel, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, m17TXLevel, 0.0f, 0.0f, 0.0f);
+	m_modem->setRFParams(rxFrequency, rxOffset, txFrequency, txOffset, txDCOffset, rxDCOffset, rfLevel, 0);
+	m_modem->setM17Params(m17TXHang);
 
 	bool ret = m_modem->open();
-	if (!ret)
-	{
+	if (!ret) {
 		m_modem.reset();
-		return false;
+		m_modem = NULL;
+		return true;
 	}
 
-	return true;
+	return false;
 }
 
 bool CM17Host::createM17Network()
 {
-	bool debug = g_Cfg.GetBoolean(g_Keys.modem.debug);
-
-	LogInfo("M17 Network Parameters");
-	LogInfo("    Mode Hang: %us", m_m17NetModeHang);
+	bool debug = g_Cfg.GetBoolean(g_Keys.reflector.section, g_Keys.reflector.debug);
 
 	m_m17Network = std::make_shared<CM17Network>(debug);
 	bool ret = m_m17Network->open();
 	if (!ret) {
 		m_m17Network.reset();
-		return false;
+		return true;
 	}
 
 	m_m17Network->enable(true);
 
-	return true;
+	return false;
 }
 
-void CM17Host::readParams()
-{
-	m_duplex   = g_Cfg.GetBoolean(g_Keys.modem.isDuplex);
-	m_callsign = g_Cfg.GetString(g_Keys.general.callsign);
-
-	LogInfo("General Parameters");
-	LogInfo("    Callsign: %s", m_callsign.c_str());
-	LogInfo("    Duplex: %s", m_duplex ? "true" : "false");
-	LogInfo("    Timeout: %us", m_timeout);
-}
-
-void CM17Host::setMode(uint8_t mode)
+void CM17Host::setMode(unsigned char mode)
 {
 	assert(m_modem != NULL);
 
-	switch (mode)
-	{
-	default:
+	switch (mode) {
 	case MODE_M17:
 		if (m_m17Network != NULL)
 			m_m17Network->enable(true);
@@ -383,8 +375,11 @@ void CM17Host::setMode(uint8_t mode)
 			m_m17->enable(true);
 		m_modem->setMode(MODE_M17);
 		m_mode = MODE_M17;
+		m_modeTimer.start();
+		m_cwIdTimer.stop();
 		LogMessage("Mode set to M17");
 		break;
+
 	case MODE_LOCKOUT:
 		if (m_m17Network != NULL)
 			m_m17Network->enable(false);
@@ -392,6 +387,8 @@ void CM17Host::setMode(uint8_t mode)
 			m_m17->enable(false);
 		m_modem->setMode(MODE_IDLE);
 		m_mode = MODE_LOCKOUT;
+		m_modeTimer.stop();
+		m_cwIdTimer.stop();
 		LogMessage("Mode set to Lockout");
 		break;
 
@@ -402,7 +399,47 @@ void CM17Host::setMode(uint8_t mode)
 		if (m_m17 != NULL)
 			m_m17->enable(false);
 		m_mode = MODE_ERROR;
+		m_modeTimer.stop();
+		m_cwIdTimer.stop();
 		LogMessage("Mode set to Error");
 		break;
+
+	default:
+		if (m_m17Network != NULL)
+			m_m17Network->enable(true);
+		if (m_m17 != NULL)
+			m_m17->enable(true);
+		m_modem->setMode(MODE_IDLE);
+		if (m_mode == MODE_ERROR) {
+			m_modem->sendCWId(m_callsign);
+			m_cwIdTimer.setTimeout(m_cwIdTime);
+			m_cwIdTimer.start();
+		} else {
+			m_cwIdTimer.setTimeout(m_cwIdTime / 4U);
+			m_cwIdTimer.start();
+		}
+		m_mode = MODE_IDLE;
+		m_modeTimer.stop();
+		LogMessage("Mode set to Idle");
+		break;
 	}
+}
+
+void CM17Host::processModeCommand(unsigned char mode, unsigned int timeout)
+{
+	m_fixedMode = false;
+	m_modeTimer.setTimeout(timeout);
+
+	setMode(mode);
+}
+
+void CM17Host::processEnableCommand(bool& mode, bool enabled)
+{
+	LogDebug("Setting mode current=%s new=%s",mode ? "true" : "false",enabled ? "true" : "false");
+
+	mode = enabled;
+
+	m_modem->setModeParams(false, false, false, false, false, true, false, false, false);
+	if (!m_modem->writeConfig())
+		LogError("Cannot write Config to MMDVM");
 }

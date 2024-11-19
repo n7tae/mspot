@@ -83,10 +83,10 @@ void CHostMap::Update(const std::string &cs, const std::string &ip4addr, const s
 void CHostMap::ReadAll()
 {
 	baseMap.clear();
-	hasIPv4 = g_Cfg.GetBoolean(g_Keys.gateway.ipv4);
-	hasIPv6 = g_Cfg.GetBoolean(g_Keys.gateway.ipv6);
-	Read(g_Cfg.GetString(g_Keys.gateway.hostPath));
-	Read(g_Cfg.GetString(g_Keys.gateway.myHostPath));
+	hasIPv4 = g_Cfg.GetBoolean(g_Keys.gateway.section, g_Keys.gateway.ipv4);
+	hasIPv6 = g_Cfg.GetBoolean(g_Keys.gateway.section, g_Keys.gateway.ipv6);
+	Read(g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.hostPath));
+	Read(g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.myHostPath));
 }
 
 void CHostMap::Read(const std::string &path)

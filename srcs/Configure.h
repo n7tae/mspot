@@ -20,7 +20,7 @@
 extern SJsonKeys g_Keys;
 
 enum class ErrorLevel { fatal, mild };
-enum class ESection { none, general, log, modem, dht, gateway };
+enum class ESection { none, reflector, log, modem, cwid, gateway };
 
 #define IS_TRUE(a) ((a)=='t' || (a)=='T' || (a)=='1')
 
@@ -31,11 +31,12 @@ public:
 	bool ReadData(const std::string &path);
 	bool Contains(const std::string &key) const;
 	void Dump(bool justpublic) const;
-	std::string GetString(const std::string &key) const;
-	unsigned GetUnsigned(const std::string &key) const;
-	int GetInt(const std::string &key) const;
-	bool GetBoolean(const std::string &key) const;
-	bool IsString(const std::string &key) const;
+	std::string GetString(const std::string &section, const std::string &key) const;
+	float GetFloat(const std::string &section, const std::string &key) const;
+	unsigned GetUnsigned(const std::string &section, const std::string &key) const;
+	int GetInt(const std::string &section, const std::string &key) const;
+	bool GetBoolean(const std::string &section, const std::string &key) const;
+	bool IsString(const std::string &section, const std::string &key) const;
 	const nlohmann::json &GetData() { return data; }
 
 private:
@@ -46,7 +47,8 @@ private:
 
 	unsigned getUnsigned(const std::string &value, const std::string &label, unsigned min, unsigned max, unsigned defaultvalue) const;
 	int getInt(const std::string &value, const std::string &label, int min, int max, int defaultvalue) const;
-	void badParam(const std::string &param) const;
+	float getFloat(const std::string &value, const std::string &label, float min, float max, float defaultValue) const;
+	void badParam(const std::string &section, const std::string &key) const;
 	void checkPath(const std::string &section, const std::string &key, const std::string &filepath, const std::filesystem::file_type type) const;
 	bool isDefined(ErrorLevel level, const std::string &section, const std::string &key, bool &rval);
 };

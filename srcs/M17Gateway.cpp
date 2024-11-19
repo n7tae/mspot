@@ -87,17 +87,17 @@ void CM17Gateway::Stop()
 bool CM17Gateway::Start()
 {
 	destMap.ReadAll();
-	std::string cs(g_Cfg.GetString(g_Keys.general.callsign));
+	std::string cs(g_Cfg.GetString(g_Keys.reflector.section, g_Keys.reflector.callsign));
 	cs.resize(8, ' ');
-	cs.append(1, g_Cfg.GetString(g_Keys.general.module).at(0));
+	cs.append(1, g_Cfg.GetString(g_Keys.reflector.section, g_Keys.reflector.module).at(0));
 	thisCS.CSIn(cs);
 	LogInfo("Station Callsign: %s", cs.c_str());
 
-	if (g_Cfg.GetBoolean(g_Keys.gateway.ipv4))
+	if (g_Cfg.GetBoolean(g_Keys.gateway.section, g_Keys.gateway.ipv4))
 	{
-		internetType = g_Cfg.GetBoolean(g_Keys.gateway.ipv6) ? EInternetType::both : EInternetType::ipv4only;
+		internetType = g_Cfg.GetBoolean(g_Keys.gateway.section, g_Keys.gateway.ipv6) ? EInternetType::both : EInternetType::ipv4only;
 	}
-	else if (g_Cfg.GetBoolean(g_Keys.gateway.ipv6))
+	else if (g_Cfg.GetBoolean(g_Keys.gateway.section, g_Keys.gateway.ipv6))
 	{
 		internetType = EInternetType::ipv6only;
 	}
@@ -138,16 +138,16 @@ bool CM17Gateway::Start()
 		LogInfo("Gateway listening on [%s]:%u", addr.GetAddress(), ipv6.GetPort());
 	}
 
-	can = g_Cfg.GetUnsigned(g_Keys.general.can);
+	can = g_Cfg.GetUnsigned(g_Keys.reflector.section, g_Keys.reflector.can);
 
 	mlink.state = ELinkState::unlinked;
 	keep_running = true;
 	hostStream.header.data.streamid = gateStream.header.data.streamid = 0;
-	mlink.maintainLink = g_Cfg.GetBoolean(g_Keys.gateway.maintainLink);
+	mlink.maintainLink = g_Cfg.GetBoolean(g_Keys.gateway.section, g_Keys.gateway.maintainLink);
 	LogInfo("Gateway will%s try to re-establish a dropped link", mlink.maintainLink ? "" : " NOT");
-	if (g_Cfg.IsString(g_Keys.gateway.startupLink))
+	if (g_Cfg.IsString(g_Keys.gateway.section, g_Keys.gateway.startupLink))
 	{
-		setDestination(g_Cfg.GetString(g_Keys.gateway.startupLink));
+		setDestination(g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.startupLink));
 	}
 
 	gateFuture = std::async(std::launch::async, &CM17Gateway::ProcessGateway, this);
