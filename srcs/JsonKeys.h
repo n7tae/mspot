@@ -40,7 +40,7 @@ struct SJsonKeys
 	}
 	cwid
 	{
-		"CW Id", "CWEnable", "CWTime", "CWCallsign"
+		"CW Id", "Enable", "Time", "Callsign"
 	};
 
 	struct MODEM

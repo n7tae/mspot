@@ -301,7 +301,7 @@ bool CConfigure::ReadData(const std::string &path)
 			std::cerr << "ERROR: Callsign '" << cs << "' does not look like a valid callsign" << std::endl;
 			rval = true;
 		}
-		data[g_Keys.reflector.callsign] = cs;
+		data[g_Keys.reflector.section][g_Keys.reflector.callsign] = cs;
 	}
 	if (isDefined(ErrorLevel::fatal, g_Keys.reflector.section, g_Keys.reflector.module, rval))
 	{
@@ -316,7 +316,7 @@ bool CConfigure::ReadData(const std::string &path)
 			std::cerr << "ERROR: '" << mod << "' has to be an upper case letter A-Z" << std::endl;
 			rval = true;
 		}
-		data[g_Keys.reflector.module] = std::string(1, mod);
+		data[g_Keys.reflector.section][g_Keys.reflector.module] = std::string(1, mod);
 	}
 	if (isDefined(ErrorLevel::fatal, g_Keys.reflector.section, g_Keys.reflector.isDaemon, rval))
 	{
@@ -485,7 +485,7 @@ bool CConfigure::ReadData(const std::string &path)
 
 bool CConfigure::isDefined(ErrorLevel level, const std::string &section, const std::string &key, bool &rval)
 {
-	if (data.contains(key))
+	if (data.contains(section) and data[section].contains(key))
 		return true;
 
 	if (ErrorLevel::mild == level)
@@ -634,7 +634,7 @@ bool CConfigure::Contains(const std::string &key) const
 std::string CConfigure::GetString(const std::string &section, const std::string &key) const
 {
 	std::string str;
-	if (data.contains(section) && data[section].contains(key))
+	if (data.contains(section) and data[section].contains(key))
 	{
 		if (data[section][key].is_null())
 		{
@@ -657,7 +657,7 @@ std::string CConfigure::GetString(const std::string &section, const std::string 
 
 float CConfigure::GetFloat(const std::string &section, const std::string &key) const
 {
-	if (data.contains(section) && data[section].contains(key))
+	if (data.contains(section) and data[section].contains(key))
 	{
 		if (data[section][key].is_number_float())
 		{
@@ -675,7 +675,7 @@ float CConfigure::GetFloat(const std::string &section, const std::string &key) c
 
 unsigned CConfigure::GetUnsigned(const std::string &section, const std::string &key) const
 {
-	if (data.contains(section) && data[section].contains(key))
+	if (data.contains(section) and data[section].contains(key))
 	{
 		if (data[section][key].is_number_unsigned())
 		{
@@ -693,7 +693,7 @@ unsigned CConfigure::GetUnsigned(const std::string &section, const std::string &
 
 int CConfigure::GetInt(const std::string &section, const std::string &key) const
 {
-	if (data.contains(section) && data[section].contains(key))
+	if (data.contains(section) and data[section].contains(key))
 	{
 		if (data[section][key].is_number_integer())
 		{
@@ -711,7 +711,7 @@ int CConfigure::GetInt(const std::string &section, const std::string &key) const
 
 bool CConfigure::GetBoolean(const std::string &section, const std::string &key) const
 {
-	if (data.contains(section) && data[section].contains(key))
+	if (data.contains(section) and data[section].contains(key))
 	{
 		if (data[key].is_boolean())
 			return data[section][key];
@@ -727,7 +727,7 @@ bool CConfigure::GetBoolean(const std::string &section, const std::string &key) 
 
 bool CConfigure::IsString(const std::string &section, const std::string &key) const
 {
-	if (data.contains(section) && data[section].contains(key))
+	if (data.contains(section) and data[section].contains(key))
 	{
 		return data[key].is_string();
 	}
