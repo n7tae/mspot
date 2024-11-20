@@ -367,6 +367,7 @@ bool CM17Host::createModem()
 		return true;
 
 	m_modem->setPort(std::move(port));
+	m_modem->setModeParams(false, false, false, false, false, true, false, false, false);
 	m_modem->setLevels(rxLevel, cwIdTXLevel, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, m17TXLevel, 0.0f, 0.0f, 0.0f);
 	m_modem->setRFParams(rxFrequency, rxOffset, txFrequency, txOffset, txDCOffset, rxDCOffset, rfLevel, 0);
 	m_modem->setM17Params(m17TXHang);

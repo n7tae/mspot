@@ -49,7 +49,6 @@ public:
 	void setModeParams(bool dstarEnabled, bool dmrEnabled, bool ysfEnabled, bool p25Enabled, bool nxdnEnabled, bool m17Enabled, bool pocsagEnabled, bool fmEnabled, bool ax25Enabled);
 	void setLevels(float rxLevel, float cwIdTXLevel, float dstarTXLevel, float dmrTXLevel, float ysfTXLevel, float p25TXLevel, float nxdnTXLevel, float m17TXLevel, float pocsagLevel, float fmTXLevel, float ax25TXLevel);
 	void setM17Params(unsigned int txHang);
-	void setTransparentDataParams(unsigned int sendFrameType);
 	bool open();
 
 	bool hasM17() const;
@@ -139,7 +138,6 @@ private:
 	CRingBuffer<unsigned char> m_txM17Data;
 	CRingBuffer<unsigned char> m_rxSerialData;
 	CRingBuffer<unsigned char> m_txSerialData;
-	unsigned int               m_sendTransparentDataFrameType;
 	CTimer                     m_statusTimer;
 	CTimer                     m_inactivityTimer;
 	CTimer                     m_playoutTimer;

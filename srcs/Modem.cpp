@@ -130,7 +130,6 @@ m_rxM17Data(1000U, "Modem RX M17"),
 m_txM17Data(1000U, "Modem TX M17"),
 m_rxSerialData(1000U, "Modem RX Serial"),
 m_txSerialData(1000U, "Modem TX Serial"),
-m_sendTransparentDataFrameType(0U),
 m_statusTimer(1000U, 0U, 250U),
 m_inactivityTimer(1000U, 2U),
 m_playoutTimer(1000U, 0U, 10U),
@@ -212,11 +211,6 @@ void CModem::setLevels(float rxLevel, float cwIdTXLevel, float dstarTXLevel, flo
 void CModem::setM17Params(unsigned int txHang)
 {
 	m_m17TXHang = txHang;
-}
-
-void CModem::setTransparentDataParams(unsigned int sendFrameType)
-{
-    m_sendTransparentDataFrameType = sendFrameType;
 }
 
 bool CModem::open()
