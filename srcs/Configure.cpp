@@ -749,7 +749,7 @@ bool CConfigure::GetBoolean(const std::string &section, const std::string &key) 
 {
 	if (data.contains(section) and data[section].contains(key))
 	{
-		if (data[key].is_boolean())
+		if (data[section][key].is_boolean())
 			return data[section][key];
 		else
 			std::cerr << "ERROR: GetBoolean(): item at [" << section << ']' << key << " is not a boolean" << std::endl;
