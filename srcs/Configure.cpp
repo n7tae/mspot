@@ -242,7 +242,7 @@ bool CConfigure::ReadData(const std::string &path)
 				if (0 == key.compare(g_Keys.cwid.enable))
 					data[g_Keys.cwid.section][g_Keys.cwid.enable] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.cwid.time))
-					data[g_Keys.cwid.section][g_Keys.cwid.time] = getUnsigned(g_Keys.cwid.time, "CW Id Time", 0, 100, 10);
+					data[g_Keys.cwid.section][g_Keys.cwid.time] = getUnsigned(value, "CW Id Time", 0, 100, 10);
 				else if (0 == key.compare(g_Keys.cwid.message))
 					data[g_Keys.cwid.section][g_Keys.cwid.message] = value;
 				else
@@ -514,35 +514,60 @@ bool CConfigure::isDefined(ErrorLevel level, const std::string &section, const s
 
 float CConfigure::getFloat(const std::string &valuestr, const std::string &label, float min, float max, float def) const
 {
-	auto f = std::strtof(valuestr.c_str(), nullptr);
-	if ( f < min || f > max )
+	try
 	{
-		std::cout << "WARNING: line #" << counter << ": " << label << " is out of range. Reset to " << def << std::endl;
-		f = def;
+		auto f = std::stof(valuestr.c_str(), nullptr);
+		if ( f < min || f > max )
+		{
+			std::cout << "WARNING: line #" << counter << ": " << label << " is out of range. Reset to " << def << std::endl;
+			f = def;
+		}
+		return f;
 	}
-	return f;
+	catch(const std::exception &)
+	{
+		std::cerr << "WARNING: Line #" << counter << ": '" << valuestr << "' could not be converted to an floating point value, it will be set to " << def << std::endl;
+		return def;
+	}
+
 }
 
 unsigned CConfigure::getUnsigned(const std::string &valuestr, const std::string &label, unsigned min, unsigned max, unsigned def) const
 {
-	auto i = unsigned(std::stoul(valuestr, nullptr, 0));
-	if ( i < min || i > max )
+	try
 	{
-		std::cout << "WARNING: line #" << counter << ": " << label << " is out of range. Reset to " << def << std::endl;
-		i = def;
+		auto i = unsigned(std::stoul(valuestr, nullptr, 0));
+		if ( i < min || i > max )
+		{
+			std::cout << "WARNING: line #" << counter << ": " << label << " is out of range. Reset to " << def << std::endl;
+			i = def;
+		}
+		return (unsigned)i;
 	}
-	return (unsigned)i;
+	catch (std::exception &)
+	{
+		std::cerr << "WARNING: Line #" << counter << ": '" << valuestr << "' could not be converted to an integer value, it will be set to " << def << std::endl;
+		return def;
+	}
 }
 
 int CConfigure::getInt(const std::string &valuestr, const std::string &label, int min, int max, int def) const
 {
-	auto i = std::stoi(valuestr.c_str());
-	if ( i < min || i > max )
+	try
 	{
-		std::cout << "WARNING: line #" << counter << ": " << label << " is out of range. Reset to " << def << std::endl;
-		i = def;
+		auto i = std::stoi(valuestr, nullptr, 0);
+		if ( i < min || i > max )
+		{
+			std::cout << "WARNING: line #" << counter << ": " << label << " is out of range. Reset to " << def << std::endl;
+			i = def;
+		}
+		return (unsigned)i;
 	}
-	return (unsigned)i;
+	catch(const std::exception &)
+	{
+		std::cerr << "WARNING: Line #" << counter << ": '" << valuestr << "' could not be converted to an unsigned value, it will be set to " << def << std::endl;
+		return def;
+	}
 }
 
 void CConfigure::badParam(const std::string &section, const std::string &key) const
