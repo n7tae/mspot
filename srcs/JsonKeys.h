@@ -36,11 +36,11 @@ struct SJsonKeys
 
 	struct CWID
 	{
-		const std::string section, enable, time, callsign;
+		const std::string section, enable, time, message;
 	}
 	cwid
 	{
-		"CW Id", "Enable", "Time", "Callsign"
+		"CW Id", "Enable", "Time", "Message"
 	};
 
 	struct MODEM

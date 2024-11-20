@@ -240,11 +240,11 @@ bool CConfigure::ReadData(const std::string &path)
 				break;
 			case ESection::cwid:
 				if (0 == key.compare(g_Keys.cwid.enable))
-					data[g_Keys.cwid.section][g_Keys.cwid.enable] = GetBoolean(g_Keys.cwid.enable, g_Keys.cwid.enable);
+					data[g_Keys.cwid.section][g_Keys.cwid.enable] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.cwid.time))
 					data[g_Keys.cwid.section][g_Keys.cwid.time] = getUnsigned(g_Keys.cwid.time, "CW Id Time", 0, 100, 10);
-				else if (0 == key.compare(g_Keys.cwid.callsign))
-					data[g_Keys.cwid.section][g_Keys.cwid.callsign] = value;
+				else if (0 == key.compare(g_Keys.cwid.message))
+					data[g_Keys.cwid.section][g_Keys.cwid.message] = value;
 				else
 					badParam(g_Keys.cwid.section, key);
 				break;
@@ -450,6 +450,17 @@ bool CConfigure::ReadData(const std::string &path)
 		checkPath(g_Keys.log.section, g_Keys.log.filePath, path, std::filesystem::file_type::directory);
 	}
 	isDefined(ErrorLevel::fatal, g_Keys.log.section, g_Keys.log.rotate,       rval);
+
+	// CW Id section
+	if (isDefined(ErrorLevel::fatal, g_Keys.cwid.section, g_Keys.cwid.enable, rval))
+	{
+		if (GetBoolean(g_Keys.cwid.section, g_Keys.cwid.enable))
+		{
+			isDefined(ErrorLevel::fatal, g_Keys.cwid.section, g_Keys.cwid.time, rval);
+			if (not IsString(g_Keys.cwid.section, g_Keys.cwid.message))
+				data[g_Keys.cwid.section][g_Keys.cwid.message] = std::string();
+		}
+	}
 
 	// Gateway section
 	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.ipv4, rval);

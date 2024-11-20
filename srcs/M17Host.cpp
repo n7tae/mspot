@@ -109,7 +109,7 @@ bool CM17Host::Start()
 	if (g_Cfg.GetBoolean(g_Keys.cwid.section, g_Keys.cwid.enable))
 	{
 		const unsigned int time = g_Cfg.GetUnsigned(g_Keys.cwid.section, g_Keys.cwid.time);
-		m_cwCallsign.assign(g_Cfg.GetString(g_Keys.cwid.section, g_Keys.cwid.callsign));
+		m_cwCallsign.assign(g_Cfg.GetString(g_Keys.cwid.section, g_Keys.cwid.message));
 
 		LogInfo("CW Id Parameters");
 		LogInfo("    Time: %u mins", time);
