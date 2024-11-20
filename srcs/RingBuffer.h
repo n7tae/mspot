@@ -139,7 +139,7 @@ public:
 	}
 
 private:
-	unsigned int m_length;
+	const unsigned int m_length;
 	const char*  m_name;
 	T*           m_buffer;
 	unsigned int m_iPtr;

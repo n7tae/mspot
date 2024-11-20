@@ -20,6 +20,8 @@
 #include "Defines.h"
 #include "Timer.h"
 
+constexpr unsigned BUFFER_LENGTH = 2000U;
+
 enum RESP_TYPE_MMDVM
 {
 	RTM_OK,
@@ -128,7 +130,7 @@ private:
 	int                        m_rxDCOffset;
 	int                        m_txDCOffset;
 	std::unique_ptr<CBasePort> m_port;
-	unsigned char*             m_buffer;
+	unsigned char              m_buffer[BUFFER_LENGTH];
 	unsigned int               m_length;
 	unsigned int               m_offset;
 	SERIAL_STATE               m_state;

@@ -68,8 +68,6 @@ const unsigned char MMDVM_DEBUG_DUMP  = 0xFAU;
 
 const unsigned int MAX_RESPONSES = 30U;
 
-const unsigned int BUFFER_LENGTH = 2000U;
-
 const unsigned char CAP1_DSTAR  = 0x01U;
 const unsigned char CAP1_DMR    = 0x02U;
 const unsigned char CAP1_YSF    = 0x04U;
@@ -124,7 +122,6 @@ m_fmEnabled(false),
 m_ax25Enabled(false),
 m_rxDCOffset(0),
 m_txDCOffset(0),
-m_buffer(NULL),
 m_length(0U),
 m_offset(0U),
 m_state(SS_START),
@@ -160,13 +157,11 @@ m_ax25PPersist(128U),
 m_capabilities1(0x00U),
 m_capabilities2(0x00U)
 {
-	m_buffer = new unsigned char[BUFFER_LENGTH];
 }
 
 CModem::~CModem()
 {
 	m_port.reset();
-	delete[] m_buffer;
 }
 
 void CModem::setPort(std::unique_ptr<CBasePort> port)

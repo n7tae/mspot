@@ -16,6 +16,8 @@
 #include <memory>
 #include <future>
 
+#include "RSSIInterpolator.h"
+#include "M17Gateway.h"
 #include "M17Control.h"
 #include "M17Network.h"
 #include "Timer.h"
@@ -35,7 +37,9 @@ private:
 	std::unique_ptr<CModem>      m_modem;
 	std::unique_ptr<CM17Control> m_m17;
 	std::shared_ptr<CM17Network> m_m17Network;
-	std::future<void> hostFuture;
+	std::unique_ptr<CM17Gateway> m_m17Gateway;
+	std::future<void> hostFuture, gateFuture;
+	std::unique_ptr<CRSSIInterpolator> m_rssi;
 	unsigned char   m_mode;
 	unsigned int    m_m17RFModeHang;
 	unsigned int    m_m17NetModeHang;

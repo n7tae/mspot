@@ -22,7 +22,6 @@
 #include <chrono>
 
 #include "M17Host.h"
-#include "RSSIInterpolator.h"
 #include "NullController.h"
 #include "UARTController.h"
 #include "I2CController.h"
@@ -122,27 +121,46 @@ bool CM17Host::Start()
 	}
 
 	// For all modes we handle RSSI
-	const std::string rssiMappingFile(g_Cfg.GetString(g_Keys.modem.section, g_Keys.modem.rssiMapFile));
+	std::string rssiMappingFile;
+	if (g_Cfg.IsString(g_Keys.modem.section, g_Keys.modem.rssiMapFile))
+	{
+		rssiMappingFile.assign(g_Cfg.GetString(g_Keys.modem.section, g_Keys.modem.rssiMapFile));
 
-	CRSSIInterpolator* rssi = new CRSSIInterpolator;
-	if (!rssiMappingFile.empty()) {
-		LogInfo("RSSI");
-		LogInfo("    Mapping File: %s", rssiMappingFile.c_str());
-		rssi->load(rssiMappingFile);
+		m_rssi = std::make_unique<CRSSIInterpolator>();
+		if (m_rssi->load(rssiMappingFile))
+		{
+			LogInfo("RSSI");
+			LogInfo("    Mapping File: %s", rssiMappingFile.c_str());
+		}
+		else
+			m_rssi.reset();
 	}
 
-	LogInfo("Starting protocol handlers");
+	LogInfo("Starting protocol handler");
 
-	m_m17 = std::make_unique<CM17Control>(m_callsign, can, selfOnly, allowEncryption, m_m17Network, m_timeout, m_duplex, rssi);
+	m_m17 = std::make_unique<CM17Control>(m_callsign, can, selfOnly, allowEncryption, m_m17Network, m_timeout, m_duplex, m_rssi.get());
 
 	setMode(MODE_IDLE);
 
-	LogInfo("M27Host-%s is running", g_Version.GetString());
+	hostFuture = std::async(std::launch::async, &CM17Host::Run, this);
+	if (not hostFuture.valid())
+	{
+		LogError("Cannot start M17Host thread");
+		return true;
+	}
+
+	LogInfo("Starting gateway");
+	m_m17Gateway = std::make_unique<CM17Gateway>();
+	if (m_m17Gateway->Start())
+		return true;
+
+	LogInfo("M17Host-%s is running", g_Version.GetString());
 	return false;
 }
 
 void CM17Host::Run()
 {
+	keep_running = true;
 	CStopWatch stopWatch;
 	stopWatch.start();
 
@@ -236,23 +254,38 @@ void CM17Host::Run()
 
 void CM17Host::Stop()
 {
+	keep_running = false;
+
+	LogInfo("Closing the gateway");
+	if (m_m17Gateway)
+	{
+		m_m17Gateway->Stop();
+		m_m17Gateway.reset();
+	}
+
+	if (hostFuture.valid())
+		hostFuture.get();
+
 	setMode(MODE_QUIT);
 
-	LogInfo("Closing network connections");
-
+	LogInfo("Closing network");
 	if (m_m17Network != NULL) {
 		m_m17Network->close();
 		m_m17Network.reset();
 	}
 
-	LogInfo("Stopping protocol handlers");
-
+	LogInfo("Closing protocol handler");
 	m_m17.release();
 
-	LogInfo("M17Host-%s has stopped", g_Version.GetString());
+	LogInfo("Closing the modem");
+	if (m_modem)
+	{
+		m_modem->close();
+		m_modem.reset();
+	}
+	m_rssi.reset();
 
-	m_modem->close();
-	m_modem.reset();
+	LogInfo("M17Host-%s has stopped", g_Version.GetString());
 }
 
 bool CM17Host::createModem()
@@ -318,6 +351,7 @@ bool CM17Host::createModem()
 	LogInfo("    CW Id TX Level: %.1f%%", cwIdTXLevel);
 	LogInfo("    M17 TX Level: %.1f%%", m17TXLevel);
 	LogInfo("    TX Frequency: %uHz (%uHz)", txFrequency, txFrequency + txOffset);
+	LogInfo("    RX Frequency: %uHz (%uHz)", rxFrequency, rxFrequency + rxOffset);
 
 	m_modem = std::make_unique<CModem>(m_duplex, rxInvert, txInvert, pttInvert, txDelay, trace, debug);
 	std::unique_ptr<CBasePort> port;

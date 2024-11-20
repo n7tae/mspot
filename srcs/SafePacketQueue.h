@@ -63,13 +63,12 @@ public:
 	T PopWaitFor(int ms)
 	{
 		std::unique_lock<std::mutex> lock(m);
-
-		if (q.empty())
-			c.wait_for(lock, std::chrono::milliseconds(ms));
-		if (q.empty())
-			return nullptr;
-		T val = std::move(q.front());
-		q.pop();
+		T val;
+		if (c.wait_for(lock, std::chrono::milliseconds(ms), [this] { return not q.empty(); }))
+		{
+			val = std::move(q.front());
+			q.pop();
+		}
 		return val;
 	}
 

@@ -33,11 +33,11 @@ public:
 	void encodeData(const unsigned char* in, unsigned char* out) const;
 
 private:
-	uint16_t* m_metrics1;
-	uint16_t* m_metrics2;
+	uint16_t  m_metrics1[20];
+	uint16_t  m_metrics2[30];
 	uint16_t* m_oldMetrics;
 	uint16_t* m_newMetrics;
-	uint64_t* m_decisions;
+	uint64_t  m_decisions[300];
 	uint64_t* m_dp;
 
 	void start();

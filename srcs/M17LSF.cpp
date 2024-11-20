@@ -27,27 +27,18 @@
 extern CCRC g_Crc;
 
 CM17LSF::CM17LSF(const CM17LSF& lsf) :
-m_lsf(NULL),
 m_valid(lsf.m_valid)
 {
-	m_lsf = new unsigned char[M17_LSF_LENGTH_BYTES];
-
 	::memcpy(m_lsf, lsf.m_lsf, M17_LSF_LENGTH_BYTES);
 }
 
 CM17LSF::CM17LSF() :
-m_lsf(NULL),
 m_valid(false)
 {
-	m_lsf = new unsigned char[M17_LSF_LENGTH_BYTES];
-
 	::memset(m_lsf, 0x00U, M17_LSF_LENGTH_BYTES);
 }
 
-CM17LSF::~CM17LSF()
-{
-	delete[] m_lsf;
-}
+CM17LSF::~CM17LSF() {}
 
 void CM17LSF::getNetwork(unsigned char* data) const
 {
@@ -197,7 +188,7 @@ void CM17LSF::getFragment(unsigned char* data, unsigned int n) const
 {
 	assert(data != NULL);
 
-	g_Crc.setCRC(m_lsf, M17_LSF_LENGTH_BYTES);
+	g_Crc.setCRC((uint8_t *)m_lsf, M17_LSF_LENGTH_BYTES);
 
 	::memcpy(data, m_lsf + (n * M17_LSF_FRAGMENT_LENGTH_BYTES), M17_LSF_FRAGMENT_LENGTH_BYTES);
 }

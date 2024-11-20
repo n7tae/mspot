@@ -53,24 +53,13 @@ const uint32_t     M = 4U;
 const unsigned int K = 5U;
 
 CM17Convolution::CM17Convolution() :
-m_metrics1(NULL),
-m_metrics2(NULL),
 m_oldMetrics(NULL),
 m_newMetrics(NULL),
-m_decisions(NULL),
 m_dp(NULL)
 {
-	m_metrics1  = new uint16_t[20U];
-	m_metrics2  = new uint16_t[20U];
-	m_decisions = new uint64_t[300U];
 }
 
-CM17Convolution::~CM17Convolution()
-{
-	delete[] m_metrics1;
-	delete[] m_metrics2;
-	delete[] m_decisions;
-}
+CM17Convolution::~CM17Convolution() {}
 
 void CM17Convolution::encodeLinkSetup(const unsigned char* in, unsigned char* out) const
 {

@@ -76,8 +76,8 @@ private:
 	unsigned int                 m_netLSFn;
 	unsigned char                m_rfTextBits;
 	unsigned char                m_netTextBits;
-	char                        *m_rfText;
-	char                        *m_netText;
+	char                         m_rfText[4U * M17_META_LENGTH_BYTES];
+	char                         m_netText[4U * M17_META_LENGTH_BYTES];
 	CRSSIInterpolator           *m_rssiMapper;
 	unsigned char                m_rssi;
 	unsigned char                m_maxRSSI;

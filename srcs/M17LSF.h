@@ -21,6 +21,8 @@
 
 #include <string>
 
+#include "M17Defines.h"
+
 class CM17LSF {
 public:
 	CM17LSF(const CM17LSF& lsf);
@@ -66,8 +68,8 @@ public:
 	CM17LSF& operator=(const CM17LSF& lsf);
 
 private:
-	unsigned char* m_lsf;
-	bool           m_valid;
+	unsigned char m_lsf[M17_LSF_LENGTH_BYTES];
+	bool          m_valid;
 };
 
 #endif

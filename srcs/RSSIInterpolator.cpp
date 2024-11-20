@@ -42,7 +42,7 @@ bool CRSSIInterpolator::load(const std::string& filename)
 		LogWarning("Cannot open the RSSI data file - %s", filename.c_str());
 		return false;
 	}
-	
+
 	char buffer[100U];
 	while (::fgets(buffer, 100, fp) != NULL) {
 		if (buffer[0U] == '#')
@@ -61,8 +61,8 @@ bool CRSSIInterpolator::load(const std::string& filename)
 	::fclose(fp);
 
 	LogInfo("Loaded %u RSSI data mapping points from %s", m_map.size(), filename.c_str());
-	
-	return true;
+
+	return m_map.size() > 0;
 }
 
 int CRSSIInterpolator::interpolate(uint16_t val) const

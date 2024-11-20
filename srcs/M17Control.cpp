@@ -89,8 +89,6 @@ m_netLSF(),
 m_netLSFn(0U),
 m_rfTextBits(0x00U),
 m_netTextBits(0x00U),
-m_rfText(NULL),
-m_netText(NULL),
 m_rssiMapper(rssiMapper),
 m_rssi(0U),
 m_maxRSSI(0U),
@@ -100,17 +98,9 @@ m_rssiCount(0U),
 m_enabled(true),
 m_fp(NULL)
 {
-	assert(rssiMapper != NULL);
-
-	m_rfText  = new char[4U * M17_META_LENGTH_BYTES];
-	m_netText = new char[4U * M17_META_LENGTH_BYTES];
 }
 
-CM17Control::~CM17Control()
-{
-	delete[] m_netText;
-	delete[] m_rfText;
-}
+CM17Control::~CM17Control() {}
 
 bool CM17Control::writeModem(unsigned char* data, unsigned int len)
 {
@@ -152,7 +142,7 @@ bool CM17Control::writeModem(unsigned char* data, unsigned int len)
 		raw |= (data[51U] << 0) & 0x00FFU;
 
 		// Convert the raw RSSI to dBm
-		int rssi = m_rssiMapper->interpolate(raw);
+		int rssi = (nullptr == m_rssiMapper) ? 0 : m_rssiMapper->interpolate(raw);
 		if (rssi != 0)
 			LogDebug("M17, raw RSSI: %u, reported RSSI: %d dBm", raw, rssi);
 
