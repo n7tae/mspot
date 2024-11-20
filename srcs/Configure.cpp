@@ -765,7 +765,7 @@ bool CConfigure::IsString(const std::string &section, const std::string &key) co
 {
 	if (data.contains(section) and data[section].contains(key))
 	{
-		return data[key].is_string();
+		return data[section][key].is_string();
 	}
 	return false;
 }
