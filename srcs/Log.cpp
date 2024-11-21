@@ -137,7 +137,7 @@ void Log(unsigned int level, const char* fmt, ...)
 	struct timeval now;
 	::gettimeofday(&now, NULL);
 
-	struct tm* tm = ::gmtime(&now.tv_sec);
+	struct tm* tm = ::localtime(&now.tv_sec);
 
 	::sprintf(buffer, "%c: %02d/%02d %02d:%02d:%02d.%03lld ", LEVELS[level], tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec, now.tv_usec / 1000LL);
 

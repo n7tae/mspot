@@ -350,6 +350,16 @@ void CM17Gateway::ProcessGateway()
 					is_packet = false;
 					break;
 				}
+				else
+				{
+					CCallsign dst(buf+6);
+					// ignore packet that aren't addressed to this reflector
+					if (dst != thisCS)
+					{
+						is_packet = false;
+						break;
+					}
+				}
 				// only process if we can set the GateState
 				if (gateState.TryState(EGateState::gatein))
 					sendPacket2Host(buf);
