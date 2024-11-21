@@ -362,7 +362,7 @@ void CM17Gateway::ProcessGateway()
 				Dump("Unknown packet", buf, length);
 		}
 
-		if (EGateState::gatein == gateState.GetState() and gateStream.header.data.streamid and gateStream.lastPacketTime.time() >= 1.6)
+		if (gateStream.header.data.streamid and gateStream.lastPacketTime.time() >= 1.6)
 		{
 			std::unique_ptr<SIPFrame> frame;
 			makeEndPacket(gateStream, frame); // current stream has timed out
@@ -545,12 +545,12 @@ void CM17Gateway::sendPacket2Dest(std::unique_ptr<SIPFrame> &Frame)
 		streamcount = 0;
 
 		// copy this packet in case we need it for a stream timeout
-		memcpy(gateStream.header.data.magic, Frame->data.magic, IPFRAMESIZE);
+		memcpy(hostStream.header.data.magic, Frame->data.magic, IPFRAMESIZE);
 
 		// we need source callsign for the log
 		const CCallsign src(Frame->data.lich.addr_src);
 
-		LogInfo("Open Host stream id=0x%04x from %s\n", Frame->GetStreamID(), src.c_str());
+		LogInfo("Open Host stream id=0x%04x from %s", Frame->GetStreamID(), src.c_str());
 		sendPacket(Frame->data.magic, IPFRAMESIZE, mlink.addr);
 		hostStream.lastPacketTime.start();
 	}
