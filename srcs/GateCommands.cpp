@@ -47,7 +47,7 @@ uint16_t CM17Gateway::makeStreamID()
 void CM17Gateway::wait4end(std::unique_ptr<SIPFrame> &Frame)
 {
 	// check the starting packet first
-	if (0x8000u & Frame->GetFrameNumber())
+	if (EOTFNMask & Frame->GetFrameNumber())
 		return;
 
 	CSteadyTimer ptime;
@@ -104,7 +104,7 @@ void CM17Gateway::doEcho(std::unique_ptr<SIPFrame> &Frame)
 
 void CM17Gateway::doRecord(std::unique_ptr<SIPFrame> &Frame)
 {
-	if (Frame->GetFrameNumber() & 0x8000u)
+	if (Frame->GetFrameNumber() & EOTFNMask)
 	{
 		return;
 	}
@@ -136,7 +136,7 @@ void CM17Gateway::doRecord(char c, uint16_t streamID)
 			memcpy(newpl->data(), frame->data.payload, 16);
 			fifo.Push(newpl);
 		}
-		if (frame->GetFrameNumber() & 0x8000u)
+		if (frame->GetFrameNumber() & EOTFNMask)
 			break;
 	}
 	if (fn > 3000)
@@ -247,7 +247,7 @@ void CM17Gateway::doPlay(char c)
 			auto frame = std::make_unique<SIPFrame>();
 			memcpy(frame->data.magic, master.data.magic, IPFRAMESIZE);
 			ifs.read((char *)(frame->data.payload), 16);
-			frame->SetFrameNumber((fn < count) ? fn++ : fn++ & 0x8000u);
+			frame->SetFrameNumber((fn < count) ? fn++ : fn++ & EOTFNMask);
 			g_Crc.setCRC(frame->data.magic, IPFRAMESIZE);
 			Gate2Host.Push(frame);
 		}

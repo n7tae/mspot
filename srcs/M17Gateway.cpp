@@ -175,7 +175,7 @@ void CM17Gateway::makeEndPacket(SStream &stream, std::unique_ptr<SIPFrame> &Fram
 	memcpy(Frame->data.magic, stream.header.data.magic, IPFRAMESIZE);
 	// set the frame number
 	uint16_t fn = (stream.header.GetFrameNumber() + 1);
-	Frame->SetFrameNumber(fn | 0x8000u);
+	Frame->SetFrameNumber(fn | EOTFNMask);
 	// fill in a silent codec2
 	switch (Frame->GetFrameType() & 0x6u) {
 	case 0x4u:
@@ -292,18 +292,18 @@ void CM17Gateway::ProcessGateway()
 					if (0 == memcmp(buf, "ACKN", 4))
 					{
 						mlink.state = ELinkState::linked;
-						LogInfo("Connected to %s", mlink.cs.GetCS().c_str());
+						LogInfo("Connected to %s", mlink.cs.c_str());
 						mlink.receivePingTimer.start();
 					}
 					else if (0 == memcmp(buf, "NACK", 4))
 					{
 						mlink.state = ELinkState::unlinked;
-						LogInfo("Link request refused from %s\n", mlink.cs.GetCS().c_str());
+						LogInfo("Link request refused from %s\n", mlink.cs.c_str());
 						mlink.state = ELinkState::unlinked;
 					}
 					else if (0 == memcmp(buf, "DISC", 4))
 					{
-						LogInfo("Disconnected from %s\n", mlink.cs.GetCS().c_str());
+						LogInfo("Disconnected from %s\n", mlink.cs.c_str());
 						mlink.state = ELinkState::unlinked;
 						mlink.maintainLink = false;
 					}
@@ -479,7 +479,7 @@ void CM17Gateway::sendPacket2Host(const uint8_t *buf)
 	memcpy(Frame->data.magic, buf, IPFRAMESIZE);
 	if (0 == gateStream.header.data.streamid)	// is the stream open?
 	{
-		if (0x8000u & Frame->GetFrameNumber()) // don't open a stream on a last packet
+		if (EOTFNMask & Frame->GetFrameNumber()) // don't open a stream on a last packet
 		{
 			Frame.reset();
 			gateState.Idle();
@@ -495,7 +495,7 @@ void CM17Gateway::sendPacket2Host(const uint8_t *buf)
 		// we need source callsign for the log
 		const CCallsign src(Frame->data.lich.addr_src);
 
-		LogInfo("Open stream id=0x%04x from %s at %s\n", Frame->GetStreamID(), src.GetCS().c_str(), from17k.GetAddress());
+		LogInfo("Open Gate stream id=0x%04x from %s at %s\n", Frame->GetStreamID(), src.GetCS().c_str(), from17k.GetAddress());
 		Gate2Host.Push(Frame);
 		gateStream.lastPacketTime.start();
 	}
@@ -509,9 +509,9 @@ void CM17Gateway::sendPacket2Host(const uint8_t *buf)
 			memset(Frame->data.lich.addr_dst, 0xffu, 6);
 			g_Crc.setCRC(Frame->data.magic, IPFRAMESIZE);
 			Gate2Host.Push(Frame);
-			if (fn & 0x8000u)
+			if (fn & EOTFNMask)
 			{
-				LogInfo("Close stream id=0x%04x, duration=%.2f sec\n", sid, 0.04f * streamcount);
+				LogInfo("Close Gate stream id=0x%04x, duration=%.2f sec\n", sid, 0.04f * streamcount);
 				gateStream.header.data.streamid = 0; // close the stream
 				gateState.Idle();
 			}
@@ -536,7 +536,7 @@ void CM17Gateway::sendPacket2Dest(std::unique_ptr<SIPFrame> &Frame)
 
 	if (0 == hostStream.header.data.streamid)	// is the stream open?
 	{
-		if (0x8000u & Frame->GetFrameNumber()) // don't open a stream on a last packet
+		if (EOTFNMask & Frame->GetFrameNumber()) // don't open a stream on a last packet
 		{
 			Frame.reset();
 			gateState.Idle();
@@ -550,7 +550,7 @@ void CM17Gateway::sendPacket2Dest(std::unique_ptr<SIPFrame> &Frame)
 		// we need source callsign for the log
 		const CCallsign src(Frame->data.lich.addr_src);
 
-		LogInfo("Open MHost stream id=0x%04x from %s\n", Frame->GetStreamID(), src.c_str());
+		LogInfo("Open Host stream id=0x%04x from %s\n", Frame->GetStreamID(), src.c_str());
 		sendPacket(Frame->data.magic, IPFRAMESIZE, mlink.addr);
 		hostStream.lastPacketTime.start();
 	}
@@ -563,9 +563,9 @@ void CM17Gateway::sendPacket2Dest(std::unique_ptr<SIPFrame> &Frame)
 			auto fn = Frame->GetFrameNumber();
 			g_Crc.setCRC(Frame->data.magic, IPFRAMESIZE);
 			sendPacket(Frame->data.magic, IPFRAMESIZE, mlink.addr);
-			if (fn & 0x8000u)
+			if (fn & EOTFNMask)
 			{
-				LogInfo("Close MHost stream id=0x%04x, duration=%.2f sec\n", sid, 0.04f * streamcount);
+				LogInfo("Close Host stream id=0x%04x, duration=%.2f sec\n", sid, 0.04f * streamcount);
 				hostStream.header.data.streamid = 0; // close the stream
 				gateState.Idle();
 			}

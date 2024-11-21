@@ -95,7 +95,8 @@ bool CM17Host::Start()
 	if (createModem())
 		return true;
 
-	if (not m_modem->hasM17()) {
+	if (not m_modem->hasM17())
+	{
 		LogError("M17 enabled in the host but not in the modem firmware, disabling");
 		return true;
 	}

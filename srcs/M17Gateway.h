@@ -48,10 +48,12 @@ using SStream = struct stream_tag
 class CM17Gateway
 {
 public:
+	CM17Gateway() : EOTFNMask(0x8000u) {}
 	bool Start();
 	void Stop();
 
 private:
+	const uint16_t EOTFNMask;
 	CCallsign thisCS;
 	uint16_t can;
 	std::string audioPath;
