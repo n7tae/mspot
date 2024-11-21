@@ -487,7 +487,7 @@ void CM17Gateway::sendPacket2Host(const uint8_t *buf)
 		}
 		streamcount = 0;
 		// set the destination to the broadcast address
-		memset(Frame->data.lich.addr_src, 0xffu, 6);
+		memset(Frame->data.lich.addr_dst, 0xffu, 6);
 
 		// copy this packet in case we need it for a stream timeout
 		memcpy(gateStream.header.data.magic, Frame->data.magic, IPFRAMESIZE);
