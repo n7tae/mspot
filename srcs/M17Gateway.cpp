@@ -495,7 +495,7 @@ void CM17Gateway::sendPacket2Host(const uint8_t *buf)
 		// we need source callsign for the log
 		const CCallsign src(Frame->data.lich.addr_src);
 
-		LogInfo("Open Gate stream id=0x%04x from %s at %s\n", Frame->GetStreamID(), src.GetCS().c_str(), from17k.GetAddress());
+		LogInfo("Open Gate stream id=0x%04x from %s at %s", Frame->GetStreamID(), src.GetCS().c_str(), from17k.GetAddress());
 		Gate2Host.Push(Frame);
 		gateStream.lastPacketTime.start();
 	}
@@ -511,7 +511,7 @@ void CM17Gateway::sendPacket2Host(const uint8_t *buf)
 			Gate2Host.Push(Frame);
 			if (fn & EOTFNMask)
 			{
-				LogInfo("Close Gate stream id=0x%04x, duration=%.2f sec\n", sid, 0.04f * streamcount);
+				LogInfo("Close Gate stream id=0x%04x, duration=%.2f sec", sid, 0.04f * streamcount);
 				gateStream.header.data.streamid = 0; // close the stream
 				gateState.Idle();
 			}
@@ -565,7 +565,7 @@ void CM17Gateway::sendPacket2Dest(std::unique_ptr<SIPFrame> &Frame)
 			sendPacket(Frame->data.magic, IPFRAMESIZE, mlink.addr);
 			if (fn & EOTFNMask)
 			{
-				LogInfo("Close Host stream id=0x%04x, duration=%.2f sec\n", sid, 0.04f * streamcount);
+				LogInfo("Close Host stream id=0x%04x, duration=%.2f sec", sid, 0.04f * streamcount);
 				hostStream.header.data.streamid = 0; // close the stream
 				gateState.Idle();
 			}
