@@ -287,7 +287,7 @@ void CM17Gateway::ProcessGateway()
 			switch (length)
 			{
 			case 4:  				// DISC, ACKN or NACK
-				if ((ELinkState::unlinked != mlink.state) && (from17k == mlink.addr))
+				if ((ELinkState::unlinked != mlink.state) and (from17k == mlink.addr))
 				{
 					if (0 == memcmp(buf, "ACKN", 4))
 					{
@@ -318,7 +318,7 @@ void CM17Gateway::ProcessGateway()
 				}
 				break;
 			case 10: 				// PING or DISC
-				if ((ELinkState::linked == mlink.state) && (from17k == mlink.addr))
+				if ((ELinkState::linked == mlink.state) and (from17k == mlink.addr))
 				{
 					if (0 == memcmp(buf, "PING", 4))
 					{
@@ -362,7 +362,7 @@ void CM17Gateway::ProcessGateway()
 				Dump("Unknown packet", buf, length);
 		}
 
-		if (gateStream.header.data.streamid && gateStream.lastPacketTime.time() >= 1.6)
+		if (EGateState::gatein == gateState.GetState() and gateStream.header.data.streamid and gateStream.lastPacketTime.time() >= 1.6)
 		{
 			std::unique_ptr<SIPFrame> frame;
 			makeEndPacket(gateStream, frame); // current stream has timed out
@@ -440,7 +440,7 @@ void CM17Gateway::ProcessHost()
 		else
 		{
 			// check for a timeout from the host
-			if (hostStream.header.data.streamid && hostStream.lastPacketTime.time() >= 1.6)
+			if (hostStream.header.data.streamid and hostStream.lastPacketTime.time() >= 1.6)
 			{
 				makeEndPacket(hostStream, Frame); // current stream has timed out
 				LogInfo("Host Stream Timeout id=0x%02hu", Frame->GetStreamID());
