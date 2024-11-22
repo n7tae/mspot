@@ -336,10 +336,7 @@ void CM17Gateway::ProcessGateway()
 
 		if (gateStream.in_stream and gateStream.lastPacketTime.time() >= 1.6)
 		{
-			std::unique_ptr<SIPFrame> frame;
-			//makeEndPacket(gateStream, frame); // current stream has timed out
-			LogInfo("Stream Timeout id=0x%02hu", frame->GetStreamID());
-			//Gate2Host.Push(frame);
+			LogInfo("Gateway stream timeout id=0x%02hu", ntohs(gateStream.streamid));
 			gateStream.in_stream = false;
 			gateState.Idle();
 			continue;
@@ -412,9 +409,9 @@ void CM17Gateway::ProcessHost()
 		else
 		{
 			// check for a timeout from the host
-			if (hostStream.in_stream and hostStream.lastPacketTime.time() >= 1.6)
+			if (hostStream.in_stream and hostStream.lastPacketTime.time() >= 1.0)
 			{
-				LogInfo("Host Stream Timeout id=0x%02hu", Frame->GetStreamID());
+				LogInfo("Modem stream timeout id=0x%02hu", ntohs(gateStream.streamid));
 				hostStream.in_stream = false; // close the hostStream
 				gateState.Idle();
 			}
@@ -525,7 +522,7 @@ void CM17Gateway::sendPacket2Dest(std::unique_ptr<SIPFrame> &Frame)
 			sendPacket(Frame->data.magic, IPFRAMESIZE, mlink.addr);
 			if (fn & EOTFNMask)
 			{
-				LogInfo("Close Host stream id=0x%04x, duration=%.2f sec", sid, 0.04f * streamcount);
+				LogInfo("Close modem stream id=0x%04x, duration=%.2f sec", sid, 0.04f * streamcount);
 				hostStream.in_stream = false; // close the stream
 				gateState.Idle();
 			}
@@ -565,7 +562,7 @@ void CM17Gateway::sendPacket2Dest(std::unique_ptr<SIPFrame> &Frame)
 		// we need source callsign for the log
 		const CCallsign src(Frame->data.lich.addr_src);
 
-		LogInfo("Open Host stream id=0x%04x from %s", Frame->GetStreamID(), src.c_str());
+		LogInfo("Open modem stream id=0x%04x from %s", Frame->GetStreamID(), src.c_str());
 		sendPacket(Frame->data.magic, IPFRAMESIZE, mlink.addr);
 		hostStream.lastPacketTime.start();
 	}

@@ -779,7 +779,7 @@ bool CModem::readVersion()
 					return true;
 
 				default:
-					LogError("MMDVM protocol version: %u, unsupported by this version of the MMDVM Host", m_protocolVersion);
+					LogError("MMDVM protocol version: %u, unsupported by this version of the MMDVM modem", m_protocolVersion);
 					return false;
 				}
 
