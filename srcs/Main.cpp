@@ -130,7 +130,7 @@ int main(int argc, char** argv)
 
 	auto isDaemon = g_Cfg.GetBoolean(g_Keys.reflector.section, g_Keys.reflector.isDaemon);
 
-	auto ret = LogInitialise(isDaemon,
+	auto ret = g_Log.Open(isDaemon,
 		g_Cfg.GetString(g_Keys.log.section, g_Keys.log.filePath),
 		g_Cfg.GetString(g_Keys.log.section, g_Keys.log.fileName),
 		g_Cfg.GetUnsigned(g_Keys.log.section, g_Keys.log.fileLevel),
@@ -180,7 +180,7 @@ int main(int argc, char** argv)
 		}
 	} while (caught_signal == SIGHUP);
 
-	::LogFinalise();
+	g_Log.Close();
 
 	return ret ? EXIT_FAILURE : EXIT_SUCCESS;
 }

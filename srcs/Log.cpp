@@ -1,22 +1,14 @@
-/*
- *   Copyright (C) 2015,2016,2020 by Jonathan Naylor G4KLX
- *
- *   This program is free software; you can redistribute it and/or modify
- *   it under the terms of the GNU General Public License as published by
- *   the Free Software Foundation; either version 2 of the License, or
- *   (at your option) any later version.
- *
- *   This program is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with this program; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- */
+// Copyright (C) 2015,2016,2020 by Jonathan Naylor G4KLX
 
-#include "Log.h"
+/****************************************************************
+ *                                                              *
+ *             More - An M17-only Repeater/HotSpot              *
+ *                                                              *
+ *         Copyright (c) 2024 by Thomas A. Early N7TAE          *
+ *                                                              *
+ * See the LICENSE file for details about the software license. *
+ *                                                              *
+ ****************************************************************/
 
 #include <sys/time.h>
 #include <unistd.h>
@@ -28,21 +20,12 @@
 #include <cassert>
 #include <cstring>
 
-static unsigned int m_fileLevel = 2U;
-static std::string m_filePath;
-static std::string m_fileRoot;
-static bool m_fileRotate = true;
+#include "Log.h"
 
-static FILE* m_fpLog = NULL;
-static bool m_daemon = false;
+// the one and only global object
+CLog g_Log;
 
-static unsigned int m_displayLevel = 2U;
-
-static struct tm m_tm;
-
-static char LEVELS[] = " DMIWEF";
-
-static bool logOpenRotate()
+bool CLog::logOpenRotate()
 {
 	bool status = false;
 
@@ -50,7 +33,7 @@ static bool logOpenRotate()
 		return true;
 
 	time_t now;
-	::time(&now);
+	time(&now);
 
 	struct tm* tm = ::gmtime(&now);
 
@@ -63,9 +46,9 @@ static bool logOpenRotate()
 	}
 
 	char filename[200U];
-	::sprintf(filename, "%s/%s-%04d-%02d-%02d.log", m_filePath.c_str(), m_fileRoot.c_str(), tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday);
+	sprintf(filename, "%s/%s-%04d-%02d-%02d.log", m_filePath.c_str(), m_fileRoot.c_str(), tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday);
 
-	if ((m_fpLog = ::fopen(filename, "a+t")) != NULL) {
+	if ((m_fpLog = fopen(filename, "a+t")) != NULL) {
 		status = true;
 
 		if (m_daemon)
@@ -77,7 +60,7 @@ static bool logOpenRotate()
 	return status;
 }
 
-static bool logOpenNoRotate()
+bool CLog::logOpenNoRotate()
 {
 	bool status = false;
 
@@ -88,7 +71,7 @@ static bool logOpenNoRotate()
 		return true;
 
 	char filename[200U];
-	::sprintf(filename, "%s/%s.log", m_filePath.c_str(), m_fileRoot.c_str());
+	sprintf(filename, "%s/%s.log", m_filePath.c_str(), m_fileRoot.c_str());
 
 	if ((m_fpLog = ::fopen(filename, "a+t")) != NULL) {
 		status = true;
@@ -100,7 +83,7 @@ static bool logOpenNoRotate()
 	return status;
 }
 
-bool LogOpen()
+bool CLog::logOpen()
 {
 	if (m_fileRotate)
 		return logOpenRotate();
@@ -108,38 +91,39 @@ bool LogOpen()
 		return logOpenNoRotate();
 }
 
-bool LogInitialise(bool daemon, const std::string& filePath, const std::string& fileRoot, unsigned int fileLevel, unsigned int displayLevel, bool rotate)
+bool CLog::Open(bool d, const std::string &path, const std::string &root, unsigned fl, unsigned dl, bool r)
 {
-	m_filePath     = filePath;
-	m_fileRoot     = fileRoot;
-	m_fileLevel    = fileLevel;
-	m_displayLevel = displayLevel;
-	m_daemon       = daemon;
-	m_fileRotate   = rotate;
+	m_filePath     = path;
+	m_fileRoot     = root;
+	m_fileLevel    = fl;
+	m_displayLevel = dl;
+	m_daemon       = d;
+	m_fileRotate   = r;
 
 	if (m_daemon)
 		m_displayLevel = 0U;
 
-	return ::LogOpen();
+	return logOpen();
 }
 
-void LogFinalise()
+void CLog::Close()
 {
 	if (m_fpLog != NULL)
-		::fclose(m_fpLog);
+		fclose(m_fpLog);
+	m_fpLog = NULL;
 }
 
-void Log(unsigned int level, const char* fmt, ...)
+void CLog::Log(unsigned level, const char* fmt, ...)
 {
 	assert(fmt != NULL);
 
 	char buffer[501U];
 	struct timeval now;
-	::gettimeofday(&now, NULL);
+	gettimeofday(&now, NULL);
 
 	struct tm* tm = ::localtime(&now.tv_sec);
 
-	::sprintf(buffer, "%c: %02d/%02d %02d:%02d:%02d.%03lld ", LEVELS[level], tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec, now.tv_usec / 1000LL);
+	sprintf(buffer, "%c: %02d/%02d %02d:%02d:%02d.%03lld ", LEVELS[level], tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec, now.tv_usec / 1000LL);
 
 	va_list vl;
 	va_start(vl, fmt);
@@ -148,8 +132,9 @@ void Log(unsigned int level, const char* fmt, ...)
 
 	va_end(vl);
 
-	if (level >= m_fileLevel && m_fileLevel != 0U) {
-		bool ret = ::LogOpen();
+	if (level >= m_fileLevel && m_fileLevel != 0U)
+	{
+		bool ret = logOpen();
 		if (!ret)
 			return;
 
@@ -157,12 +142,14 @@ void Log(unsigned int level, const char* fmt, ...)
 		::fflush(m_fpLog);
 	}
 
-	if (level >= m_displayLevel && m_displayLevel != 0U) {
+	if (level >= m_displayLevel && m_displayLevel != 0U)
+	{
 		::fprintf(stdout, "%s\n", buffer);
 		::fflush(stdout);
 	}
 
-	if (level == 6U) {		// Fatal
+	if (level == 6U)
+	{		// Fatal
 		::fclose(m_fpLog);
 		exit(1);
 	}

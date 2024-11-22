@@ -28,7 +28,7 @@ void CUtils::dump(int level, const std::string& title, const unsigned char* data
 {
 	assert(data != NULL);
 
-	::Log(level, "%s", title.c_str());
+	LogLv(level, "%s", title.c_str());
 
 	unsigned int offset = 0U;
 
@@ -59,7 +59,7 @@ void CUtils::dump(int level, const std::string& title, const unsigned char* data
 
 		output += '*';
 
-		::Log(level, "%04X:  %s", offset, output.c_str());
+		LogLv(level, "%04X:  %s", offset, output.c_str());
 
 		offset += 16U;
 
@@ -167,6 +167,6 @@ void CUtils::removeChar(unsigned char * haystack, char needdle)
             haystack[j++] = haystack[i];
 		i++;
 	}
- 
+
     haystack[j] = '\0';
 }
