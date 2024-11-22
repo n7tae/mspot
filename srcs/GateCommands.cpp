@@ -65,7 +65,7 @@ void CM17Gateway::wait4end(std::unique_ptr<SIPFrame> &Frame)
 			if (0x8000 & Frame->GetFrameNumber())
 				break;
 		}
-		if (ptime.time() > 1.6)
+		if (ptime.time() > 0.5)
 		{
 			break;
 		}

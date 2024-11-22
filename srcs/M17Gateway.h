@@ -41,8 +41,9 @@ using SM17Link = struct sm17link_tag
 
 using SStream = struct stream_tag
 {
+	bool in_stream;
 	CSteadyTimer lastPacketTime;
-	SIPFrame header;
+	uint16_t streamid;
 };
 
 class CM17Gateway
@@ -71,7 +72,6 @@ private:
 	std::mt19937 m_random;
 
 	void ProcessGateway();
-	void makeEndPacket(SStream &stream, std::unique_ptr<SIPFrame> &frame);
 	void sendPacket(const void *buf, const size_t size, const CSockAddress &addr) const;
 	void sendPacket2Host(const uint8_t *buf);
 	void sendPacket2Dest(std::unique_ptr<SIPFrame> &frame);

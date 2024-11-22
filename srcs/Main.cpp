@@ -21,7 +21,7 @@
 #include "CRC.h"
 
 // global defs
-CVersion   g_Version(0, 0, 0);
+CVersion   g_Version(0, 1, 0);
 CConfigure g_Cfg;
 CCRC       g_Crc;
 

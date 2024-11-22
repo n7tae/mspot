@@ -142,7 +142,8 @@ bool CM17Gateway::Start()
 
 	mlink.state = ELinkState::unlinked;
 	keep_running = true;
-	hostStream.header.data.streamid = gateStream.header.data.streamid = 0;
+	hostStream.in_stream = gateStream.in_stream = false;
+	hostStream.streamid = gateStream.streamid = 0;
 	mlink.maintainLink = g_Cfg.GetBoolean(g_Keys.gateway.section, g_Keys.gateway.maintainLink);
 	LogInfo("Gateway will%s try to re-establish a dropped link", mlink.maintainLink ? "" : " NOT");
 	if (g_Cfg.IsString(g_Keys.gateway.section, g_Keys.gateway.startupLink))
@@ -166,35 +167,6 @@ bool CM17Gateway::Start()
 		return true;
 	}
 	return false;
-}
-
-// make a closing packet
-void CM17Gateway::makeEndPacket(SStream &stream, std::unique_ptr<SIPFrame> &Frame)
-{
-	Frame = std::make_unique<SIPFrame>();
-	memcpy(Frame->data.magic, stream.header.data.magic, IPFRAMESIZE);
-	// set the frame number
-	uint16_t fn = (stream.header.GetFrameNumber() + 1);
-	Frame->SetFrameNumber(fn | EOTFNMask);
-	// fill in a silent codec2
-	switch (Frame->GetFrameType() & 0x6u) {
-	case 0x4u:
-		{ //3200
-			uint8_t silent[] = { 0x01u, 0x00u, 0x09u, 0x43u, 0x9cu, 0xe4u, 0x21u, 0x08u };
-			memcpy(Frame->data.payload,   silent, 8);
-			memcpy(Frame->data.payload+8, silent, 8);
-		}
-		break;
-	case 0x6u:
-		{ // 1600
-			uint8_t silent[] = { 0x01u, 0x00u, 0x04u, 0x00u, 0x25u, 0x75u, 0xddu, 0xf2u };
-			memcpy(Frame->data.payload, silent, 8);
-		}
-		break;
-	default:
-		break;
-	}
-	g_Crc.setCRC(Frame->data.magic, IPFRAMESIZE);
 }
 
 void CM17Gateway::ProcessGateway()
@@ -350,16 +322,6 @@ void CM17Gateway::ProcessGateway()
 					is_packet = false;
 					break;
 				}
-				else
-				{
-					CCallsign dst(buf+6);
-					// ignore packet that aren't addressed to this reflector
-					if (dst != thisCS)
-					{
-						is_packet = false;
-						break;
-					}
-				}
 				// only process if we can set the GateState
 				if (gateState.TryState(EGateState::gatein))
 					sendPacket2Host(buf);
@@ -372,13 +334,13 @@ void CM17Gateway::ProcessGateway()
 				Dump("Unknown packet", buf, length);
 		}
 
-		if (gateStream.header.data.streamid and gateStream.lastPacketTime.time() >= 1.6)
+		if (gateStream.in_stream and gateStream.lastPacketTime.time() >= 1.6)
 		{
 			std::unique_ptr<SIPFrame> frame;
-			makeEndPacket(gateStream, frame); // current stream has timed out
+			//makeEndPacket(gateStream, frame); // current stream has timed out
 			LogInfo("Stream Timeout id=0x%02hu", frame->GetStreamID());
-			Gate2Host.Push(frame);
-			gateStream.header.data.streamid = 0;
+			//Gate2Host.Push(frame);
+			gateStream.in_stream = false;
 			gateState.Idle();
 			continue;
 		}
@@ -450,12 +412,10 @@ void CM17Gateway::ProcessHost()
 		else
 		{
 			// check for a timeout from the host
-			if (hostStream.header.data.streamid and hostStream.lastPacketTime.time() >= 1.6)
+			if (hostStream.in_stream and hostStream.lastPacketTime.time() >= 1.6)
 			{
-				makeEndPacket(hostStream, Frame); // current stream has timed out
 				LogInfo("Host Stream Timeout id=0x%02hu", Frame->GetStreamID());
-				sendPacket2Dest(Frame);
-				hostStream.header.data.streamid = 0; // close the hostStream
+				hostStream.in_stream = false; // close the hostStream
 				gateState.Idle();
 			}
 		}
@@ -487,31 +447,9 @@ void CM17Gateway::sendPacket2Host(const uint8_t *buf)
 	static unsigned streamcount = 0;
 	auto Frame = std::make_unique<SIPFrame>();
 	memcpy(Frame->data.magic, buf, IPFRAMESIZE);
-	if (0 == gateStream.header.data.streamid)	// is the stream open?
+	if (gateStream.in_stream)	// is the stream open?
 	{
-		if (EOTFNMask & Frame->GetFrameNumber()) // don't open a stream on a last packet
-		{
-			Frame.reset();
-			gateState.Idle();
-			return;
-		}
-		streamcount = 0;
-		// set the destination to the broadcast address
-		memset(Frame->data.lich.addr_dst, 0xffu, 6);
-
-		// copy this packet in case we need it for a stream timeout
-		memcpy(gateStream.header.data.magic, Frame->data.magic, IPFRAMESIZE);
-
-		// we need source callsign for the log
-		const CCallsign src(Frame->data.lich.addr_src);
-
-		LogInfo("Open Gate stream id=0x%04x from %s at %s", Frame->GetStreamID(), src.GetCS().c_str(), from17k.GetAddress());
-		Gate2Host.Push(Frame);
-		gateStream.lastPacketTime.start();
-	}
-	else
-	{
-		if (gateStream.header.data.streamid == Frame->data.streamid)
+		if (gateStream.streamid == Frame->data.streamid)
 		{
 			streamcount++;
 			auto sid = Frame->GetStreamID();
@@ -522,19 +460,51 @@ void CM17Gateway::sendPacket2Host(const uint8_t *buf)
 			if (fn & EOTFNMask)
 			{
 				LogInfo("Close Gate stream id=0x%04x, duration=%.2f sec", sid, 0.04f * streamcount);
-				gateStream.header.data.streamid = 0; // close the stream
+				gateStream.in_stream = false; // close the stream
 				gateState.Idle();
 			}
 			else
 			{
-				gateStream.header.SetFrameNumber(fn);
 				gateStream.lastPacketTime.start();
 			}
 		}
 		else
 		{
+			Frame.reset();  // this frame doesn't belong to the open stream
+		}
+	}
+	else
+	{
+		if (EOTFNMask & Frame->GetFrameNumber()) // don't open a stream on a last packet
+		{
+			Frame.reset();
+			gateState.Idle();
 			return;
 		}
+		// don't open a stream if this packet has the same SID as the last stream
+		// and the last stream closed less than 1 second ago
+		// NOTE: It's theoretically possible that this is actually a new stream that has the same SID.
+		//       In that case, up to a second of the beginning of the stream will be lost. Sorry.
+		if (Frame->data.streamid == gateStream.streamid and gateStream.lastPacketTime.time() < 1.0)
+		{
+			Frame.reset();
+			gateState.Idle();
+			return;
+		}
+
+		// Start the stream!!
+		gateStream.in_stream = true;
+		streamcount = 0;
+
+		// remember the SID
+		gateStream.streamid = Frame->data.streamid;
+
+		// we need source callsign for the log
+		const CCallsign src(Frame->data.lich.addr_src);
+
+		LogInfo("Open Gate stream id=0x%04x from %s at %s", Frame->GetStreamID(), src.GetCS().c_str(), from17k.GetAddress());
+		Gate2Host.Push(Frame);
+		gateStream.lastPacketTime.start();
 	}
 	return;
 }
@@ -544,29 +514,9 @@ void CM17Gateway::sendPacket2Dest(std::unique_ptr<SIPFrame> &Frame)
 {
 	static unsigned streamcount = 0;
 
-	if (0 == hostStream.header.data.streamid)	// is the stream open?
+	if (hostStream.in_stream)	// is the stream open?
 	{
-		if (EOTFNMask & Frame->GetFrameNumber()) // don't open a stream on a last packet
-		{
-			Frame.reset();
-			gateState.Idle();
-			return;
-		}
-		streamcount = 0;
-
-		// copy this packet in case we need it for a stream timeout
-		memcpy(hostStream.header.data.magic, Frame->data.magic, IPFRAMESIZE);
-
-		// we need source callsign for the log
-		const CCallsign src(Frame->data.lich.addr_src);
-
-		LogInfo("Open Host stream id=0x%04x from %s", Frame->GetStreamID(), src.c_str());
-		sendPacket(Frame->data.magic, IPFRAMESIZE, mlink.addr);
-		hostStream.lastPacketTime.start();
-	}
-	else
-	{
-		if (hostStream.header.data.streamid == Frame->data.streamid)
+		if (hostStream.streamid == Frame->data.streamid)
 		{
 			streamcount++;
 			auto sid = Frame->GetStreamID();
@@ -576,21 +526,49 @@ void CM17Gateway::sendPacket2Dest(std::unique_ptr<SIPFrame> &Frame)
 			if (fn & EOTFNMask)
 			{
 				LogInfo("Close Host stream id=0x%04x, duration=%.2f sec", sid, 0.04f * streamcount);
-				hostStream.header.data.streamid = 0; // close the stream
+				hostStream.in_stream = false; // close the stream
 				gateState.Idle();
 			}
 			else
 			{
-				hostStream.header.SetFrameNumber(fn);
 				hostStream.lastPacketTime.start();
 			}
 		}
 		else
 		{
-			return;
+			Frame.reset(); // this frame has the wrong SID
 		}
 	}
-	return;
+	else
+	{
+		if (EOTFNMask & Frame->GetFrameNumber()) // don't open a stream on a last packet
+		{
+			Frame.reset();
+			gateState.Idle();
+			return;
+		}
+		// don't open a stream if this packet has the same SID as the last stream
+		if (Frame->data.streamid == hostStream.streamid)
+		{
+			Frame.reset();
+			gateState.Idle();
+			return;
+		}
+
+		// Open the Stream!!
+		hostStream.in_stream = true;
+		streamcount = 0;
+
+		// remember the SID
+		hostStream.streamid = Frame->data.streamid;
+
+		// we need source callsign for the log
+		const CCallsign src(Frame->data.lich.addr_src);
+
+		LogInfo("Open Host stream id=0x%04x from %s", Frame->GetStreamID(), src.c_str());
+		sendPacket(Frame->data.magic, IPFRAMESIZE, mlink.addr);
+		hostStream.lastPacketTime.start();
+	}
 }
 
 void CM17Gateway::sendPacket(const void *buf, const size_t size, const CSockAddress &addr) const
