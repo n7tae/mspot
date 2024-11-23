@@ -8,7 +8,7 @@
 #                                                              #
 ################################################################
 
-include mhost.mk
+include morhs.mk
 
 ifeq ($(DEBUG), true)
 CPPFLAGS = -g -ggdb -std=c++17 -Wall -Isrcs
@@ -22,9 +22,9 @@ SRCS = $(wildcard srcs/*.cpp)
 OBJS = $(SRCS:.cpp=.o)
 DEPS = $(SRCS:.cpp=.d)
 
-all : mhost inicheck
+all : morhs inicheck
 
-mhost : $(OBJS)
+morhs : $(OBJS)
 	$(CXX) $(CPPFLAGS) $(OBJS) $(LIBS) -o $@
 
 inicheck : srcs/Configure.h srcs/Configure.cpp srcs/JsonKeys.h
@@ -38,5 +38,5 @@ inicheck : srcs/Configure.h srcs/Configure.cpp srcs/JsonKeys.h
 clean :
 	$(RM) $(all) srcs/*.o srcs/*.d
 
-install : gateway/gate mhost/host
-	install -m 755 m17host $(BINDIR)
+install : gateway/gate morhs/host
+	install -m 755 morhs $(BINDIR)

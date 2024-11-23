@@ -1,6 +1,3 @@
-# Visual Code
-.vscode
-
 # Prerequisites
 *.d
 
@@ -8,9 +5,8 @@
 *.o
 
 # executables
-mhost
+morhs
 inicheck
 
 # local configs
-mhost.*
-srcs/GitVersion.h
+morhs.*

@@ -151,6 +151,9 @@ bool CM17Gateway::Start()
 		setDestination(g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.startupLink));
 	}
 
+	audioPath.assign(g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.audioFolder));
+	LogInfo("Audio folder is at %s", audioPath.c_str());
+
 	gateFuture = std::async(std::launch::async, &CM17Gateway::ProcessGateway, this);
 	if (not gateFuture.valid())
 	{
