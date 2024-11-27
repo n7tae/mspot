@@ -8,7 +8,7 @@
 #                                                              #
 ################################################################
 
-include morhs.mk
+include mor.mk
 
 ifeq ($(DEBUG), true)
 CPPFLAGS = -g -ggdb -std=c++17 -Wall -Isrcs
