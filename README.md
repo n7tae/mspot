@@ -1,6 +1,6 @@
-# morhs
+# MORe
 
-M17 only repeater (or hot-spot) using an MMDVM modem
+As is *less is MORe*, an M17 only repeater (or hot-spot) using an MMDVM modem
 
 ## Description
 
