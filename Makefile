@@ -22,9 +22,9 @@ SRCS = $(wildcard srcs/*.cpp)
 OBJS = $(SRCS:.cpp=.o)
 DEPS = $(SRCS:.cpp=.d)
 
-all : morhs inicheck
+all : mor inicheck
 
-morhs : $(OBJS)
+mor : $(OBJS)
 	$(CXX) $(CPPFLAGS) $(OBJS) $(LIBS) -o $@
 
 inicheck : srcs/Configure.h srcs/Configure.cpp srcs/JsonKeys.h
@@ -38,5 +38,5 @@ inicheck : srcs/Configure.h srcs/Configure.cpp srcs/JsonKeys.h
 clean :
 	$(RM) $(all) srcs/*.o srcs/*.d
 
-install : gateway/gate morhs/host
-	install -m 755 morhs $(BINDIR)
+install : mor
+	install -m 755 mor $(BINDIR)
