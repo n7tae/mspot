@@ -273,14 +273,17 @@ void CM17Gateway::ProcessGateway()
 					else if (0 == memcmp(buf, "NACK", 4))
 					{
 						mlink.state = ELinkState::unlinked;
-						LogInfo("Link request refused from %s\n", mlink.cs.c_str());
+						LogInfo("Connection request refused from %s\n", mlink.cs.c_str());
+						mlink.cs.Clear();
+						mlink.addr.Clear();
 						mlink.state = ELinkState::unlinked;
 					}
 					else if (0 == memcmp(buf, "DISC", 4))
 					{
 						LogInfo("Disconnected from %s\n", mlink.cs.c_str());
+						mlink.addr.Clear(); // initiated with UNLINK, so don't try to reconnect
+						mlink.cs.Clear();   // ^^^^^^^^^ ^^^^ ^^^^^^
 						mlink.state = ELinkState::unlinked;
-						mlink.maintainLink = false;
 					}
 					else
 					{
@@ -509,7 +512,7 @@ void CM17Gateway::sendPacket2Host(const uint8_t *buf)
 	return;
 }
 
-// this also opens and closes the gateStream
+// this also opens and closes the hostStream
 void CM17Gateway::sendPacket2Dest(std::unique_ptr<SIPFrame> &Frame)
 {
 	static unsigned streamcount = 0;
