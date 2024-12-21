@@ -1,3 +1,6 @@
+# VSCode
+.vscode
+
 # Prerequisites
 *.d
 
@@ -5,8 +8,9 @@
 *.o
 
 # executables
-morhs
+mor
 inicheck
 
 # local configs
-morhs.*
+/mor.*
+/*Hosts.txt

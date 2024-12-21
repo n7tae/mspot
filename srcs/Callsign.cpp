@@ -52,23 +52,30 @@ void CCallsign::CSIn(const std::string &callsign)
 		return;
 	}
 
-	strncpy(cs, callsign.c_str(), 9);
-	coded = 0;
-	// 'skip' will be used to delay encoded until a char with pos > 0 is found;
+	strncpy(cs, callsign.c_str(), 9); // shorter callsigns will have trailing NULLs, but there might be trailing spaces
+	coded = 0; //initialize the encoded value
+
+	// 'skip' will be used to delay encoding until a char with pos > 0 is found;
 	bool skip = true;
-	for(int i=8; i>=0; i--)
+	for(int i=8; i>=0; i--) // processing the cs  backwards, from the end to the beginning
 	{
 		while (0 == cs[i])
-			i--;
+			i--; // skip traling nulls
 		auto pos = m17_alphabet.find(cs[i]);
 		if (std::string::npos == pos)
-			pos = 0;
-		if (skip and 0 == pos)
+			pos = 0; // the char wasn't found in the M17 char set, so it becomes a space
+		if (skip)
 		{
-			cs[i] = 0;
-			continue;
+			if ( 0 == pos) // unless it's at the end
+			{
+				cs[i] = 0;	// this ensures trailing spaces will actually be NULL
+				continue;
+			}
+			else
+			{
+				skip = false; // okay, here is our first char that's not a space
+			}
 		}
-		skip = false;
 		cs[i] = m17_alphabet.at(pos);	// replace with valid character
 		coded *= 40u;
 		coded += pos;

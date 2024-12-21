@@ -11,7 +11,7 @@
 
 #include <mutex>
 
-enum class EGateState { idle, gatein, modemin };
+enum class EGateState { idle, gatein, modemin, messagein };
 
 class CGateState
 {
@@ -31,6 +31,17 @@ public:
 	{
 		std::lock_guard<std::mutex> lg(mtx);
 		currentState = newstate;
+	}
+
+	bool SetStateOnlyIfIdle(EGateState newstate)
+	{
+		std::lock_guard<std::mutex> lg(mtx);
+		if (EGateState::idle == currentState)
+		{
+			currentState = newstate;
+			return true;
+		}
+		return false;
 	}
 
 	// returns true if successful

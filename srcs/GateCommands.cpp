@@ -78,6 +78,7 @@ void CM17Gateway::doUnlink(std::unique_ptr<SIPFrame> &Frame)
 	wait4end(Frame);
 	if (ELinkState::unlinked == mlink.state)
 	{
+		addMessage("already_unlinked");
 		LogInfo("%s is already unlinked", thisCS.c_str());
 	}
 	else

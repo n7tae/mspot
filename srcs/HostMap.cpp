@@ -12,11 +12,33 @@
 #include <regex>
 
 #include "Configure.h"
-#include "Utilities.h"
 #include "Log.h"
 #include "HostMap.h"
 
 extern CConfigure g_Cfg;
+
+// trim from start (in place)
+static inline void ltrim(std::string &s)
+{
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
+        return !std::isspace(ch);
+    }));
+}
+
+// trim from end (in place)
+static inline void rtrim(std::string &s)
+{
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](int ch) {
+        return !std::isspace(ch);
+    }).base(), s.end());
+}
+
+// trim from both ends (in place)
+static inline void trim(std::string &s)
+{
+    ltrim(s);
+    rtrim(s);
+}
 
 CHostMap::CHostMap() {}
 
@@ -101,12 +123,12 @@ void CHostMap::Read(const std::string &path)
 			count++;
 			trim(line);
 			if (0==line.size() || '#'==line[0]) continue;
-			std::vector<std::string> elem;
-			auto vsize = split(line, elem);
-			if (6 == vsize)
+			std::istringstream ss(line);
+			std::vector<std::string> elem(std::istream_iterator<std::string>{ss}, std::istream_iterator<std::string>());
+			if (6 == elem.size())
 				Update(elem[0], elem[1], elem[2], elem[3], elem[4], std::stoul(elem[5]));
 			else
-				LogWarning("Line #%u of %s has %u elements, needs 6", count, path.c_str(), vsize);
+				LogWarning("Line #%u of %s has %u elements, needs 6", count, path.c_str(), elem.size());
 
 		}
 		file.close();

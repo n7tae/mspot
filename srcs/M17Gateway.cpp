@@ -17,6 +17,7 @@
 #include <cstring>
 #include <thread>
 #include <chrono>
+#include <map>
 
 #include "SafePacketQueue.h"
 #include "M17Gateway.h"
@@ -28,6 +29,40 @@ extern CConfigure g_Cfg;
 extern CCRC       g_Crc;
 extern IPFrameFIFO Host2Gate;
 extern IPFrameFIFO Gate2Host;
+
+static const uint8_t quiet[] { 0x01u, 0x00u, 0x09u, 0x43u, 0x9Cu, 0xE4u, 0x21u, 0x08u };
+
+
+static inline void split(const std::string &s, char delim, std::queue<std::string> &q)
+{
+	std::istringstream iss(s);
+	std::string item;
+	while (std::getline(iss, item, delim))
+		q.push(item);
+}
+
+// trim from start (in place)
+static inline void ltrim(std::string &s)
+{
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
+        return !std::isspace(ch);
+    }));
+}
+
+// trim from end (in place)
+static inline void rtrim(std::string &s)
+{
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](int ch) {
+        return !std::isspace(ch);
+    }).base(), s.end());
+}
+
+// trim from both ends (in place)
+static inline void trim(std::string &s)
+{
+    ltrim(s);
+    rtrim(s);
+}
 
 // for calculating switch case values for host command processor
 constexpr uint64_t CalcCSCode(const char *cs)
@@ -91,6 +126,7 @@ bool CM17Gateway::Start()
 	cs.resize(8, ' ');
 	cs.append(1, g_Cfg.GetString(g_Keys.reflector.section, g_Keys.reflector.module).at(0));
 	thisCS.CSIn(cs);
+	makeCSData(thisCS, "repeater.dat");
 	LogInfo("Station Callsign: %s", cs.c_str());
 
 	if (g_Cfg.GetBoolean(g_Keys.gateway.section, g_Keys.gateway.ipv4))
@@ -191,6 +227,7 @@ void CM17Gateway::ProcessGateway()
 			if (mlink.receivePingTimer.time() > 30) // is the reflector okay?
 			{
 				// looks like we lost contact
+				addMessage("unlinked_from reflector");
 				LogInfo("Disconnected from %s, TIMEOUT...\n", mlink.cs.GetCS().c_str());
 				mlink.state = ELinkState::unlinked;
 				if (not mlink.maintainLink)
@@ -218,8 +255,42 @@ void CM17Gateway::ProcessGateway()
 			break;
 		}
 
-		//PlayVoiceFile(); // play if there is any msg to play
+		// close the current audio message task
+		if (msgTask && msgTask->isDone)
+		{
+			if (msgTask->futTask.valid())
+			{
+				auto count = msgTask->futTask.get();
+				LogInfo("Played %.2f sec message", count*0.04f);
+			}
+			else
+			{
+				LogWarning("Message task is done, but future task is invalid");
+			}
+			msgTask.reset();
+			gateState.Idle();
+		}
 
+		// can we play an audio message?
+		if ((not voiceQueue.empty()) and gateState.SetStateOnlyIfIdle(EGateState::messagein))
+		{
+			auto message = voiceQueue.front();
+			voiceQueue.pop();
+			if (msgTask)
+			{
+				LogError("Trying to initiate message play, the gateState was idle, but msgTask is not empty!");
+				LogError("'%s' will not be played!", message.c_str());
+				gateState.Idle();
+			}
+			else
+			{
+				msgTask = std::make_unique<SMessageTask>();
+				msgTask->isDone = false;
+				msgTask->futTask = std::async(std::launch::async, &CM17Gateway::PlayVoiceFiles, this, std::ref(message));
+			}
+		}
+
+		// any packets from IPv4 or 6?
 		auto rval = poll(pfds, 2, 10);
 		if (0 > rval)
 		{
@@ -232,7 +303,7 @@ void CM17Gateway::ProcessGateway()
 		socklen_t fromlen = sizeof(struct sockaddr_storage);
 		int length;
 
-		if (rval)
+		if (rval)	// receive any packet
 		{
 			if (pfds[0].revents & POLLIN)
 			{
@@ -259,7 +330,7 @@ void CM17Gateway::ProcessGateway()
 
 		if (is_packet)
 		{
-			switch (length)
+			switch (length)	// process known packets
 			{
 			case 4:  				// DISC, ACKN or NACK
 				if ((ELinkState::unlinked != mlink.state) and (from17k == mlink.addr))
@@ -267,12 +338,15 @@ void CM17Gateway::ProcessGateway()
 					if (0 == memcmp(buf, "ACKN", 4))
 					{
 						mlink.state = ELinkState::linked;
+						makeCSData(mlink.cs, "destination.dat");
+						addMessage("linked_to reflector");
 						LogInfo("Connected to %s", mlink.cs.c_str());
 						mlink.receivePingTimer.start();
 					}
 					else if (0 == memcmp(buf, "NACK", 4))
 					{
 						mlink.state = ELinkState::unlinked;
+						addMessage("link_refused");
 						LogInfo("Connection request refused from %s\n", mlink.cs.c_str());
 						mlink.cs.Clear();
 						mlink.addr.Clear();
@@ -280,6 +354,7 @@ void CM17Gateway::ProcessGateway()
 					}
 					else if (0 == memcmp(buf, "DISC", 4))
 					{
+						addMessage("repeater is_unlinked");
 						LogInfo("Disconnected from %s\n", mlink.cs.c_str());
 						mlink.addr.Clear(); // initiated with UNLINK, so don't try to reconnect
 						mlink.cs.Clear();   // ^^^^^^^^^ ^^^^ ^^^^^^
@@ -340,6 +415,7 @@ void CM17Gateway::ProcessGateway()
 				Dump("Unknown packet", buf, length);
 		}
 
+		// check for a stream timeout
 		if (gateStream.in_stream and gateStream.lastPacketTime.time() >= 1.6)
 		{
 			LogInfo("Gateway stream timeout id=0x%02hu", ntohs(gateStream.streamid));
@@ -668,4 +744,221 @@ bool CM17Gateway::setDestination(const CCallsign &cs)
 
 	LogWarning("Host '%s' not found", cs.c_str());
 	return true;
+}
+
+void CM17Gateway::addMessage(const std::string &message)
+{
+	voiceQueue.push(message);
+}
+
+void CM17Gateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
+{
+	const std::filesystem::path ap(audioPath);
+	const std::filesystem::path oFilePath(ap / ofileName);
+	std::ofstream ofile(oFilePath, std::ios::binary | std::ios::trunc);
+	if (not ofile.is_open())
+	{
+		LogError("could not open %s", oFilePath.c_str());
+		return;
+	}
+
+	// our dictionary index
+	std::map<unsigned, std::pair<unsigned, unsigned>> words;
+
+	// open speak.index
+	std::filesystem::path speakPath(ap / "speak.index");
+	std::ifstream speakFile(ap);
+	if (not speakFile.is_open())
+	{
+		LogError("could not open %s", ap.c_str());
+		ofile.close();
+		return;
+	}
+
+	// read index
+	do
+	{
+		std::string line;
+		std::getline(speakFile, line);
+		trim(line);
+		if (0 == line.size() or '#' == line.at(0))
+			continue;
+		std::stringstream ss(line);
+		unsigned index, start, stop, length;
+		ss >> index >> start >> stop >> length;
+		words[index] = std::make_pair(start, stop);
+	} while (not speakFile.eof());
+	speakFile.close();
+
+	if (words.size() < 67)
+	{
+		LogError("Only found %u words in %s", words.size(), speakPath.c_str());
+		ofile.close();
+		return;
+	}
+
+	// open speak.dat
+	speakPath.replace_extension("dat");
+	std::ifstream sfile(speakPath, std::ios::binary);
+	if (not sfile.is_open())
+	{
+		ofile.close();
+		LogError("Could not open %s", speakPath.c_str());
+		return;
+	}
+
+	// fill the output file with voice data
+	const std::string callsign(cs.c_str());
+	const std::string m17_ab(" ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/.");
+	for (std::size_t pos=0; pos<callsign.size(); pos++)
+	{
+		std::size_t indx = 66u;	// initialize the index to point at the "M17" word
+		// check for "M17" at this postion
+		if (pos+3 >= callsign.size() or callsign.compare(pos, 3, "M17"))
+		{
+			// no "M17" at this pos, so find the m17 alphabet index
+			indx = m17_ab.find(callsign[pos]);
+			if (indx > 40u)
+				indx = 0u;
+		}
+		else // yes, here is an "M17" in the callsign
+			pos += 2u; // increment the  position to the end of "M17"
+
+		// now add the word to the data
+		if (0 == indx)
+		{
+			// insert 200 millisecond of quiet, this is a ' ' in the callsign (very rare)
+			for (int n=0; n<10; n++)
+				ofile.write(reinterpret_cast<const char *>(quiet), 8);
+		}
+		else
+		{
+			unsigned start = words[indx].first;
+			unsigned stop  = words[indx].second;
+			sfile.seekg(8u * start);
+			for (unsigned n=start; n<=stop; n++)
+			{
+				uint8_t hf[8];
+				sfile.read(reinterpret_cast<char *>(hf), 8);
+				ofile.write(reinterpret_cast<char *>(hf), 8);
+			}
+			// add 80 ms of quiet between each word
+			for (unsigned n=0; n<4; n++)
+				ofile.write(reinterpret_cast<const char *>(quiet), 8);
+		}
+		// loop back for the next char in the callsign base
+	}
+	// now add the callsign module, using a phonetic word, if the module is not a space
+	const auto m = cs.GetModule();
+	if (' ' != m)
+	{
+		unsigned indx = 40u + unsigned(m - 'A');	// alpha is at 40, zulu is as 65
+		unsigned start = words[indx].first;
+		unsigned stop  = words[indx].second;
+		sfile.seekg(8u * start);
+		for (unsigned n=start; n<=stop; n++)
+		{
+			uint8_t hf[8];
+			sfile.read(reinterpret_cast<char *>(hf), 8);
+			ofile.write(reinterpret_cast<char *>(hf), 8);
+		}
+	}
+	// done adding all the words!
+	sfile.close();
+	ofile.close();
+}
+
+unsigned CM17Gateway::PlayVoiceFiles(std::string message)
+{
+	unsigned count = 0u;	// this counts the number of 20ms half-payloads
+
+	// make a voice frame template
+	// we'll still need to add the payload, frame counter and the CRC before sending it to the modem.
+	SIPFrame master;
+	memcpy(master.data.magic, "M17 ", 4);
+	master.SetStreamID(makeStreamID());
+	memset(master.data.lich.addr_dst, 0xffu, 6); // set destination to Broadcast
+	thisCS.CodeOut(master.data.lich.addr_src);
+	master.SetFrameType(0x0005 | (can << 7));
+	memset(master.data.lich.meta, 0, 14);
+
+	auto clock = std::chrono::steady_clock::now(); // start the packet clock
+	std::ifstream ifile;
+
+	std::queue<std::string> words;
+	split(message, ' ', words);
+
+	while (not words.empty())
+	{
+		// build the pathname to the data file
+		std::filesystem::path afp(audioPath);
+		afp /= words.front();
+		words.pop();
+		afp.replace_extension(".dat");
+
+		if (not std::filesystem::exists(afp))
+		{
+			LogError("'%s' does not exist", afp.c_str());
+			continue;
+		}
+
+		unsigned fsize = std::filesystem::file_size(afp);
+		if (fsize % 8 or fsize == 0)
+		{
+			LogWarning("'%s' size, %u, is not a multiple of 8", afp.c_str(), fsize);
+		}
+		fsize /= 8u; // count of 1/2 of a 16 byte payload, 20 ms
+
+		ifile.open(afp, std::ios::binary);
+		if (not ifile.is_open())
+		{
+			LogError("'%s' could not be opened", afp.c_str());
+			continue;
+		}
+
+		for (unsigned i=1; i<=fsize; i++) // read all the data
+		{
+			if (count % 2)
+			{
+				// read the data into the second half of the payload
+				ifile.read(reinterpret_cast<char *>(master.data.payload+8), 8);
+				// now finsih off the packet
+				uint16_t fn = (count % 0x8000u) / 2u;
+				if (words.empty() and (i == fsize))
+					fn |= 0x8000u; // nothing left to read, mark the end of the stream
+				master.SetFrameNumber(fn);
+				g_Crc.setCRC(master.data.magic, IPFRAMESIZE); // seal it with the CRC
+
+				// make the packet to pass to the modem
+				auto frame = std::make_unique<SIPFrame>();
+				memcpy(frame->data.magic, master.data.magic, IPFRAMESIZE);
+				clock = clock + std::chrono::milliseconds(40);
+				std::this_thread::sleep_until(clock); // the frames will go out every 40 milliseconds
+				Gate2Host.Push(frame);
+			}
+			else
+			{
+				ifile.read(reinterpret_cast<char *>(master.data.payload), 8);
+			}
+			count++;
+		}
+		ifile.close();
+	}
+	if (count % 2) // if this is true, we need to finish off the last packet
+	{
+		memcpy(master.data.payload+8, quiet, 8);
+		uint16_t fn = ((count %0x8000u) / 2u) + 0x8000u;
+		master.SetFrameNumber(fn);
+		g_Crc.setCRC(master.data.magic, IPFRAMESIZE);
+		auto frame = std::make_unique<SIPFrame>();
+		memcpy(frame->data.magic, master.data.magic, IPFRAMESIZE);
+		clock = clock + std::chrono::milliseconds(40);
+		std::this_thread::sleep_until(clock);
+		Gate2Host.Push(frame);
+	}
+
+	// this thread can be harvested
+	msgTask->isDone = true;
+	// return the number of packets sent
+	return count / 2u;
 }

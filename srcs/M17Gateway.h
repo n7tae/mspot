@@ -15,7 +15,9 @@
 #include <mutex>
 #include <future>
 #include <random>
+#include <vector>
 
+#include "SafePacketQueue.h"
 #include "SteadyTimer.h"
 #include "SockAddress.h"
 #include "Configure.h"
@@ -46,6 +48,12 @@ using SStream = struct stream_tag
 	uint16_t streamid;
 };
 
+using SMessageTask = struct message_tag
+{
+	std::future<unsigned> futTask;
+	std::atomic<bool> isDone;
+};
+
 class CM17Gateway
 {
 public:
@@ -70,6 +78,8 @@ private:
 	CGateState gateState;
 	CHostMap destMap;
 	std::mt19937 m_random;
+	std::queue<std::string> voiceQueue;
+	std::unique_ptr<SMessageTask> msgTask;
 
 	void ProcessGateway();
 	void sendPacket(const void *buf, const size_t size, const CSockAddress &addr) const;
@@ -80,6 +90,9 @@ private:
 	bool setDestination(const std::string &cs);
 	bool setDestination(const   CCallsign &cs);
 	void Dump(const char *title, const void *pointer, int length);
+	void addMessage(const std::string &message);
+	void makeCSData(const CCallsign &cs, const std::string &ofileName);
+	unsigned PlayVoiceFiles(std::string message);
 
 	// for executing rf based commands!
 	uint16_t makeStreamID();

@@ -36,7 +36,7 @@ inicheck : srcs/Configure.h srcs/Configure.cpp srcs/JsonKeys.h
 		$(CXX) $(CPPFLAGS) -MMD -MP -c -o $@ $<
 
 clean :
-	$(RM) $(all) srcs/*.o srcs/*.d
+	$(RM) mor inicheck srcs/*.o srcs/*.d
 
 install : mor
 	install -m 755 mor $(BINDIR)
