@@ -125,7 +125,7 @@ void CHostMap::Read(const std::string &path)
 			if (0==line.size() || '#'==line[0]) continue;
 			std::istringstream ss(line);
 			std::vector<std::string> elem(std::istream_iterator<std::string>{ss}, std::istream_iterator<std::string>());
-			if (6 == elem.size())
+			if ( elem.size() > 5 )
 				Update(elem[0], elem[1], elem[2], elem[3], elem[4], std::stoul(elem[5]));
 			else
 				LogWarning("Line #%u of %s has %u elements, needs 6", count, path.c_str(), elem.size());
