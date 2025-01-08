@@ -471,7 +471,9 @@ void CM17Gateway::ProcessHost()
 					{
 					case ELinkState::linked:
 						if (dest == mlink.cs) // is the destination the linked reflector?
+						{
 							sendPacket2Dest(Frame);
+						}
 						else
 						{
 							wait4end(Frame);
@@ -485,14 +487,15 @@ void CM17Gateway::ProcessHost()
 							LogInfo("%s is not yet linked", dest.c_str());
 						else
 							LogWarning("Destination is %s but you are linking to %s", dest.c_str(), mlink.cs.c_str());
+						gateState.Idle();
 						break;
 					case ELinkState::unlinked:
 						wait4end(Frame);
 						if (setDestination(dest))
 						{
 							mlink.state = ELinkState::linking;
-							gateState.Idle();
 						}
+						gateState.Idle();
 					}
 				}
 			}
