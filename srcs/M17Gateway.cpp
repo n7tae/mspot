@@ -770,7 +770,7 @@ void CM17Gateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 	// open speak.index
 	std::filesystem::path speakPath(ap);
 	speakPath /= "speak.index";
-	std::ifstream speakFile(ap.c_str());
+	std::ifstream speakFile(speakPath.c_str());
 	if (speakFile.is_open())
 	{
 		std::string line;
