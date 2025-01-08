@@ -843,7 +843,6 @@ void CM17Gateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 		{
 			unsigned start = words[indx].first;
 			unsigned stop  = words[indx].second;
-			LogInfo("adding '%c' (%u) from %u to %u", callsign[pos], indx, start, stop);
 			sfile.seekg(8u * start);
 			for (unsigned n=start; n<=stop; n++)
 			{
@@ -864,7 +863,6 @@ void CM17Gateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 		unsigned indx = 40u + unsigned(m - 'A');	// alpha is at 40, zulu is as 65
 		unsigned start = words[indx].first;
 		unsigned stop  = words[indx].second;
-		LogInfo("adding Module '%c' at %u from %u to %u", m, indx, start, stop);
 		sfile.seekg(8u * start);
 		for (unsigned n=start; n<=stop; n++)
 		{
@@ -919,7 +917,7 @@ unsigned CM17Gateway::PlayVoiceFiles(std::string message)
 		}
 		fsize /= 8u; // count of 1/2 of a 16 byte payload, 20 ms
 
-		ifile.open(afp, std::ios::binary);
+		ifile.open(afp.c_str(), std::ios::binary);
 		if (not ifile.is_open())
 		{
 			LogError("'%s' could not be opened", afp.c_str());
