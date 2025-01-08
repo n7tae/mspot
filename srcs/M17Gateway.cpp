@@ -886,7 +886,7 @@ void CM17Gateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 	ofile.close();
 }
 
-unsigned CM17Gateway::PlayVoiceFiles(std::string message)
+unsigned CM17Gateway::PlayVoiceFiles(std::string &message)
 {
 	LogInfo("This is the thread that's playing tbe message '%s'", message.c_str());
 
