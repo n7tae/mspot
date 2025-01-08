@@ -783,7 +783,6 @@ void CM17Gateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 			unsigned index, start, stop, length;
 			ss >> index >> start >> stop >> length;
 			words[index] = std::make_pair(start, stop);
-			LogInfo("index: %u start: %u stop: %u length: %u", index, start, stop, length);
 		}
 		speakFile.close();
 	}
@@ -865,7 +864,7 @@ void CM17Gateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 		unsigned indx = 40u + unsigned(m - 'A');	// alpha is at 40, zulu is as 65
 		unsigned start = words[indx].first;
 		unsigned stop  = words[indx].second;
-		LogInfo("adding Module '%s' at %u from %u to %u", m, indx, start, stop);
+		LogInfo("adding Module '%c' at %u from %u to %u", m, indx, start, stop);
 		sfile.seekg(8u * start);
 		for (unsigned n=start; n<=stop; n++)
 		{
