@@ -776,20 +776,20 @@ void CM17Gateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 		ofile.close();
 		return;
 	}
-
-	// read index
-	while (speakFile.good())
+	else
 	{
 		std::string line;
-		std::getline(speakFile, line);
-		trim(line);
-		if (0 == line.size() or '#' == line.at(0))
-			continue;
-		std::stringstream ss(line);
-		unsigned index, start, stop, length;
-		ss >> index >> start >> stop >> length;
-		words[index] = std::make_pair(start, stop);
-		LogInfo("index: %u start: %u stop: %u length: %u", index, start, stop, length);
+		while (std::getline(speakFile, line))
+		{
+			trim(line);
+			if (0 == line.size() or '#' == line.at(0))
+				continue;
+			std::stringstream ss(line);
+			unsigned index, start, stop, length;
+			ss >> index >> start >> stop >> length;
+			words[index] = std::make_pair(start, stop);
+			LogInfo("index: %u start: %u stop: %u length: %u", index, start, stop, length);
+		}
 	}
 	speakFile.close();
 
