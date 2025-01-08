@@ -768,7 +768,8 @@ void CM17Gateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 	std::map<unsigned, std::pair<unsigned, unsigned>> words;
 
 	// open speak.index
-	std::filesystem::path speakPath(ap / "speak.index");
+	std::filesystem::path speakPath(ap);
+	speakPath /= "speak.index";
 	std::ifstream speakFile(ap.c_str());
 	if (speakFile.is_open())
 	{
