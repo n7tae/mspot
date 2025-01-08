@@ -888,6 +888,8 @@ void CM17Gateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 
 unsigned CM17Gateway::PlayVoiceFiles(std::string message)
 {
+	LogInfo("This is the thread that's playing tbe message '%s'", message.c_str());
+
 	unsigned count = 0u;	// this counts the number of 20ms half-payloads
 
 	// make a voice frame template
