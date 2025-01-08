@@ -284,6 +284,7 @@ void CM17Gateway::ProcessGateway()
 			}
 			else
 			{
+				LogInfo("Playing message '%s'", message.c_str());
 				msgTask = std::make_unique<SMessageTask>();
 				msgTask->isDone = false;
 				msgTask->futTask = std::async(std::launch::async, &CM17Gateway::PlayVoiceFiles, this, std::ref(message));
@@ -807,8 +808,12 @@ void CM17Gateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 		return;
 	}
 
+	LogInfo("Building '%s' at %s", cs.c_str(), oFilePath.c_str());
+
 	// fill the output file with voice data
-	const std::string callsign(cs.c_str());
+	auto callsign(cs.GetCS(8));
+	rtrim(callsign);
+
 	const std::string m17_ab(" ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/.");
 	for (std::size_t pos=0; pos<callsign.size(); pos++)
 	{
@@ -827,6 +832,7 @@ void CM17Gateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 		// now add the word to the data
 		if (0 == indx)
 		{
+			LogInfo("adding quiet (for ' ' at position %u)", pos);
 			// insert 200 millisecond of quiet, this is a ' ' in the callsign (very rare)
 			for (int n=0; n<10; n++)
 				ofile.write(reinterpret_cast<const char *>(quiet), 8);
@@ -835,6 +841,7 @@ void CM17Gateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 		{
 			unsigned start = words[indx].first;
 			unsigned stop  = words[indx].second;
+			LogInfo("adding '%c' (%u) from %u to %u", callsign[pos], indx, start, stop);
 			sfile.seekg(8u * start);
 			for (unsigned n=start; n<=stop; n++)
 			{
@@ -855,6 +862,7 @@ void CM17Gateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 		unsigned indx = 40u + unsigned(m - 'A');	// alpha is at 40, zulu is as 65
 		unsigned start = words[indx].first;
 		unsigned stop  = words[indx].second;
+		LogInfo("adding Module '%s' at %u from %u to %u", m, indx, start, stop);
 		sfile.seekg(8u * start);
 		for (unsigned n=start; n<=stop; n++)
 		{
@@ -916,6 +924,8 @@ unsigned CM17Gateway::PlayVoiceFiles(std::string message)
 			continue;
 		}
 
+		LogInfo("Playing %s", afp.c_str());
+
 		for (unsigned i=1; i<=fsize; i++) // read all the data
 		{
 			if (count % 2)
@@ -943,6 +953,30 @@ unsigned CM17Gateway::PlayVoiceFiles(std::string message)
 			count++;
 		}
 		ifile.close();
+		if (not words.empty())
+		{
+			// add 80 ms of quiet between files
+			for (unsigned i=0; i<8; i++)
+			{
+				if (count % 2)
+				{
+					memcpy(master.data.payload+8, quiet, 8);
+					uint16_t fn = ((count %0x8000u) / 2u) + 0x8000u;
+					master.SetFrameNumber(fn);
+					g_Crc.setCRC(master.data.magic, IPFRAMESIZE);
+					auto frame = std::make_unique<SIPFrame>();
+					memcpy(frame->data.magic, master.data.magic, IPFRAMESIZE);
+					clock = clock + std::chrono::milliseconds(40);
+					std::this_thread::sleep_until(clock);
+					Gate2Host.Push(frame);
+				}
+				else
+				{
+					memcpy(master.data.payload, quiet, 8);
+				}
+				count++;
+			}
+		}
 	}
 	if (count % 2) // if this is true, we need to finish off the last packet
 	{
