@@ -228,7 +228,7 @@ void CM17Gateway::ProcessGateway()
 			if (mlink.receivePingTimer.time() > 30) // is the reflector okay?
 			{
 				// looks like we lost contact
-				addMessage("unlinked_from reflector");
+				addMessage("unlinked_from destination");
 				LogInfo("Disconnected from %s, TIMEOUT...\n", mlink.cs.GetCS().c_str());
 				mlink.state = ELinkState::unlinked;
 				if (not mlink.maintainLink)
@@ -348,7 +348,7 @@ void CM17Gateway::ProcessGateway()
 					{
 						mlink.state = ELinkState::linked;
 						makeCSData(mlink.cs, "destination.dat");
-						addMessage("linked_to reflector");
+						addMessage("linked_to destination");
 						LogInfo("Connected to %s", mlink.cs.c_str());
 						mlink.receivePingTimer.start();
 					}
@@ -888,8 +888,6 @@ void CM17Gateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 
 unsigned CM17Gateway::PlayVoiceFiles(std::string message)
 {
-	LogInfo("This is the thread that's playing tbe message '%s'", message.c_str());
-
 	unsigned count = 0u;	// this counts the number of 20ms half-payloads
 
 	// make a voice frame template
@@ -941,11 +939,10 @@ unsigned CM17Gateway::PlayVoiceFiles(std::string message)
 		for (unsigned i=1; i<=fsize; i++) // read all the data
 		{
 			if (count % 2)
-			{
-				// read the data into the second half of the payload
+			{	// counter is odd, this is the second half of the C2_3200 data
 				ifile.read(reinterpret_cast<char *>(master.data.payload+8), 8);
 				// now finsih off the packet
-				uint16_t fn = (count % 0x8000u) / 2u;
+				uint16_t fn = ((count / 2u) % 0x8000u);
 				if (words.empty() and (i == fsize))
 					fn |= 0x8000u; // nothing left to read, mark the end of the stream
 				master.SetFrameNumber(fn);
@@ -959,7 +956,7 @@ unsigned CM17Gateway::PlayVoiceFiles(std::string message)
 				Gate2Host.Push(frame);
 			}
 			else
-			{
+			{	// counter is even, this is the first 20 ms of C2_3200 data
 				ifile.read(reinterpret_cast<char *>(master.data.payload), 8);
 			}
 			count++;
@@ -971,9 +968,9 @@ unsigned CM17Gateway::PlayVoiceFiles(std::string message)
 			for (unsigned i=0; i<8; i++)
 			{
 				if (count % 2)
-				{
+				{	// counter is odd, put this in the second half
 					memcpy(master.data.payload+8, quiet, 8);
-					uint16_t fn = ((count %0x8000u) / 2u) + 0x8000u;
+					uint16_t fn = ((count / 2u) % 0x8000u);
 					master.SetFrameNumber(fn);
 					g_Crc.setCRC(master.data.magic, IPFRAMESIZE);
 					auto frame = std::make_unique<SIPFrame>();
@@ -983,14 +980,14 @@ unsigned CM17Gateway::PlayVoiceFiles(std::string message)
 					Gate2Host.Push(frame);
 				}
 				else
-				{
+				{	// counter is even, this goes in the first half
 					memcpy(master.data.payload, quiet, 8);
 				}
 				count++;
 			}
 		}
 	}
-	if (count % 2) // if this is true, we need to finish off the last packet
+	if (count % 2) // if this is true, we need to complete and send the last packet
 	{
 		memcpy(master.data.payload+8, quiet, 8);
 		uint16_t fn = ((count %0x8000u) / 2u) + 0x8000u;
