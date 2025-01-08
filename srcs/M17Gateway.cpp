@@ -126,7 +126,6 @@ bool CM17Gateway::Start()
 	cs.resize(8, ' ');
 	cs.append(1, g_Cfg.GetString(g_Keys.reflector.section, g_Keys.reflector.module).at(0));
 	thisCS.CSIn(cs);
-	makeCSData(thisCS, "repeater.dat");
 	LogInfo("Station Callsign: %s", cs.c_str());
 
 	if (g_Cfg.GetBoolean(g_Keys.gateway.section, g_Keys.gateway.ipv4))
@@ -189,6 +188,8 @@ bool CM17Gateway::Start()
 
 	audioPath.assign(g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.audioFolder));
 	LogInfo("Audio folder is at %s", audioPath.c_str());
+
+	makeCSData(thisCS, "repeater.dat");
 
 	gateFuture = std::async(std::launch::async, &CM17Gateway::ProcessGateway, this);
 	if (not gateFuture.valid())
@@ -788,6 +789,7 @@ void CM17Gateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 		unsigned index, start, stop, length;
 		ss >> index >> start >> stop >> length;
 		words[index] = std::make_pair(start, stop);
+		LogInfo("index: %u start: %u stop: %u length: %u", index, start, stop, length);
 	} while (not speakFile.eof());
 	speakFile.close();
 
