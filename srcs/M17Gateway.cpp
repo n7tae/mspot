@@ -290,7 +290,7 @@ void CM17Gateway::ProcessGateway()
 					LogInfo("Playing message '%s'", message.c_str());
 					msgTask = std::make_unique<SMessageTask>();
 					msgTask->isDone = false;
-					msgTask->futTask = std::async(std::launch::async, &CM17Gateway::PlayVoiceFiles, this, std::ref(message));
+					msgTask->futTask = std::async(std::launch::async, &CM17Gateway::PlayVoiceFiles, this, message);
 				}
 			}
 			else
@@ -886,7 +886,7 @@ void CM17Gateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 	ofile.close();
 }
 
-unsigned CM17Gateway::PlayVoiceFiles(std::string &message)
+unsigned CM17Gateway::PlayVoiceFiles(std::string message)
 {
 	LogInfo("This is the thread that's playing tbe message '%s'", message.c_str());
 

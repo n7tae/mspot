@@ -92,7 +92,7 @@ private:
 	void Dump(const char *title, const void *pointer, int length);
 	void addMessage(const std::string &message);
 	void makeCSData(const CCallsign &cs, const std::string &ofileName);
-	unsigned PlayVoiceFiles(std::string &message);
+	unsigned PlayVoiceFiles(std::string message);
 
 	// for executing rf based commands!
 	uint16_t makeStreamID();
