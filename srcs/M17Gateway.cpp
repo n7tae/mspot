@@ -769,27 +769,26 @@ void CM17Gateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 
 	// open speak.index
 	std::filesystem::path speakPath(ap / "speak.index");
-	std::ifstream speakFile(ap);
+	std::ifstream speakFile(ap.c_str());
 	if (not speakFile.is_open())
 	{
 		LogError("could not open %s", ap.c_str());
 		ofile.close();
 		return;
 	}
-	else
+
+	while (speakFile.good())
 	{
 		std::string line;
-		while (std::getline(speakFile, line))
-		{
-			trim(line);
-			if (0 == line.size() or '#' == line.at(0))
-				continue;
-			std::stringstream ss(line);
-			unsigned index, start, stop, length;
-			ss >> index >> start >> stop >> length;
-			words[index] = std::make_pair(start, stop);
-			LogInfo("index: %u start: %u stop: %u length: %u", index, start, stop, length);
-		}
+		std::getline(speakFile, line);
+		trim(line);
+		if (0 == line.size() or '#' == line.at(0))
+			continue;
+		std::stringstream ss(line);
+		unsigned index, start, stop, length;
+		ss >> index >> start >> stop >> length;
+		words[index] = std::make_pair(start, stop);
+		LogInfo("index: %u start: %u stop: %u length: %u", index, start, stop, length);
 	}
 	speakFile.close();
 
