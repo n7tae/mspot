@@ -19,10 +19,20 @@ public:
 	CGateState() : currentState(EGateState::idle) {}
 	~CGateState() {}
 
-	EGateState GetState()
+	const char *GetState()
 	{
 		std::lock_guard<std::mutex> lg(mtx);
-		return currentState;
+		switch (currentState)
+		{
+			case EGateState::gatein:
+			return "gatein";
+			case EGateState::messagein:
+			return "messagein";
+			case EGateState::modemin:
+			return "modemin";
+			default:
+			return "idle";
+		}
 	}
 
 	void Idle()	{ SetState(EGateState::idle); }

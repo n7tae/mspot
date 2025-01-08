@@ -273,22 +273,29 @@ void CM17Gateway::ProcessGateway()
 		}
 
 		// can we play an audio message?
-		if ((not voiceQueue.empty()) and gateState.SetStateOnlyIfIdle(EGateState::messagein))
+		if (not voiceQueue.empty())
 		{
-			auto message = voiceQueue.front();
-			voiceQueue.pop();
-			if (msgTask)
+			if (gateState.SetStateOnlyIfIdle(EGateState::messagein))
 			{
-				LogError("Trying to initiate message play, the gateState was idle, but msgTask is not empty!");
-				LogError("'%s' will not be played!", message.c_str());
-				gateState.Idle();
+				auto message = voiceQueue.front();
+				voiceQueue.pop();
+				if (msgTask)
+				{
+					LogError("Trying to initiate message play, the gateState was idle, but msgTask is not empty!");
+					LogError("'%s' will not be played!", message.c_str());
+					gateState.Idle();
+				}
+				else
+				{
+					LogInfo("Playing message '%s'", message.c_str());
+					msgTask = std::make_unique<SMessageTask>();
+					msgTask->isDone = false;
+					msgTask->futTask = std::async(std::launch::async, &CM17Gateway::PlayVoiceFiles, this, std::ref(message));
+				}
 			}
 			else
 			{
-				LogInfo("Playing message '%s'", message.c_str());
-				msgTask = std::make_unique<SMessageTask>();
-				msgTask->isDone = false;
-				msgTask->futTask = std::async(std::launch::async, &CM17Gateway::PlayVoiceFiles, this, std::ref(message));
+				LogInfo("VoiceQueue not empty but state is %s", gateState.GetState());
 			}
 		}
 
