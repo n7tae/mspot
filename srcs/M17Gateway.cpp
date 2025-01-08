@@ -778,7 +778,7 @@ void CM17Gateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 	}
 
 	// read index
-	do
+	while (speakFile.good())
 	{
 		std::string line;
 		std::getline(speakFile, line);
@@ -790,7 +790,7 @@ void CM17Gateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 		ss >> index >> start >> stop >> length;
 		words[index] = std::make_pair(start, stop);
 		LogInfo("index: %u start: %u stop: %u length: %u", index, start, stop, length);
-	} while (not speakFile.eof());
+	}
 	speakFile.close();
 
 	if (words.size() < 67)
