@@ -228,7 +228,7 @@ void CM17Gateway::ProcessGateway()
 			if (mlink.receivePingTimer.time() > 30) // is the reflector okay?
 			{
 				// looks like we lost contact
-				addMessage("unlinked_from destination");
+				addMessage("repeater was_disconnected_from destination");
 				LogInfo("Disconnected from %s, TIMEOUT...\n", mlink.cs.GetCS().c_str());
 				mlink.state = ELinkState::unlinked;
 				if (not mlink.maintainLink)
@@ -348,7 +348,7 @@ void CM17Gateway::ProcessGateway()
 					{
 						mlink.state = ELinkState::linked;
 						makeCSData(mlink.cs, "destination.dat");
-						addMessage("linked_to destination");
+						addMessage("repeater is_linked_to destination");
 						LogInfo("Connected to %s", mlink.cs.c_str());
 						mlink.receivePingTimer.start();
 					}
@@ -392,6 +392,7 @@ void CM17Gateway::ProcessGateway()
 						const CCallsign from(buf+4);
 						if (from == mlink.cs)
 						{
+							addMessage("repeater was_disconnected_from destination");
 							mlink.state = ELinkState::unlinked;
 							if (not mlink.maintainLink)
 								mlink.addr.Clear();
@@ -448,10 +449,17 @@ void CM17Gateway::ProcessHost()
 				const CCallsign dest(Frame->data.lich.addr_dst);
 				switch (dest.GetBase())
 				{
+				case CalcCSCode("E"):
 				case CalcCSCode("ECHO"):
 					doEcho(Frame);
 					gateState.Idle();
 					break;
+				case CalcCSCode("I"):
+				case CalcCSCode("STATUS"):
+					doStatus(Frame);
+					gateState.Idle();
+					break;
+				case CalcCSCode("U"):
 				case CalcCSCode("UNLINK"):
 					doUnlink(Frame);
 					gateState.Idle();
@@ -933,8 +941,6 @@ unsigned CM17Gateway::PlayVoiceFiles(std::string message)
 			LogError("'%s' could not be opened", afp.c_str());
 			continue;
 		}
-
-		LogInfo("Playing %s", afp.c_str());
 
 		for (unsigned i=1; i<=fsize; i++) // read all the data
 		{

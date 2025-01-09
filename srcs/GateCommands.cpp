@@ -73,12 +73,23 @@ void CM17Gateway::wait4end(std::unique_ptr<SIPFrame> &Frame)
 	return;
 }
 
+void CM17Gateway::doStatus(std::unique_ptr<SIPFrame> &Frame)
+{
+	wait4end(Frame);
+	if (ELinkState::linked == mlink.state)
+		addMessage("repeater is_linked_to destination");
+	else if (ELinkState::linking == mlink.state)
+		addMessage("repeater is_linking");
+	else
+		addMessage("repeater is_unlinked");
+}
+
 void CM17Gateway::doUnlink(std::unique_ptr<SIPFrame> &Frame)
 {
 	wait4end(Frame);
 	if (ELinkState::unlinked == mlink.state)
 	{
-		addMessage("already_unlinked");
+		addMessage("repeater was_already_unlinked");
 		LogInfo("%s is already unlinked", thisCS.c_str());
 	}
 	else

@@ -102,5 +102,6 @@ private:
 	void doRecord(char, uint16_t);
 	void doPlay(std::unique_ptr<SIPFrame> &);
 	void doPlay(char c);
+	void doStatus(std::unique_ptr<SIPFrame> &);
 	void wait4end(std::unique_ptr<SIPFrame> &);
 };
