@@ -208,7 +208,7 @@ bool CM17Gateway::Start()
 	}
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-	addMessage("welcome reflector");
+	addMessage("welcome repeater");
 	return false;
 }
 
