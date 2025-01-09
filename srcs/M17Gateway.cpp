@@ -914,7 +914,27 @@ unsigned CM17Gateway::PlayVoiceFiles(std::string message)
 	std::queue<std::string> words;
 	split(message, ' ', words);
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(500));
+	// start with 400ms of quiet
+	for (unsigned i=0; i<20; i++)
+	{
+		if (count % 2)
+		{	// counter is odd, put this in the second half
+			memcpy(master.data.payload+8, quiet, 8);
+			uint16_t fn = ((count / 2u) % 0x8000u);
+			master.SetFrameNumber(fn);
+			g_Crc.setCRC(master.data.magic, IPFRAMESIZE);
+			auto frame = std::make_unique<SIPFrame>();
+			memcpy(frame->data.magic, master.data.magic, IPFRAMESIZE);
+			clock = clock + std::chrono::milliseconds(40);
+			std::this_thread::sleep_until(clock);
+			Gate2Host.Push(frame);
+		}
+		else
+		{	// counter is even, this goes in the first half
+			memcpy(master.data.payload, quiet, 8);
+		}
+		count++;
+	}
 
 	while (not words.empty())
 	{
@@ -972,7 +992,7 @@ unsigned CM17Gateway::PlayVoiceFiles(std::string message)
 		ifile.close();
 		if (not words.empty())
 		{
-			// add 80 ms of quiet between files
+			// add 160 ms of quiet between files
 			for (unsigned i=0; i<8; i++)
 			{
 				if (count % 2)
