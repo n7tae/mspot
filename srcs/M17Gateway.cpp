@@ -873,8 +873,8 @@ void CM17Gateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 				sfile.read(reinterpret_cast<char *>(hf), 8);
 				ofile.write(reinterpret_cast<char *>(hf), 8);
 			}
-			// add 80 ms of quiet between each word
-			for (unsigned n=0; n<4; n++)
+			// add 60 ms of quiet between each word
+			for (unsigned n=0; n<3; n++)
 				ofile.write(reinterpret_cast<const char *>(quiet), 8);
 		}
 		// loop back for the next char in the callsign base
@@ -919,8 +919,8 @@ unsigned CM17Gateway::PlayVoiceFiles(std::string message)
 	std::queue<std::string> words;
 	split(message, ' ', words);
 
-	// start with 400ms of quiet
-	for (unsigned i=0; i<20; i++)
+	// start with 320ms of quiet
+	for (unsigned i=0; i<16; i++)
 	{
 		if (count % 2)
 		{	// counter is odd, put this in the second half
@@ -997,8 +997,8 @@ unsigned CM17Gateway::PlayVoiceFiles(std::string message)
 		ifile.close();
 		if (not words.empty())
 		{
-			// add 160 ms of quiet between files
-			for (unsigned i=0; i<8; i++)
+			// add 100 ms of quiet between files
+			for (unsigned i=0; i<5; i++)
 			{
 				if (count % 2)
 				{	// counter is odd, put this in the second half
