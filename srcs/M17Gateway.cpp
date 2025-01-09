@@ -484,9 +484,11 @@ void CM17Gateway::ProcessHost()
 						}
 						else
 						{
+							addMessage("repeater is_already_linked");
 							wait4end(Frame);
 							LogWarning("Destination is %s but you are already linked to %s", dest.c_str(), mlink.cs.c_str());
 							gateState.Idle();
+
 						}
 						break;
 					case ELinkState::linking:
@@ -494,7 +496,10 @@ void CM17Gateway::ProcessHost()
 						if (dest == mlink.cs)
 							LogInfo("%s is not yet linked", dest.c_str());
 						else
+						{
+							addMessage("repeater is_already_linking");
 							LogWarning("Destination is %s but you are linking to %s", dest.c_str(), mlink.cs.c_str());
+						}
 						gateState.Idle();
 						break;
 					case ELinkState::unlinked:
