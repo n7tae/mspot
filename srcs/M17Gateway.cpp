@@ -914,6 +914,8 @@ unsigned CM17Gateway::PlayVoiceFiles(std::string message)
 	std::queue<std::string> words;
 	split(message, ' ', words);
 
+	std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
 	while (not words.empty())
 	{
 		// build the pathname to the data file
