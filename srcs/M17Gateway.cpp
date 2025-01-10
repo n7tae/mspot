@@ -367,7 +367,7 @@ void CM17Gateway::ProcessGateway()
 					else if (0 == memcmp(buf, "DISC", 4))
 					{
 						addMessage("repeater is_unlinked");
-						LogInfo("Disconnected from %s\n", mlink.cs.c_str());
+						LogInfo("Disconnected from %s", mlink.cs.c_str());
 						mlink.addr.Clear(); // initiated with UNLINK, so don't try to reconnect
 						mlink.cs.Clear();   // ^^^^^^^^^ ^^^^ ^^^^^^
 						mlink.state = ELinkState::unlinked;
