@@ -41,10 +41,7 @@ private:
 	std::future<void> hostFuture, gateFuture;
 	std::unique_ptr<CRSSIInterpolator> m_rssi;
 	unsigned char   m_mode;
-	unsigned int    m_m17RFModeHang;
-	unsigned int    m_m17NetModeHang;
 
-	CTimer          m_modeTimer;
 	CTimer          m_cwIdTimer;
 	bool            m_duplex;
 	unsigned int    m_timeout;
@@ -52,7 +49,6 @@ private:
 	std::string     m_callsign;
 	unsigned int    m_id;
 	std::string     m_cwCallsign;
-	bool            m_fixedMode;
 
 	void Run();
 	bool createModem();

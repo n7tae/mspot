@@ -19,8 +19,6 @@
 #if !defined(Defines_H)
 #define	Defines_H
 
-const unsigned char MODE_IDLE    = 0U;
-
 const unsigned char MODE_M17     = 7U;
 const unsigned char MODE_LOCKOUT = 99U;
 const unsigned char MODE_ERROR   = 100U;

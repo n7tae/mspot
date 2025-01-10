@@ -18,11 +18,11 @@ struct SJsonKeys
 {
 	struct REFLECTOR
 	{
-		const std::string section, callsign, module, timeOut, isDuplex, isDaemon, allowEncrypt, user, can, isprivate, netModeHang, rfModeHang, debug;
+		const std::string section, callsign, module, timeOut, isDuplex, isDaemon, allowEncrypt, user, can, isprivate, debug;
 	}
 	reflector
 	{
-		"Reflector", "Callsign", "Module", "Timeout", "IsDuplex", "IsDaemon", "AllowEncrypt", "UserName", "CAN", "IsPrivate", "NetModeHang", "RFModeHang", "Debug"
+		"Reflector", "Callsign", "Module", "Timeout", "IsDuplex", "IsDaemon", "AllowEncrypt", "UserName", "CAN", "IsPrivate", "Debug"
 	};
 
 	struct LOG

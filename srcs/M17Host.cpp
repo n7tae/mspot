@@ -43,18 +43,13 @@ const char* HEADER4 = "Copyright(C) 2015-2024 by Jonathan Naylor, G4KLX and othe
 const char* HEADER5 = "Copyright(C) 2024,2025 by Thomas A. Early, N7TAE";
 
 CM17Host::CM17Host() :
-m_mode(MODE_IDLE),
-m_m17RFModeHang(10U),
-m_m17NetModeHang(3U),
-m_modeTimer(1000U),
 m_cwIdTimer(1000U),
 m_duplex(false),
 m_timeout(180U),
 m_cwIdTime(0U),
 m_callsign(),
 m_id(0U),
-m_cwCallsign(),
-m_fixedMode(false)
+m_cwCallsign()
 {
 }
 
@@ -79,8 +74,6 @@ bool CM17Host::Start()
 	const bool selfOnly = g_Cfg.GetBoolean(g_Keys.reflector.section, g_Keys.reflector.isprivate);
 	const unsigned int can = g_Cfg.GetUnsigned(g_Keys.reflector.section, g_Keys.reflector.can);
 	const bool allowEncryption = g_Cfg.GetBoolean(g_Keys.reflector.section, g_Keys.reflector.allowEncrypt);
-	m_m17RFModeHang = g_Cfg.GetUnsigned(g_Keys.reflector.section, g_Keys.reflector.rfModeHang);
-	m_m17NetModeHang = g_Cfg.GetUnsigned(g_Keys.reflector.section, g_Keys.reflector.netModeHang);
 
 	LogInfo("Reflector Parameters");
 	LogInfo("    Callsign: %s", m_callsign.c_str());
@@ -89,8 +82,6 @@ bool CM17Host::Start()
 	LogInfo("    Self Only: %s", selfOnly ? "true" : "false");
 	LogInfo("    CAN: %u", can);
 	LogInfo("    Allow Encryption: %s", allowEncryption ? "true" : "false");
-	LogInfo("    RF Mode Hang: %us", m_m17RFModeHang);
-	LogInfo("    Net Mode Hang: %us", m_m17NetModeHang);
 
 	if (createModem())
 		return true;
@@ -141,7 +132,7 @@ bool CM17Host::Start()
 
 	m_m17 = std::make_unique<CM17Control>(m_callsign, can, selfOnly, allowEncryption, m_m17Network, m_timeout, m_duplex, m_rssi.get());
 
-	setMode(MODE_IDLE);
+	setMode(MODE_M17);
 
 	hostFuture = std::async(std::launch::async, &CM17Host::Run, this);
 	if (not hostFuture.valid())
@@ -171,13 +162,13 @@ void CM17Host::Run()
 		if (lockout && m_mode != MODE_LOCKOUT)
 			setMode(MODE_LOCKOUT);
 		else if (!lockout && m_mode == MODE_LOCKOUT)
-			setMode(MODE_IDLE);
+			setMode(MODE_M17);
 
 		bool error = m_modem->hasError();
 		if (error && m_mode != MODE_ERROR)
 			setMode(MODE_ERROR);
 		else if (!error && m_mode == MODE_ERROR)
-			setMode(MODE_IDLE);
+			setMode(MODE_M17);
 
 		unsigned char data[500U];
 		unsigned int len;
@@ -185,24 +176,11 @@ void CM17Host::Run()
 
 		len = m_modem->readM17Data(data);
 		if (m_m17 != NULL && len > 0U) {
-			if (m_mode == MODE_IDLE) {
-				bool ret = m_m17->writeModem(data, len);
-				if (ret) {
-					m_modeTimer.setTimeout(m_m17RFModeHang);
-					setMode(MODE_M17);
-				}
-			} else if (m_mode == MODE_M17) {
-				bool ret = m_m17->writeModem(data, len);
-				if (ret)
-					m_modeTimer.start();
+			if (m_mode == MODE_M17) {
+				m_m17->writeModem(data, len);
 			} else if (m_mode != MODE_LOCKOUT) {
 				LogWarning("M17 modem data received when in mode %u", m_mode);
 			}
-		}
-
-		if (!m_fixedMode) {
-			if (m_modeTimer.isRunning() && m_modeTimer.hasExpired())
-				setMode(MODE_IDLE);
 		}
 
 		if (m_m17 != NULL) {
@@ -210,13 +188,8 @@ void CM17Host::Run()
 			if (ret) {
 				len = m_m17->readModem(data);
 				if (len > 0U) {
-					if (m_mode == MODE_IDLE) {
-						m_modeTimer.setTimeout(m_m17NetModeHang);
-						setMode(MODE_M17);
-					}
 					if (m_mode == MODE_M17) {
 						m_modem->writeM17Data(data, len);
-						m_modeTimer.start();
 					} else if (m_mode != MODE_LOCKOUT) {
 						LogWarning("M17 data received when in mode %u", m_mode);
 					}
@@ -228,9 +201,6 @@ void CM17Host::Run()
 		stopWatch.start();
 
 		m_modem->clock(ms);
-
-		if (!m_fixedMode)
-			m_modeTimer.clock(ms);
 
 		if (m_m17 != NULL)
 			m_m17->clock(ms);
@@ -411,7 +381,6 @@ void CM17Host::setMode(unsigned char mode)
 			m_m17->enable(true);
 		m_modem->setMode(MODE_M17);
 		m_mode = MODE_M17;
-		m_modeTimer.start();
 		m_cwIdTimer.stop();
 		LogMessage("Mode set to M17");
 		break;
@@ -421,9 +390,8 @@ void CM17Host::setMode(unsigned char mode)
 			m_m17Network->enable(false);
 		if (m_m17 != NULL)
 			m_m17->enable(false);
-		m_modem->setMode(MODE_IDLE);
+		m_modem->setMode(0);
 		m_mode = MODE_LOCKOUT;
-		m_modeTimer.stop();
 		m_cwIdTimer.stop();
 		LogMessage("Mode set to Lockout");
 		break;
@@ -435,17 +403,16 @@ void CM17Host::setMode(unsigned char mode)
 		if (m_m17 != NULL)
 			m_m17->enable(false);
 		m_mode = MODE_ERROR;
-		m_modeTimer.stop();
 		m_cwIdTimer.stop();
 		LogMessage("Mode set to Error");
 		break;
 
-	default:
+	default: // for MODE_IDLE and MODE_QUIT
 		if (m_m17Network != NULL)
 			m_m17Network->enable(true);
 		if (m_m17 != NULL)
 			m_m17->enable(true);
-		m_modem->setMode(MODE_IDLE);
+		m_modem->setMode(0);
 		if (m_mode == MODE_ERROR) {
 			m_modem->sendCWId(m_callsign);
 			m_cwIdTimer.setTimeout(m_cwIdTime);
@@ -454,8 +421,7 @@ void CM17Host::setMode(unsigned char mode)
 			m_cwIdTimer.setTimeout(m_cwIdTime / 4U);
 			m_cwIdTimer.start();
 		}
-		m_mode = MODE_IDLE;
-		m_modeTimer.stop();
+		m_mode = 0;
 		LogMessage("Mode set to Idle");
 		break;
 	}

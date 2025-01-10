@@ -162,10 +162,6 @@ bool CConfigure::ReadData(const std::string &path)
 					data[g_Keys.reflector.section][g_Keys.reflector.module] = value;
 				else if (0 == key.compare(g_Keys.reflector.user))
 					data[g_Keys.reflector.section][g_Keys.reflector.user] = value;
-				else if (0 == key.compare(g_Keys.reflector.netModeHang))
-					data[g_Keys.reflector.section][g_Keys.reflector.netModeHang] = getUnsigned(value, "Net Mode Hang time", 1u, 60u, 3u);
-				else if (0 == key.compare(g_Keys.reflector.rfModeHang))
-					data[g_Keys.reflector.section][g_Keys.reflector.rfModeHang] = getUnsigned(value, "RF Mode Hang time", 1u, 60u, 10u);
 				else if (0 == key.compare(g_Keys.reflector.debug))
 					data[g_Keys.reflector.section][g_Keys.reflector.debug] = IS_TRUE(value[0]);
 				else
@@ -336,8 +332,6 @@ bool CConfigure::ReadData(const std::string &path)
 	isDefined(ErrorLevel::fatal, g_Keys.reflector.section, g_Keys.reflector.can,          rval);
 	isDefined(ErrorLevel::fatal, g_Keys.reflector.section, g_Keys.reflector.isprivate,    rval);
 	isDefined(ErrorLevel::fatal, g_Keys.reflector.section, g_Keys.reflector.allowEncrypt, rval);
-	isDefined(ErrorLevel::fatal, g_Keys.reflector.section, g_Keys.reflector.netModeHang,  rval);
-	isDefined(ErrorLevel::fatal, g_Keys.reflector.section, g_Keys.reflector.rfModeHang,   rval);
 	isDefined(ErrorLevel::fatal, g_Keys.reflector.section, g_Keys.reflector.debug,        rval);
 
 	// Modem section
