@@ -16,13 +16,13 @@
 // the string values have to be unique within struct SJsonKeys
 struct SJsonKeys
 {
-	struct REFLECTOR
+	struct Repeater
 	{
 		const std::string section, callsign, module, timeOut, isDuplex, isDaemon, allowEncrypt, user, can, isprivate, debug;
 	}
-	reflector
+	repeater
 	{
-		"Reflector", "Callsign", "Module", "Timeout", "IsDuplex", "IsDaemon", "AllowEncrypt", "UserName", "CAN", "IsPrivate", "Debug"
+		"Repeater", "Callsign", "Module", "Timeout", "IsDuplex", "IsDaemon", "AllowEncrypt", "UserName", "CAN", "IsPrivate", "Debug"
 	};
 
 	struct LOG

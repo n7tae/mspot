@@ -63,7 +63,7 @@ static bool daemonize()
 	// If we are currently root...
 	if (getuid() == 0)
 	{
-		struct passwd* user = ::getpwnam(g_Cfg.GetString(g_Keys.reflector.section, g_Keys.reflector.user).c_str());
+		struct passwd* user = ::getpwnam(g_Cfg.GetString(g_Keys.repeater.section, g_Keys.repeater.user).c_str());
 		if (user == NULL)
 		{
 			fprintf(stderr, "Could not get the mmdvm user, exiting\n");
@@ -128,7 +128,7 @@ int main(int argc, char** argv)
 	if (g_Cfg.ReadData(arg))
 		return EXIT_FAILURE;
 
-	auto isDaemon = g_Cfg.GetBoolean(g_Keys.reflector.section, g_Keys.reflector.isDaemon);
+	auto isDaemon = g_Cfg.GetBoolean(g_Keys.repeater.section, g_Keys.repeater.isDaemon);
 
 	auto ret = g_Log.Open(isDaemon,
 		g_Cfg.GetString(g_Keys.log.section, g_Keys.log.filePath),

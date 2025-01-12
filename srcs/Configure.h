@@ -20,7 +20,7 @@
 extern SJsonKeys g_Keys;
 
 enum class ErrorLevel { fatal, mild };
-enum class ESection { none, reflector, log, modem, cwid, gateway };
+enum class ESection { none, repeater, log, modem, cwid, gateway };
 
 #define IS_TRUE(a) ((a)=='t' || (a)=='T' || (a)=='1')
 

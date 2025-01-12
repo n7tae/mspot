@@ -122,9 +122,9 @@ void CM17Gateway::Stop()
 bool CM17Gateway::Start()
 {
 	destMap.ReadAll();
-	std::string cs(g_Cfg.GetString(g_Keys.reflector.section, g_Keys.reflector.callsign));
+	std::string cs(g_Cfg.GetString(g_Keys.repeater.section, g_Keys.repeater.callsign));
 	cs.resize(8, ' ');
-	cs.append(1, g_Cfg.GetString(g_Keys.reflector.section, g_Keys.reflector.module).at(0));
+	cs.append(1, g_Cfg.GetString(g_Keys.repeater.section, g_Keys.repeater.module).at(0));
 	thisCS.CSIn(cs);
 	LogInfo("Station Callsign: %s", cs.c_str());
 
@@ -173,7 +173,7 @@ bool CM17Gateway::Start()
 		LogInfo("Gateway listening on [%s]:%u", addr.GetAddress(), ipv6.GetPort());
 	}
 
-	can = g_Cfg.GetUnsigned(g_Keys.reflector.section, g_Keys.reflector.can);
+	can = g_Cfg.GetUnsigned(g_Keys.repeater.section, g_Keys.repeater.can);
 
 	mlink.state = ELinkState::unlinked;
 	keep_running = true;

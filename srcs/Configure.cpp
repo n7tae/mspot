@@ -99,8 +99,8 @@ bool CConfigure::ReadData(const std::string &path)
 			if (std::string::npos != pos)
 				hname.resize(pos);
 			section = ESection::none;
-			if (0 == hname.compare(g_Keys.reflector.section))
-				section = ESection::reflector;
+			if (0 == hname.compare(g_Keys.repeater.section))
+				section = ESection::repeater;
 			else if (0 == hname.compare(g_Keys.log.section))
 				section = ESection::log;
 			else if (0 == hname.compare(g_Keys.cwid.section))
@@ -143,29 +143,29 @@ bool CConfigure::ReadData(const std::string &path)
 		}
 		switch (section)
 		{
-			case ESection::reflector:
-				if (0 == key.compare(g_Keys.reflector.callsign))
-					data[g_Keys.reflector.section][g_Keys.reflector.callsign] = value;
-				else if (0 == key.compare(g_Keys.reflector.can))
-					data[g_Keys.reflector.section][g_Keys.reflector.can] = getUnsigned(value, "Channel Access Number", 0u, 15u, 0u);
-				else if (0 == key.compare(g_Keys.reflector.timeOut))
-					data[g_Keys.reflector.section][g_Keys.reflector.timeOut] = getUnsigned(value, "RF and Net timeouts", 50u, 500u, 180u);
-				else if (0 == key.compare(g_Keys.reflector.isDaemon))
-					data[g_Keys.reflector.section][g_Keys.reflector.isDaemon] = IS_TRUE(value[0]);
-				else if (0 == key.compare(g_Keys.reflector.isDuplex))
-					data[g_Keys.reflector.section][g_Keys.reflector.isDuplex] = IS_TRUE(value[0]);
-				else if (0 == key.compare(g_Keys.reflector.allowEncrypt))
-					data[g_Keys.reflector.section][g_Keys.reflector.allowEncrypt] = IS_TRUE(value[0]);
-				else if (0 == key.compare(g_Keys.reflector.isprivate))
-					data[g_Keys.reflector.section][g_Keys.reflector.isprivate] = IS_TRUE(value[0]);
-				else if (0 == key.compare(g_Keys.reflector.module))
-					data[g_Keys.reflector.section][g_Keys.reflector.module] = value;
-				else if (0 == key.compare(g_Keys.reflector.user))
-					data[g_Keys.reflector.section][g_Keys.reflector.user] = value;
-				else if (0 == key.compare(g_Keys.reflector.debug))
-					data[g_Keys.reflector.section][g_Keys.reflector.debug] = IS_TRUE(value[0]);
+			case ESection::repeater:
+				if (0 == key.compare(g_Keys.repeater.callsign))
+					data[g_Keys.repeater.section][g_Keys.repeater.callsign] = value;
+				else if (0 == key.compare(g_Keys.repeater.can))
+					data[g_Keys.repeater.section][g_Keys.repeater.can] = getUnsigned(value, "Channel Access Number", 0u, 15u, 0u);
+				else if (0 == key.compare(g_Keys.repeater.timeOut))
+					data[g_Keys.repeater.section][g_Keys.repeater.timeOut] = getUnsigned(value, "RF and Net timeouts", 50u, 500u, 180u);
+				else if (0 == key.compare(g_Keys.repeater.isDaemon))
+					data[g_Keys.repeater.section][g_Keys.repeater.isDaemon] = IS_TRUE(value[0]);
+				else if (0 == key.compare(g_Keys.repeater.isDuplex))
+					data[g_Keys.repeater.section][g_Keys.repeater.isDuplex] = IS_TRUE(value[0]);
+				else if (0 == key.compare(g_Keys.repeater.allowEncrypt))
+					data[g_Keys.repeater.section][g_Keys.repeater.allowEncrypt] = IS_TRUE(value[0]);
+				else if (0 == key.compare(g_Keys.repeater.isprivate))
+					data[g_Keys.repeater.section][g_Keys.repeater.isprivate] = IS_TRUE(value[0]);
+				else if (0 == key.compare(g_Keys.repeater.module))
+					data[g_Keys.repeater.section][g_Keys.repeater.module] = value;
+				else if (0 == key.compare(g_Keys.repeater.user))
+					data[g_Keys.repeater.section][g_Keys.repeater.user] = value;
+				else if (0 == key.compare(g_Keys.repeater.debug))
+					data[g_Keys.repeater.section][g_Keys.repeater.debug] = IS_TRUE(value[0]);
 				else
-					badParam(g_Keys.reflector.section, key);
+					badParam(g_Keys.repeater.section, key);
 				break;
 			case ESection::modem:
 				if (0 == key.compare(g_Keys.modem.protocol))
@@ -289,19 +289,19 @@ bool CConfigure::ReadData(const std::string &path)
 
 	////////////////////////////// check the input //////////////////////////////
 	// Reflector section
-	if (isDefined(ErrorLevel::fatal, g_Keys.reflector.section, g_Keys.reflector.callsign, rval))
+	if (isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.callsign, rval))
 	{
-		auto cs = GetString(g_Keys.reflector.section, g_Keys.reflector.callsign);
+		auto cs = GetString(g_Keys.repeater.section, g_Keys.repeater.callsign);
 		if (not std::regex_match(cs, MoreCS) or cs.size()>8)
 		{
 			std::cerr << "ERROR: Callsign '" << cs << "' does not look like a valid callsign" << std::endl;
 			rval = true;
 		}
-		data[g_Keys.reflector.section][g_Keys.reflector.callsign] = cs;
+		data[g_Keys.repeater.section][g_Keys.repeater.callsign] = cs;
 	}
-	if (isDefined(ErrorLevel::fatal, g_Keys.reflector.section, g_Keys.reflector.module, rval))
+	if (isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.module, rval))
 	{
-		auto mod = GetString(g_Keys.reflector.section, g_Keys.reflector.module).at(0);
+		auto mod = GetString(g_Keys.repeater.section, g_Keys.repeater.module).at(0);
 		if ('a' <= mod and mod <= 'z')
 		{
 			std::cout << "WARNING: '" << mod << "' is not uppercase, converting" << std::endl;
@@ -312,13 +312,13 @@ bool CConfigure::ReadData(const std::string &path)
 			std::cerr << "ERROR: '" << mod << "' has to be an upper case letter A-Z" << std::endl;
 			rval = true;
 		}
-		data[g_Keys.reflector.section][g_Keys.reflector.module] = std::string(1, mod);
+		data[g_Keys.repeater.section][g_Keys.repeater.module] = std::string(1, mod);
 	}
-	if (isDefined(ErrorLevel::fatal, g_Keys.reflector.section, g_Keys.reflector.isDaemon, rval))
+	if (isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.isDaemon, rval))
 	{
-		if (isDefined(ErrorLevel::fatal, g_Keys.reflector.section, g_Keys.reflector.user, rval))
+		if (isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.user, rval))
 		{
-			const auto user = GetString(g_Keys.reflector.section, g_Keys.reflector.user);
+			const auto user = GetString(g_Keys.repeater.section, g_Keys.repeater.user);
 			struct passwd *pwitem = getpwnam(user.c_str());
 			if (nullptr == pwitem)
 			{
@@ -327,12 +327,12 @@ bool CConfigure::ReadData(const std::string &path)
 			}
 		}
 	}
-	isDefined(ErrorLevel::fatal, g_Keys.reflector.section, g_Keys.reflector.isDuplex,     rval);
-	isDefined(ErrorLevel::fatal, g_Keys.reflector.section, g_Keys.reflector.timeOut,      rval);
-	isDefined(ErrorLevel::fatal, g_Keys.reflector.section, g_Keys.reflector.can,          rval);
-	isDefined(ErrorLevel::fatal, g_Keys.reflector.section, g_Keys.reflector.isprivate,    rval);
-	isDefined(ErrorLevel::fatal, g_Keys.reflector.section, g_Keys.reflector.allowEncrypt, rval);
-	isDefined(ErrorLevel::fatal, g_Keys.reflector.section, g_Keys.reflector.debug,        rval);
+	isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.isDuplex,     rval);
+	isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.timeOut,      rval);
+	isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.can,          rval);
+	isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.isprivate,    rval);
+	isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.allowEncrypt, rval);
+	isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.debug,        rval);
 
 	// Modem section
 	if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.protocol, rval))

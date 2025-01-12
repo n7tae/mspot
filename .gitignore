@@ -8,9 +8,9 @@
 *.o
 
 # executables
-mor
+mspot
 inicheck
 
 # local configs
-/mor.*
+/mspot.*
 /*Hosts.txt

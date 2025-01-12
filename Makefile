@@ -8,7 +8,7 @@
 #                                                              #
 ################################################################
 
-include mor.mk
+include mspot.mk
 
 ifeq ($(DEBUG), true)
 CPPFLAGS = -g -ggdb -std=c++17 -Wall -Isrcs
@@ -22,9 +22,9 @@ SRCS = $(wildcard srcs/*.cpp)
 OBJS = $(SRCS:.cpp=.o)
 DEPS = $(SRCS:.cpp=.d)
 
-all : mor inicheck
+all : mspot inicheck
 
-mor : $(OBJS)
+mspot : $(OBJS)
 	$(CXX) $(CPPFLAGS) $(OBJS) $(LIBS) -o $@
 
 inicheck : srcs/Configure.h srcs/Configure.cpp srcs/JsonKeys.h
@@ -35,8 +35,24 @@ inicheck : srcs/Configure.h srcs/Configure.cpp srcs/JsonKeys.h
 %.o: %.cpp
 		$(CXX) $(CPPFLAGS) -MMD -MP -c -o $@ $<
 
+.PHONY : clean
 clean :
-	$(RM) mor inicheck srcs/*.o srcs/*.d
+	$(RM) mspot inicheck srcs/*.o srcs/*.d
 
-install : mor
-	install -m 755 mor $(BINDIR)
+.PHONY : install
+install : mspot.service... mspot
+	### Installing mspot ###
+	cp -f mspot $(BINDIR)
+	cp -f mspot.service /etc/systemd/system/
+	systemctl enable mspot
+	systemctl daemon-reload
+	systemctl start mspot
+
+.PHONY : uninstall
+uninstall :
+	### Uninstalling mspot... ###
+	systemctl stop mspot
+	systemctl disable mspot
+	$(RM) /etc/systemd/system/mspot.service
+	systemctl daemon-reload
+	$(RM) $(BINDIR)/mspot

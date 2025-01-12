@@ -68,12 +68,12 @@ bool CM17Host::Start()
 	LogInfo("MMDVMHost-%s is starting", g_Version.GetString());
 	LogInfo("Built %s %s", __TIME__, __DATE__);
 
-	m_duplex = g_Cfg.GetBoolean(g_Keys.reflector.section, g_Keys.reflector.isDuplex);
-	m_callsign.assign(g_Cfg.GetString(g_Keys.reflector.section, g_Keys.reflector.callsign));
-	m_timeout = g_Cfg.GetUnsigned(g_Keys.reflector.section, g_Keys.reflector.timeOut);
-	const bool selfOnly = g_Cfg.GetBoolean(g_Keys.reflector.section, g_Keys.reflector.isprivate);
-	const unsigned int can = g_Cfg.GetUnsigned(g_Keys.reflector.section, g_Keys.reflector.can);
-	const bool allowEncryption = g_Cfg.GetBoolean(g_Keys.reflector.section, g_Keys.reflector.allowEncrypt);
+	m_duplex = g_Cfg.GetBoolean(g_Keys.repeater.section, g_Keys.repeater.isDuplex);
+	m_callsign.assign(g_Cfg.GetString(g_Keys.repeater.section, g_Keys.repeater.callsign));
+	m_timeout = g_Cfg.GetUnsigned(g_Keys.repeater.section, g_Keys.repeater.timeOut);
+	const bool selfOnly = g_Cfg.GetBoolean(g_Keys.repeater.section, g_Keys.repeater.isprivate);
+	const unsigned int can = g_Cfg.GetUnsigned(g_Keys.repeater.section, g_Keys.repeater.can);
+	const bool allowEncryption = g_Cfg.GetBoolean(g_Keys.repeater.section, g_Keys.repeater.allowEncrypt);
 
 	LogInfo("Reflector Parameters");
 	LogInfo("    Callsign: %s", m_callsign.c_str());
@@ -355,7 +355,7 @@ bool CM17Host::createModem()
 
 bool CM17Host::createM17Network()
 {
-	bool debug = g_Cfg.GetBoolean(g_Keys.reflector.section, g_Keys.reflector.debug);
+	bool debug = g_Cfg.GetBoolean(g_Keys.repeater.section, g_Keys.repeater.debug);
 
 	m_m17Network = std::make_shared<CM17Network>(debug);
 	bool ret = m_m17Network->open();
