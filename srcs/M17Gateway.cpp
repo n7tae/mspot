@@ -847,11 +847,11 @@ void CM17Gateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 	{
 		std::size_t indx = 66u;	// initialize the index to point at the "M17" word
 		// check for "M17" at this postion
-		if (pos+3 >= callsign.size() or callsign.compare(pos, 3, "M17"))
+		if (pos+3 > callsign.size() or callsign.compare(pos, 3, "M17"))
 		{
 			// no "M17" at this pos, so find the m17 alphabet index
 			indx = m17_ab.find(callsign[pos]);
-			if (indx > 40u)
+			if (std::string::npos == indx)
 				indx = 0u;
 		}
 		else // yes, here is an "M17" in the callsign
