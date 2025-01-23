@@ -743,9 +743,9 @@ bool CM17Gateway::setDestination(const CCallsign &cs)
 	if (phost)
 	{
 		// prefer IPv6
-		if (EInternetType::ipv4only != internetType and not phost->ip6addr.empty())
+		if (EInternetType::ipv4only != internetType and not phost->ipv6address.empty())
 		{
-			mlink.addr.Initialize(phost->ip6addr, phost->port);
+			mlink.addr.Initialize(phost->ipv6address, phost->port);
 			mlink.cs = cs;
 			return false;
 		}
@@ -758,14 +758,14 @@ bool CM17Gateway::setDestination(const CCallsign &cs)
 		}
 
 		// if the host is IPv6 only, were also done
-		if (phost->ip4addr.empty())
+		if (phost->ipv4address.empty())
 		{
 			LogWarning("There is no IPv4 address for '%s'", cs.c_str());
 			return true;
 		}
 
 		// this is the default IPv4 address
-		mlink.addr.Initialize(phost->ip4addr, phost->port);
+		mlink.addr.Initialize(phost->ipv4address, phost->port);
 		mlink.cs = cs;
 		return false;
 	}
