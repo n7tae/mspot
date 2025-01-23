@@ -1,6 +1,6 @@
 /****************************************************************
  *                                                              *
- *             More - An M17-only Repeater/HotSpot              *
+ *            mspot - An M17-only Hotspot/Repeater              *
  *                                                              *
  *         Copyright (c) 2024 by Thomas A. Early N7TAE          *
  *                                                              *
@@ -18,7 +18,7 @@
 struct SHost
 {
 	SHost() {}
-	std::string cs, ip4addr, ip6addr, mods, smods;
+	std::string cs, ipv4address, ipv6address, mods, smods, source;
 	uint16_t port;
 };
 
@@ -28,7 +28,7 @@ public:
 	CHostMap();
 	~CHostMap();
 	const SHost *Find(const std::string &cs) const;
-	void Update(const std::string &cs, const std::string &ip4addr, const std::string &ip6addr, const std::string &modules, const std::string &specialmodules, const uint16_t port);
+	void Update(const std::string &, const std::string &, const std::string &, const std::string &, const std::string &, const std::string &, const uint16_t);
 	void ReadAll();
 	const std::list<std::string> GetKeys() const;
 	size_t Size() const;

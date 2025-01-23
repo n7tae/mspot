@@ -1,7 +1,7 @@
 //  Copyright (C) 2020,2021,2023 by Jonathan Naylor G4KLX
 /****************************************************************
  *                                                              *
- *             More - An M17-only Repeater/HotSpot              *
+ *            mspot - An M17-only Hotspot/Repeater              *
  *                                                              *
  *         Copyright (c) 2024 by Thomas A. Early N7TAE          *
  *                                                              *

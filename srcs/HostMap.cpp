@@ -1,6 +1,6 @@
 /****************************************************************
  *                                                              *
- *             More - An M17-only Repeater/HotSpot              *
+ *            mspot - An M17-only Hotspot/Repeater              *
  *                                                              *
  *         Copyright (c) 2024 by Thomas A. Early N7TAE          *
  *                                                              *
@@ -72,7 +72,7 @@ bool CHostMap::getBase(const std::string &cs, std::string &base) const
 	return false;
 }
 
-void CHostMap::Update(const std::string &cs, const std::string &ip4addr, const std::string &ip6addr, const std::string &mods, const std::string &smods, const uint16_t port)
+void CHostMap::Update(const std::string &cs, const std::string &ip4, const std::string &ip6, const std::string &mods, const std::string &smods, const std::string &src, const uint16_t port)
 {
 	std::string base;
 	if (getBase(cs, base))
@@ -80,14 +80,14 @@ void CHostMap::Update(const std::string &cs, const std::string &ip4addr, const s
 	const std::string null("null");
 	auto host = &baseMap[base];
 	host->cs.assign(base);
-	if (ip4addr.compare(null) and hasIPv4)
-		host->ip4addr.assign(ip4addr);
+	if (ip4.compare(null) and hasIPv4)
+		host->ipv4address.assign(ip4);
 	else
-		host->ip4addr.clear();
-	if (ip6addr.compare(null) and hasIPv6)
-		host->ip6addr.assign(ip6addr);
+		host->ipv4address.clear();
+	if (ip6.compare(null) and hasIPv6)
+		host->ipv6address.assign(ip6);
 	else
-		host->ip6addr.clear();
+		host->ipv6address.clear();
 	if (mods.compare(null))
 		host->mods.assign(mods);
 	else
@@ -98,7 +98,7 @@ void CHostMap::Update(const std::string &cs, const std::string &ip4addr, const s
 		host->smods.clear();
 	host->port = port;
 	// make sure there is an IP path
-	if (host->ip4addr.empty() and host->ip6addr.empty())
+	if (host->ipv4address.empty() and host->ipv6address.empty())
 		baseMap.erase(base);
 }
 
@@ -125,10 +125,12 @@ void CHostMap::Read(const std::string &path)
 			if (0==line.size() || '#'==line[0]) continue;
 			std::istringstream ss(line);
 			std::vector<std::string> elem(std::istream_iterator<std::string>{ss}, std::istream_iterator<std::string>());
-			if ( elem.size() > 5 )
-				Update(elem[0], elem[1], elem[2], elem[3], elem[4], std::stoul(elem[5]));
+			if (elem.size() == 6)
+				elem.emplace_back("me");
+			if (elem.size() > 6)
+				Update(elem[0], elem[1], elem[2], elem[3], elem[4], elem[6], std::stoul(elem[5]));
 			else
-				LogWarning("Line #%u of %s has %u elements, needs 6", count, path.c_str(), elem.size());
+				LogWarning("Line #%u of %s has %u elements, needs at least 6", count, path.c_str(), elem.size());
 
 		}
 		file.close();

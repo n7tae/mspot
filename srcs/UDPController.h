@@ -2,7 +2,7 @@
 
 /****************************************************************
  *                                                              *
- *             More - An M17-only Repeater/HotSpot              *
+ *            mspot - An M17-only Hotspot/Repeater              *
  *                                                              *
  *         Copyright (c) 2024 by Thomas A. Early N7TAE          *
  *                                                              *
