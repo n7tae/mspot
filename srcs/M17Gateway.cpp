@@ -1,12 +1,23 @@
-/****************************************************************
- *                                                              *
- *            mspot - An M17-only Hotspot/Repeater              *
- *                                                              *
- *         Copyright (c) 2024 by Thomas A. Early N7TAE          *
- *                                                              *
- * See the LICENSE file for details about the software license. *
- *                                                              *
- ****************************************************************/
+/*
+
+         mspot - an M17-only HotSpot using an MMDVM device
+            Copyright (C) 2025 Thomas A. Early N7TAE
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+*/
 
 #include <poll.h>
 #include <string>
@@ -177,8 +188,8 @@ bool CM17Gateway::Start()
 
 	mlink.state = ELinkState::unlinked;
 	keep_running = true;
-	hostStream.in_stream = gateStream.in_stream = false;
-	hostStream.streamid = gateStream.streamid = 0;
+	gateStream.Initialize("Gateway");
+	hostStream.Initialize("Modem");
 	mlink.maintainLink = g_Cfg.GetBoolean(g_Keys.gateway.section, g_Keys.gateway.maintainLink);
 	LogInfo("Gateway will%s try to re-establish a dropped link", mlink.maintainLink ? "" : " NOT");
 	if (g_Cfg.IsString(g_Keys.gateway.section, g_Keys.gateway.startupLink))
@@ -429,12 +440,10 @@ void CM17Gateway::ProcessGateway()
 		}
 
 		// check for a stream timeout
-		if (gateStream.in_stream and gateStream.lastPacketTime.time() >= 1.6)
+		if (gateStream.IsOpen() and gateStream.GetLastTime() >= 1.6)
 		{
-			LogInfo("Gateway stream timeout id=0x%02hu", ntohs(gateStream.streamid));
-			gateStream.in_stream = false;
+			gateStream.CloseStream(true);
 			gateState.Idle();
-			continue;
 		}
 	}
 }
@@ -519,10 +528,9 @@ void CM17Gateway::ProcessHost()
 		else
 		{
 			// check for a timeout from the host
-			if (hostStream.in_stream and hostStream.lastPacketTime.time() >= 1.0)
+			if (hostStream.IsOpen() and hostStream.GetLastTime() >= 1.0)
 			{
-				LogInfo("Modem stream timeout id=0x%02hu", ntohs(gateStream.streamid));
-				hostStream.in_stream = false; // close the hostStream
+				hostStream.CloseStream(true); // close the hostStream
 				gateState.Idle();
 			}
 		}
@@ -551,28 +559,22 @@ void CM17Gateway::sendLinkRequest()
 // this also opens and closes the gateStream
 void CM17Gateway::sendPacket2Host(const uint8_t *buf)
 {
-	static unsigned streamcount = 0;
 	auto Frame = std::make_unique<SIPFrame>();
 	memcpy(Frame->data.magic, buf, IPFRAMESIZE);
-	if (gateStream.in_stream)	// is the stream open?
+	auto framesid = Frame->GetStreamID();
+	if (gateStream.IsOpen())	// is the stream open?
 	{
-		if (gateStream.streamid == Frame->data.streamid)
+		if (gateStream.GetStreamID() == framesid)
 		{
-			streamcount++;
-			auto sid = Frame->GetStreamID();
+			gateStream.CountnTouch();
 			auto fn = Frame->GetFrameNumber();
 			memset(Frame->data.lich.addr_dst, 0xffu, 6);
 			g_Crc.setCRC(Frame->data.magic, IPFRAMESIZE);
 			Gate2Host.Push(Frame);
 			if (fn & EOTFNMask)
 			{
-				LogInfo("Close Gate stream id=0x%04x, duration=%.2f sec", sid, 0.04f * streamcount);
-				gateStream.in_stream = false; // close the stream
+				gateStream.CloseStream(false); // close the stream
 				gateState.Idle();
-			}
-			else
-			{
-				gateStream.lastPacketTime.start();
 			}
 		}
 		else
@@ -592,26 +594,17 @@ void CM17Gateway::sendPacket2Host(const uint8_t *buf)
 		// and the last stream closed less than 1 second ago
 		// NOTE: It's theoretically possible that this is actually a new stream that has the same SID.
 		//       In that case, up to a second of the beginning of the stream will be lost. Sorry.
-		if (Frame->data.streamid == gateStream.streamid and gateStream.lastPacketTime.time() < 1.0)
+		if (framesid == gateStream.GetPreviousID() and gateStream.GetLastTime() < 1.0)
 		{
 			Frame.reset();
 			gateState.Idle();
 			return;
 		}
 
-		// Start the stream!!
-		gateStream.in_stream = true;
-		streamcount = 0;
-
-		// remember the SID
-		gateStream.streamid = Frame->data.streamid;
-
-		// we need source callsign for the log
-		const CCallsign src(Frame->data.lich.addr_src);
-
-		LogInfo("Open Gate stream id=0x%04x from %s at %s", Frame->GetStreamID(), src.GetCS().c_str(), from17k.GetAddress());
+		// Open the stream
+		gateStream.OpenStream(Frame->data.lich.addr_src, Frame->GetStreamID(), from17k.GetAddress());
 		Gate2Host.Push(Frame);
-		gateStream.lastPacketTime.start();
+		gateStream.CountnTouch();
 	}
 	return;
 }
@@ -619,26 +612,19 @@ void CM17Gateway::sendPacket2Host(const uint8_t *buf)
 // this also opens and closes the hostStream
 void CM17Gateway::sendPacket2Dest(std::unique_ptr<SIPFrame> &Frame)
 {
-	static unsigned streamcount = 0;
-
-	if (hostStream.in_stream)	// is the stream open?
+	auto framesid = Frame->GetStreamID();
+	if (hostStream.IsOpen())	// is the stream open?
 	{
-		if (hostStream.streamid == Frame->data.streamid)
-		{
-			streamcount++;
-			auto sid = Frame->GetStreamID();
+		if (hostStream.GetStreamID() == framesid)
+		{	// Here's the next stream packet
 			auto fn = Frame->GetFrameNumber();
 			g_Crc.setCRC(Frame->data.magic, IPFRAMESIZE);
 			sendPacket(Frame->data.magic, IPFRAMESIZE, mlink.addr);
+			hostStream.CountnTouch();
 			if (fn & EOTFNMask)
 			{
-				LogInfo("Close modem stream id=0x%04x, duration=%.2f sec", sid, 0.04f * streamcount);
-				hostStream.in_stream = false; // close the stream
+				gateStream.CloseStream(false);
 				gateState.Idle();
-			}
-			else
-			{
-				hostStream.lastPacketTime.start();
 			}
 		}
 		else
@@ -655,7 +641,7 @@ void CM17Gateway::sendPacket2Dest(std::unique_ptr<SIPFrame> &Frame)
 			return;
 		}
 		// don't open a stream if this packet has the same SID as the last stream
-		if (Frame->data.streamid == hostStream.streamid)
+		if (framesid == hostStream.GetPreviousID() && hostStream.GetLastTime() < 1.0)
 		{
 			Frame.reset();
 			gateState.Idle();
@@ -663,18 +649,9 @@ void CM17Gateway::sendPacket2Dest(std::unique_ptr<SIPFrame> &Frame)
 		}
 
 		// Open the Stream!!
-		hostStream.in_stream = true;
-		streamcount = 0;
-
-		// remember the SID
-		hostStream.streamid = Frame->data.streamid;
-
-		// we need source callsign for the log
-		const CCallsign src(Frame->data.lich.addr_src);
-
-		LogInfo("Open modem stream id=0x%04x from %s", Frame->GetStreamID(), src.c_str());
+		hostStream.OpenStream(Frame->data.lich.addr_src, Frame->GetStreamID(), "MSpot");
 		sendPacket(Frame->data.magic, IPFRAMESIZE, mlink.addr);
-		hostStream.lastPacketTime.start();
+		hostStream.CountnTouch();
 	}
 }
 
