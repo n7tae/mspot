@@ -263,6 +263,7 @@ void CM17Gateway::doPlay(char c)
 
 	uint16_t fn = 0;
 	std::ifstream ifs(pathname, std::ios::binary);
+	auto clock = std::chrono::steady_clock::now(); // start the packet clock
 	if (ifs.is_open())
 	{
 		while (fn < count)
@@ -272,6 +273,8 @@ void CM17Gateway::doPlay(char c)
 			ifs.read((char *)(frame->data.payload), 16);
 			frame->SetFrameNumber((fn < count) ? fn++ : fn++ & EOTFNMask);
 			g_Crc.setCRC(frame->data.magic, IPFRAMESIZE);
+			clock = clock + std::chrono::milliseconds(40);
+			std::this_thread::sleep_until(clock);
 			Gate2Host.Push(frame);
 		}
 		ifs.close();
