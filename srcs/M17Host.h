@@ -60,7 +60,6 @@ private:
 	std::string     m_callsign;
 	std::string     m_cwCallsign;
 	unsigned int    m_id;
-	std::string     m_cwCallsign;
 
 	void Run();
 	bool createModem();
