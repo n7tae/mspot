@@ -170,7 +170,7 @@ bool CConfigure::ReadData(const std::string &path)
 				else if (0 == key.compare(g_Keys.repeater.isprivate))
 					data[g_Keys.repeater.section][g_Keys.repeater.isprivate] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.repeater.module))
-					data[g_Keys.repeater.section][g_Keys.repeater.module] = value[0];
+					data[g_Keys.repeater.section][g_Keys.repeater.module] = value;
 				else if (0 == key.compare(g_Keys.repeater.user))
 					data[g_Keys.repeater.section][g_Keys.repeater.user] = value;
 				else if (0 == key.compare(g_Keys.repeater.debug))
