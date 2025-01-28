@@ -48,6 +48,7 @@ public:
 
 private:
 	std::string                  m_callsign;
+	std::string                  m_basecs;
 	unsigned int                 m_can;
 	bool                         m_selfOnly;
 	bool                         m_allowEncryption;

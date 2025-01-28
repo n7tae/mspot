@@ -98,6 +98,11 @@ m_rssiCount(0U),
 m_enabled(true),
 m_fp(NULL)
 {
+	m_basecs.assign(m_callsign);
+	auto pos = m_callsign.find_first_of("./- ");
+	if (std::string::npos == pos)
+		pos = 8;
+	m_basecs.resize(pos);
 }
 
 CM17Control::~CM17Control() {}
@@ -898,9 +903,9 @@ void CM17Control::decorrelator(const unsigned char* in, unsigned char* out) cons
 
 bool CM17Control::checkCallsign(const std::string& callsign) const
 {
-	size_t len = m_callsign.size();
+	size_t len = m_basecs.size();
 
-	return m_callsign.compare(0U, len, callsign, 0U, len) == 0;
+	return m_basecs.compare(0U, len, callsign, 0U, len) == 0;
 }
 
 bool CM17Control::openFile()

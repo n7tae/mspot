@@ -58,6 +58,7 @@ private:
 	unsigned int    m_timeout;
 	unsigned int    m_cwIdTime;
 	std::string     m_callsign;
+	std::string     m_cwCallsign;
 	unsigned int    m_id;
 	std::string     m_cwCallsign;
 

@@ -59,8 +59,8 @@ m_duplex(false),
 m_timeout(180U),
 m_cwIdTime(0U),
 m_callsign(),
-m_id(0U),
-m_cwCallsign()
+m_cwCallsign(),
+m_id(0U)
 {
 }
 
@@ -80,7 +80,10 @@ bool CM17Host::Start()
 	LogInfo("Built %s %s", __TIME__, __DATE__);
 
 	m_duplex = g_Cfg.GetBoolean(g_Keys.repeater.section, g_Keys.repeater.isDuplex);
-	m_callsign.assign(g_Cfg.GetString(g_Keys.repeater.section, g_Keys.repeater.callsign));
+	m_cwCallsign.assign(g_Cfg.GetString(g_Keys.repeater.section, g_Keys.repeater.callsign));
+	m_callsign.assign(m_cwCallsign);
+	m_callsign.resize(8, ' ');
+	m_callsign.append(1, g_Cfg.GetString(g_Keys.repeater.section, g_Keys.repeater.module).at(0));
 	m_timeout = g_Cfg.GetUnsigned(g_Keys.repeater.section, g_Keys.repeater.timeOut);
 	const bool selfOnly = g_Cfg.GetBoolean(g_Keys.repeater.section, g_Keys.repeater.isprivate);
 	const unsigned int can = g_Cfg.GetUnsigned(g_Keys.repeater.section, g_Keys.repeater.can);
@@ -425,7 +428,7 @@ void CM17Host::setMode(unsigned char mode)
 			m_m17->enable(true);
 		m_modem->setMode(0);
 		if (m_mode == MODE_ERROR) {
-			m_modem->sendCWId(m_callsign);
+			m_modem->sendCWId(m_cwCallsign);
 			m_cwIdTimer.setTimeout(m_cwIdTime);
 			m_cwIdTimer.start();
 		} else {

@@ -170,7 +170,7 @@ bool CConfigure::ReadData(const std::string &path)
 				else if (0 == key.compare(g_Keys.repeater.isprivate))
 					data[g_Keys.repeater.section][g_Keys.repeater.isprivate] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.repeater.module))
-					data[g_Keys.repeater.section][g_Keys.repeater.module] = value;
+					data[g_Keys.repeater.section][g_Keys.repeater.module] = value[0];
 				else if (0 == key.compare(g_Keys.repeater.user))
 					data[g_Keys.repeater.section][g_Keys.repeater.user] = value;
 				else if (0 == key.compare(g_Keys.repeater.debug))
@@ -315,8 +315,9 @@ bool CConfigure::ReadData(const std::string &path)
 		auto mod = GetString(g_Keys.repeater.section, g_Keys.repeater.module).at(0);
 		if ('a' <= mod and mod <= 'z')
 		{
-			std::cout << "WARNING: '" << mod << "' is not uppercase, converting" << std::endl;
-			mod = 'A' + (mod - 'a');
+			char newmod = 'A' + (mod - 'a');
+			std::cout << "WARNING: '" << mod << "' is not uppercase, set to '" << newmod << "'" << std::endl;
+			mod = newmod;
 		}
 		if (not('A' <= mod and mod <= 'Z'))
 		{
