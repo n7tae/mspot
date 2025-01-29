@@ -161,7 +161,7 @@ bool CM17Gateway::Start()
 		LogInfo("Gateway supports IPv6 Only");
 		break;
 	default:
-		LogInfo("Gateway supports Dual Stack (IPv4 and IPv6");
+		LogInfo("Gateway supports Dual Stack (IPv4 and IPv6)");
 		break;
 	}
 
@@ -307,10 +307,10 @@ void CM17Gateway::ProcessGateway()
 					msgTask->futTask = std::async(std::launch::async, &CM17Gateway::PlayVoiceFiles, this, message);
 				}
 			}
-			else
-			{
-				LogInfo("VoiceQueue not empty but state is %s", gateState.GetState());
-			}
+			// else
+			// {
+			// 	LogInfo("VoiceQueue not empty but state is %s", gateState.GetState());
+			// }
 		}
 
 		// any packets from IPv4 or 6?

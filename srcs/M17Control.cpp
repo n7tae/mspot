@@ -554,7 +554,7 @@ void CM17Control::writeNetwork()
 		m_source = m_netLSF.getSource();
 		m_dest   = m_netLSF.getDest();
 
-		m_netLSF.setSource(m_callsign);
+		m_netLSF.setSource(m_source);
 		m_netLSF.setCAN(m_can);
 
 		unsigned char dataType = m_netLSF.getDataType();
@@ -612,7 +612,7 @@ void CM17Control::writeNetwork()
 		if (m_netLSFn == 0U) {
 			m_netLSF.setNetwork(netData);
 
-			m_netLSF.setSource(m_callsign);
+			m_netLSF.setSource(m_source);
 			m_netLSF.setCAN(m_can);
 
 			unsigned char encryptionType    = m_netLSF.getEncryptionType();
@@ -802,7 +802,7 @@ void CM17Control::createRFLSF(bool addCallsign)
 {
 	m_rfCurrentRFLSF = m_rfCurrentNetLSF;
 
-	m_rfCurrentRFLSF.setSource(m_callsign);
+	m_rfCurrentRFLSF.setSource(m_source);
 
 	if (addCallsign) {
 		m_rfCurrentRFLSF.setEncryptionType(M17_ENCRYPTION_TYPE_NONE);
@@ -811,7 +811,7 @@ void CM17Control::createRFLSF(bool addCallsign)
 		// Copy the encoded source into the META field
 		unsigned char meta[M17_META_LENGTH_BYTES];
 		::memset(meta, 0x00U, M17_META_LENGTH_BYTES);
-		CM17Utils::encodeCallsign(m_source, meta + 0U);
+		CM17Utils::encodeCallsign(m_callsign, meta + 0U);
 
 		m_rfCurrentRFLSF.setMeta(meta);
 	}
