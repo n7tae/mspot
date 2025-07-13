@@ -7,11 +7,11 @@ An M17-only hot-spot (or repeater)
 This open-source project will build an M17-only repeater or hot-spot for amateur radio. The design goals for this project include:
 - **Easy to build**: Because the *mspot* repeater is a single application and is complete. It includes a novel M17 gateway that can connect to both M17 and URF reflectors.
 - **Easy to configure**: With a single, self contained application, there is just a single configuration file, and the project builds an additional program, *inicheck*, that will intelligently analyze your ini file and reports any problems it finds.
-- **Easy to use**: *mspot* includes many RF-base commands to manage its connection state and responds to commands with voice messages, making *mspot* ideal for a mobile, smart-phone tethered repeater.
+- **Easy to use**: *mspot* includes many RF-base commands to manage its connection state and responds to commands with voice messages, making *mspot* ideal for a mobile, smart-phone tethered repeater. I am hoping it is also useful to sight-impaired hams.
 - **Minimum executable size**: *mspot* is tiny, especially when you compare it to the multi-mode alternatives.
 - **Excellent reliability**: You'll be the judge of that. Try it and find out.
 
-It should support most any MMDVM-type modem because a significant portion of the project is based on a stripped-down version of G4KLX Jonathan Naylor's [MMDVMHost](https://github.com/g4klx/MMDVMHost). Unlike MMDVMHost, this project does not support any display device. It also does not support file locking, transparent port, or remote control.
+It should support most any MMDVM-type modem because a significant portion of the project is based on a stripped-down earlyer version of G4KLX Jonathan Naylor's [MMDVMHost](https://github.com/g4klx/MMDVMHost). Unlike MMDVMHost, this project does not support any display device. It also does not support file locking, transparent port, or remote control.
 
 This project will build *mspot*, a single executable program that has a built-in M17 gateway that will connect to both M17 reflectors and URF reflectors. The gateway portion of *mspot* is unique. It doesn't use the popular *time-slice* method characterized by a `clock()` routine, but rather uses a kind of *pass the baton* control scheme.
 
@@ -27,7 +27,7 @@ There are a few things you need: `sudo apt install git build-essential nlohmann-
 
 Then copy this repo: `git clone https://github.com/n7tae/mspot.git`
 
-Within the *mspot* folder, copy a few files to this folder (don't forget the period at the end!): `cp config/{mspot.*,*.txt} ,`
+Within the *mspot* folder, copy a few files to this folder (don't forget the period at the end!): `cp config/{mspot.*,*.txt} .`
 
 Then you your favorite text editor to modify two of these files to your needs. Comments within these files will help you decide what you need to do:
 
@@ -41,7 +41,7 @@ You can then build *mspot*: `make`
 
 You may have noticed that two programs were created at the build stage: *mspot* the M17-only repeater/hot-spot, and *inicheck*, a program that will check you initialization file for errors. *inicheck* tries to be very thorough. In addition to making sure that all needed variable are define and have reasonable values, it checks that path names are pointing to existing files on your system, and that those files are the kinds of files they need to be. Do: `./inicheck mspot.ini`. If any errors are identified, *mspot* won't run.
 
-In the build section, a few `txt` files were copied. For connection information, *mspot* uses a host text file that is not compatible with the M17Hosts.txt file that is used by G4KLX's *M17Gateway* application. `M17_Hosts.txt` contains a list of all M17 and URF reflectors registered at [dvref.com](https://dvref.com/). This file contains a time-stamp so you know exactly when it was created. You can easily build an up-to-the-minute accurate host text file with the *make-m17-host-file* program that you can build using the [*ham-dht-tools*](https://github.com/n7tae/ham-dht-tools) repository. The second, `MyHost.txt` is a place for you to add other reflectors that aren't registered at dvref.com.
+In the build section, a few `txt` files were copied. These files are for connection information. `M17_Hosts.txt` contains a list of all M17 and URF reflectors registered at [dvref.com](https://dvref.com/). This file contains a time-stamp so you know exactly when it was created. You can easily build an up-to-the-minute accurate host text file with the *make-m17-host-file* program that you can build using the [*ham-dht-tools*](https://github.com/n7tae/ham-dht-tools) repository. The second, `MyHosts.txt` is a place for you to add other reflectors that aren't registered at dvref.com.
 
 ## Starting *mspot*
 
@@ -51,7 +51,7 @@ Alternatively, you can have *mspot* automatically launched on system boot up. To
 
 ### Dialout
 
-Do a `getent group dialout`. If the user is not listed, do a `sudo adduser <username> dialout`, where `<username>` is the login name of the user. After this, you can verify with another `getent` command.
+The user that executes *mspot* needs to be in the `dialout` group! Do a `getent group dialout`. If the user is not listed, do a `sudo adduser <username> dialout`, where `<username>` is the login name of the user. After this, you can verify with another `getent` command.
 
 ## Using *mspot*
 
@@ -73,4 +73,12 @@ The echo and record functions will not record more than two minutes and the reco
 
 The robotic voice prompts currently being used are generated from a rather old open-source program, *espeak*. The first time you hear it, it might be a little difficult to understand. For example, the first time you hear espeak say "hotel", it may be hard to recognize. However, it gets much easier with repetition. However, if you are interested in recording your own voice messages or want to re-record messages in a different language, see the related [M17AudioTools](https://github.com/n7tae/M17AudioTools) repo. These are the tools used to create the *mspot* voice messages.
 
+## License
+
+This software is published using the GNU GPU, Version 2. Please see the enclosed `LICENSE` file for details.
+
 ## Finally
+
+There is still a lot of work to do before it will be really useful to my target audience.
+
+73 de N7TAE
