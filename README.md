@@ -71,7 +71,7 @@ The echo and record functions will not record more than two minutes and the reco
 
 ### More about voice message
 
-The robotic voice prompts currently being used are generated from a rather old open-source program, *espeak*. The first time you hear it, it might be a little difficult to understand. For example, the first time you hear espeak say "hotel", it may be hard to recognize. However, it gets much easier with repetition. However, if you are interested in recording your own voice messages or want to re-record messages in a different language, see the related [M17AudioTools](https://github.com/n7tae/M17AudioTools) repo. These are the tools used to create the *mspot* voice messages.
+The robotic voice prompts currently being used are generated from a rather old open-source program, *espeak*. The first time you hear it, it might be a little difficult to understand. For example, the first time you hear espeak say "hotel", it may be hard to recognize. However, it gets much easier with repetition. However, if you are interested in recording your own voice messages or want to re-record messages in a different language, see the related [M17AudioTools](https://github.com/n7tae/mat) repo. These are the tools used to create the *mspot* voice messages.
 
 ## License
 
