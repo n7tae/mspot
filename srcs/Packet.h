@@ -29,7 +29,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 // M17 Packet
 
-using SMLich = struct __attribute__((__packed__)) lich_tag
+using SLSD = struct __attribute__((__packed__)) lsd_tag
 {
 	uint8_t  addr_dst[6]; //48 bit int - you'll have to assemble it yourself unfortunately
 	uint8_t  addr_src[6];
@@ -42,7 +42,7 @@ using SFrame = struct __attribute__((__packed__)) frame_tag
 {
 	uint8_t  magic[4];
 	uint16_t streamid;
-	SMLich   lich;
+	SLSD     lsd;
 	uint16_t framenumber;
 	uint8_t  payload[16];
 	uint16_t crc;
@@ -53,11 +53,11 @@ using SIPFrame = struct ipframe_tag
 	SFrame data;
 	uint16_t GetCRC        (void) const        { return ntohs(data.crc);            }
 	uint16_t GetFrameNumber(void) const        { return ntohs(data.framenumber);    }
-	uint16_t GetFrameType  (void) const        { return ntohs(data.lich.frametype); }
+	uint16_t GetFrameType  (void) const        { return ntohs(data.lsd.frametype);  }
 	uint16_t GetStreamID   (void) const        { return ntohs(data.streamid);       }
 	void     SetCRC        (const uint16_t cr) { data.crc            = htons(cr);   }
 	void     SetFrameNumber(const uint16_t fn) { data.framenumber    = htons(fn);   }
-	void     SetFrameType  (const uint16_t ft) { data.lich.frametype = htons(ft);   }
+	void     SetFrameType  (const uint16_t ft) { data.lsd.frametype = htons(ft);    }
 	void     SetStreamID   (const uint16_t id) { data.streamid       = htons(id);   }
 }; // also 54 bytes
 

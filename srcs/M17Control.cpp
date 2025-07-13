@@ -228,11 +228,11 @@ bool CM17Control::writeModem(unsigned char* data, unsigned int len)
 		if (!valid1 || !valid2 || !valid3 || !valid4)
 			return false;
 
-		unsigned char lich[M17_LICH_FRAGMENT_LENGTH_BYTES];
-		CM17Utils::combineFragmentLICH(lich1, lich2, lich3, lich4, lich);
+		unsigned char lsd[M17_LICH_FRAGMENT_LENGTH_BYTES];
+		CM17Utils::combineFragmentLICH(lich1, lich2, lich3, lich4, lsd);
 
 		m_rfLSFn = (lich4 >> 5) & 0x07U;
-		m_rfCurrentNetLSF.setFragment(lich, m_rfLSFn);
+		m_rfCurrentNetLSF.setFragment(lsd, m_rfLSFn);
 
 		bool valid = m_rfCurrentNetLSF.isValid();
 		if (valid) {
@@ -277,11 +277,11 @@ bool CM17Control::writeModem(unsigned char* data, unsigned int len)
 		bool valid4 = CGolay24128::decode24128(data + 2U + M17_SYNC_LENGTH_BYTES + 9U, lich4);
 
 		if (valid1 && valid2 && valid3 && valid4) {
-			unsigned char lich[M17_LICH_FRAGMENT_LENGTH_BYTES];
-			CM17Utils::combineFragmentLICH(lich1, lich2, lich3, lich4, lich);
+			unsigned char lsd[M17_LICH_FRAGMENT_LENGTH_BYTES];
+			CM17Utils::combineFragmentLICH(lich1, lich2, lich3, lich4, lsd);
 
 			unsigned int n = (lich4 >> 5) & 0x07U;
-			m_rfCollectingLSF.setFragment(lich, n);
+			m_rfCollectingLSF.setFragment(lsd, n);
 
 			// If the latest LSF is valid, save it and start collecting the next one
 			bool valid = m_rfCollectingLSF.isValid();
@@ -360,14 +360,14 @@ bool CM17Control::writeModem(unsigned char* data, unsigned int len)
 			// Generate the sync
 			CSync::addM17StreamSync(rfData + 2U);
 
-			unsigned char lich[M17_LICH_FRAGMENT_LENGTH_BYTES];
-			m_rfCurrentRFLSF.getFragment(lich, m_rfLSFn);
+			unsigned char lsd[M17_LICH_FRAGMENT_LENGTH_BYTES];
+			m_rfCurrentRFLSF.getFragment(lsd, m_rfLSFn);
 
 			// Add the fragment number
-			lich[5U] = (m_rfLSFn & 0x07U) << 5;
+			lsd[5U] = (m_rfLSFn & 0x07U) << 5;
 
 			unsigned int frag1, frag2, frag3, frag4;
-			CM17Utils::splitFragmentLICH(lich, frag1, frag2, frag3, frag4);
+			CM17Utils::splitFragmentLICH(lsd, frag1, frag2, frag3, frag4);
 
 			// Add Golay to the LICH fragment here
 			unsigned int lich1 = CGolay24128::encode24128(frag1);
@@ -659,14 +659,14 @@ void CM17Control::writeNetwork()
 		m_netFrames++;
 
 		// Add the fragment LICH
-		unsigned char lich[M17_LICH_FRAGMENT_LENGTH_BYTES];
-		m_netLSF.getFragment(lich, m_netLSFn);
+		unsigned char lsd[M17_LICH_FRAGMENT_LENGTH_BYTES];
+		m_netLSF.getFragment(lsd, m_netLSFn);
 
 		// Add the fragment number
-		lich[5U] = (m_netLSFn & 0x07U) << 5;
+		lsd[5U] = (m_netLSFn & 0x07U) << 5;
 
 		unsigned int frag1, frag2, frag3, frag4;
-		CM17Utils::splitFragmentLICH(lich, frag1, frag2, frag3, frag4);
+		CM17Utils::splitFragmentLICH(lsd, frag1, frag2, frag3, frag4);
 
 		// Add Golay to the LICH fragment here
 		unsigned int lich1 = CGolay24128::encode24128(frag1);

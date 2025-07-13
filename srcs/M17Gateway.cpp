@@ -458,7 +458,7 @@ void CM17Gateway::ProcessHost()
 			// if TryState fails, the frame will be reset
 			if (gateState.TryState(EGateState::modemin))
 			{
-				const CCallsign dest(Frame->data.lich.addr_dst);
+				const CCallsign dest(Frame->data.lsd.addr_dst);
 				switch (dest.GetBase())
 				{
 				case CalcCSCode("E"):
@@ -485,7 +485,7 @@ void CM17Gateway::ProcessHost()
 					gateState.Idle();
 					break;
 				default:
-					const CCallsign dest(Frame->data.lich.addr_dst); // where are we going?
+					const CCallsign dest(Frame->data.lsd.addr_dst); // where are we going?
 					// the only way we are going to send this anywhere is if we are linked
 					switch (mlink.state)
 					{
@@ -568,7 +568,7 @@ void CM17Gateway::sendPacket2Host(const uint8_t *buf)
 		{
 			gateStream.CountnTouch();
 			auto fn = Frame->GetFrameNumber();
-			memset(Frame->data.lich.addr_dst, 0xffu, 6);
+			memset(Frame->data.lsd.addr_dst, 0xffu, 6);
 			g_Crc.setCRC(Frame->data.magic, IPFRAMESIZE);
 			Gate2Host.Push(Frame);
 			if (fn & EOTFNMask)
@@ -602,7 +602,7 @@ void CM17Gateway::sendPacket2Host(const uint8_t *buf)
 		}
 
 		// Open the stream
-		gateStream.OpenStream(Frame->data.lich.addr_src, Frame->GetStreamID(), from17k.GetAddress());
+		gateStream.OpenStream(Frame->data.lsd.addr_src, Frame->GetStreamID(), from17k.GetAddress());
 		Gate2Host.Push(Frame);
 		gateStream.CountnTouch();
 	}
@@ -649,7 +649,7 @@ void CM17Gateway::sendPacket2Dest(std::unique_ptr<SIPFrame> &Frame)
 		}
 
 		// Open the Stream!!
-		hostStream.OpenStream(Frame->data.lich.addr_src, Frame->GetStreamID(), "MSpot");
+		hostStream.OpenStream(Frame->data.lsd.addr_src, Frame->GetStreamID(), "MSpot");
 		sendPacket(Frame->data.magic, IPFRAMESIZE, mlink.addr);
 		hostStream.CountnTouch();
 	}
@@ -888,10 +888,10 @@ unsigned CM17Gateway::PlayVoiceFiles(std::string message)
 	SIPFrame master;
 	memcpy(master.data.magic, "M17 ", 4);
 	master.SetStreamID(makeStreamID());
-	memset(master.data.lich.addr_dst, 0xffu, 6); // set destination to Broadcast
-	thisCS.CodeOut(master.data.lich.addr_src);
+	memset(master.data.lsd.addr_dst, 0xffu, 6); // set destination to Broadcast
+	thisCS.CodeOut(master.data.lsd.addr_src);
 	master.SetFrameType(0x0005 | (can << 7));
-	memset(master.data.lich.meta, 0, 14);
+	memset(master.data.lsd.meta, 0, 14);
 
 	auto clock = std::chrono::steady_clock::now(); // start the packet clock
 	std::ifstream ifile;

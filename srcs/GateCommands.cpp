@@ -131,7 +131,7 @@ void CM17Gateway::doRecord(std::unique_ptr<SIPFrame> &Frame)
 	{
 		return;
 	}
-	CCallsign dest(Frame->data.lich.addr_dst);
+	CCallsign dest(Frame->data.lsd.addr_dst);
 	auto streamID = Frame->data.streamid;
 	doRecord(dest.GetModule(), streamID);
 }
@@ -217,7 +217,7 @@ void CM17Gateway::doPlay(std::unique_ptr<SIPFrame> &Frame)
 {
 	wait4end(Frame);
 	std::this_thread::sleep_for(std::chrono::milliseconds(300));
-	CCallsign dest(Frame->data.lich.addr_dst);
+	CCallsign dest(Frame->data.lsd.addr_dst);
 	doPlay(dest.GetModule());
 }
 
@@ -256,10 +256,10 @@ void CM17Gateway::doPlay(char c)
 	SIPFrame master;
 	memcpy(master.data.magic, "M17 ", 4);
 	master.SetStreamID(makeStreamID());
-	memset(master.data.lich.addr_dst, 0xffu, 6); // set destination to Broadcast
-	thisCS.CodeOut(master.data.lich.addr_src);
+	memset(master.data.lsd.addr_dst, 0xffu, 6); // set destination to Broadcast
+	thisCS.CodeOut(master.data.lsd.addr_src);
 	master.SetFrameType(0x0005 | (can << 7));
-	memset(master.data.lich.meta, 0, 14);
+	memset(master.data.lsd.meta, 0, 14);
 
 	uint16_t fn = 0;
 	std::ifstream ifs(pathname, std::ios::binary);
