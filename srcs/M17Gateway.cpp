@@ -734,7 +734,7 @@ bool CM17Gateway::setDestination(const CCallsign &cs)
 			return true;
 		}
 
-		// if the host is IPv6 only, were also done
+		// if the host is IPv6 only, we're also done
 		if (phost->ipv4address.empty())
 		{
 			LogWarning("There is no IPv4 address for '%s'", cs.c_str());

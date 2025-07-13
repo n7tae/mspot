@@ -20,6 +20,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include <fstream>
+#include <vector>
 #include <regex>
 
 #include "Configure.h"
@@ -49,6 +50,14 @@ static inline void trim(std::string &s)
 {
     ltrim(s);
     rtrim(s);
+}
+
+static inline void split(const std::string &s, char delim, std::vector<std::string> &v)
+{
+	std::istringstream iss(s);
+	std::string item;
+	while (std::getline(iss, item, delim))
+		v.push_back(item);
 }
 
 CHostMap::CHostMap() {}
@@ -83,27 +92,33 @@ bool CHostMap::getBase(const std::string &cs, std::string &base) const
 	return false;
 }
 
-void CHostMap::Update(const std::string &cs, const std::string &ip4, const std::string &ip6, const std::string &mods, const std::string &smods, const std::string &src, const uint16_t port)
+void CHostMap::Update(const std::string &cs, const std::string &version, const std::string &dn, const std::string &ip4, const std::string &ip6, const std::string &mods, const std::string &smods, const uint16_t port, const std::string &src, const std::string &url)
 {
 	std::string base;
 	if (getBase(cs, base))
 		return;
-	const std::string null("null");
+
+
+
 	auto host = &baseMap[base];
 	host->cs.assign(base);
-	if (ip4.compare(null) and hasIPv4)
+	if (ip4.size() and hasIPv4)
 		host->ipv4address.assign(ip4);
 	else
 		host->ipv4address.clear();
-	if (ip6.compare(null) and hasIPv6)
+	if (dn.size())
+		host->domainname.assign(dn);
+	else
+		host->domainname.clear();
+	if (ip6.size() and hasIPv6)
 		host->ipv6address.assign(ip6);
 	else
 		host->ipv6address.clear();
-	if (mods.compare(null))
+	if (mods.size())
 		host->mods.assign(mods);
 	else
 		host->mods.clear();
-	if (smods.compare(null))
+	if (smods.size())
 		host->smods.assign(smods);
 	else
 		host->smods.clear();
@@ -134,14 +149,13 @@ void CHostMap::Read(const std::string &path)
 			count++;
 			trim(line);
 			if (0==line.size() || '#'==line[0]) continue;
-			std::istringstream ss(line);
-			std::vector<std::string> elem(std::istream_iterator<std::string>{ss}, std::istream_iterator<std::string>());
-			if (elem.size() == 6)
-				elem.emplace_back("me");
-			if (elem.size() > 6)
-				Update(elem[0], elem[1], elem[2], elem[3], elem[4], elem[6], std::stoul(elem[5]));
+
+			std::vector<std::string> elem;
+			split(line, ';', elem);
+			if (elem.size() == 10)
+				Update(elem[0], elem[1], elem[2], elem[3], elem[4], elem[5], elem[6], std::stoul(elem[7]), elem[8], elem[9]);
 			else
-				LogWarning("Line #%u of %s has %u elements, needs at least 6", count, path.c_str(), elem.size());
+				LogWarning("Line #%u of %s has %u elements, needs 7 item", count, path.c_str(), elem.size());
 
 		}
 		file.close();
