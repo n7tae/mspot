@@ -152,10 +152,12 @@ void CHostMap::Read(const std::string &path)
 
 			std::vector<std::string> elem;
 			split(line, ';', elem);
+			if (elem.size() == 9)
+				elem.push_back("");
 			if (elem.size() == 10)
 				Update(elem[0], elem[1], elem[2], elem[3], elem[4], elem[5], elem[6], std::stoul(elem[7]), elem[8], elem[9]);
 			else
-				LogWarning("Line #%u of %s has %u elements, needs 7 item", count, path.c_str(), elem.size());
+				LogWarning("Line #%u of %s has %u elements, needs 10 item", count, path.c_str(), elem.size());
 
 		}
 		file.close();
