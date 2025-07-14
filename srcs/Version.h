@@ -27,27 +27,18 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 class CVersion
 {
 public:
-	// constructors
-	CVersion();
-	CVersion(uint8_t maj, uint8_t min, uint8_t rev);
+	// constructor
+	CVersion() = delete;
+	CVersion(const CVersion &v) : maj(v.GetMajor()), min(v.GetMinor()), rev(v.GetRevision()) {}
+	CVersion(uint8_t a, uint8_t b, uint16_t c) : maj(a), min(b), rev(c) {}
+	CVersion &operator=(const CVersion &v) { maj=v.maj; min=v.min; rev=v.rev; return *this; }
+	~CVersion() {}
 
 	// get
-	int GetMajor(void) const;
-	int GetMinor(void) const;
-	int GetRevision(void) const;
-	int GetVersion(void) const;
-	const char *GetString() { return strversion.c_str(); }
-
-	// set
-	void Set(uint8_t, uint8_t, uint8_t);
-
-	// comparison operators
-	bool operator ==(const CVersion &v) const;
-	bool operator !=(const CVersion &v) const;
-	bool operator >=(const CVersion &v) const;
-	bool operator <=(const CVersion &v) const;
-	bool operator  >(const CVersion &v) const;
-	bool operator  <(const CVersion &v) const;
+	unsigned GetMajor(void) const;
+	unsigned GetMinor(void) const;
+	unsigned GetRevision(void) const;
+	unsigned GetVersion(void) const;
 
 	// output
 	friend std::ostream &operator <<(std::ostream &os, const CVersion &v);
@@ -55,6 +46,6 @@ public:
 
 protected:
 	// data
-	int version;
-	std::string strversion;
+	uint8_t maj, min;
+	uint16_t rev;
 };

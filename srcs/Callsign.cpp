@@ -56,9 +56,9 @@ void CCallsign::Clear()
 void CCallsign::CSIn(const std::string &callsign)
 {
 	Clear();
-	if(0 == callsign.find("#ALL"))
+	if(0 == callsign.find("@ALL"))
 	{
-		strcpy(cs, "#ALL");
+		strcpy(cs, "@ALL");
 		coded = 0xffffffffffffu;
 		return;
 	}
@@ -115,7 +115,7 @@ void CCallsign::CodeIn(const uint8_t *in)
 
 	if (coded == 0xffffffffffffu)
 	{
-		strcpy(cs, "#ALL");
+		strcpy(cs, "@ALL");
 		return;
 	}
 
