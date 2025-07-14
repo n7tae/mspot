@@ -39,6 +39,7 @@ public:
 	unsigned GetMinor(void) const;
 	unsigned GetRevision(void) const;
 	unsigned GetVersion(void) const;
+	const char *GetString(void) const;
 
 	// output
 	friend std::ostream &operator <<(std::ostream &os, const CVersion &v);

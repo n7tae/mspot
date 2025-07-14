@@ -19,6 +19,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 */
 
+#include <stdio.h>
+
 #include "Version.h"
 
 unsigned CVersion::GetMajor(void) const
@@ -39,6 +41,13 @@ unsigned CVersion::GetRevision(void) const
 unsigned CVersion::GetVersion() const
 {
 	return (maj<<24) | (min<<16) | rev;
+}
+
+const char *CVersion::GetString() const
+{
+	static char s[16];
+	sprintf(s, "%u.%u.%u", unsigned(maj), unsigned(min), unsigned(rev));
+	return s;
 }
 
 // output
