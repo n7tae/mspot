@@ -243,7 +243,7 @@ void CM17Gateway::ProcessGateway()
 			{
 				// looks like we lost contact
 				addMessage("repeater was_disconnected_from destination");
-				LogInfo("Disconnected from %s, TIMEOUT...\n", mlink.cs.GetCS().c_str());
+				LogInfo("Disconnected from %s, TIMEOUT...\n", mlink.cs.c_str());
 				mlink.state = ELinkState::unlinked;
 				if (not mlink.maintainLink)
 					mlink.addr.Clear();
@@ -252,7 +252,7 @@ void CM17Gateway::ProcessGateway()
 		case ELinkState::linking:
 			if (linkingTime.time() >= 30)
 			{
-				LogInfo("Link request to %s timeout.\n", mlink.cs.GetCS().c_str());
+				LogInfo("Link request to %s timeout.\n", mlink.cs.c_str());
 				mlink.state = ELinkState::unlinked;
 			}
 			else
@@ -363,7 +363,7 @@ void CM17Gateway::ProcessGateway()
 						mlink.state = ELinkState::linked;
 						makeCSData(mlink.cs, "destination.dat");
 						addMessage("repeater is_linked_to destination");
-						LogInfo("Connected to %s", mlink.cs.c_str());
+						LogInfo("Connected to %s at %s", mlink.cs.c_str(), mlink.addr.GetAddress());
 						mlink.receivePingTimer.start();
 					}
 					else if (0 == memcmp(buf, "NACK", 4))
@@ -378,7 +378,7 @@ void CM17Gateway::ProcessGateway()
 					else if (0 == memcmp(buf, "DISC", 4))
 					{
 						addMessage("repeater is_unlinked");
-						LogInfo("Disconnected from %s", mlink.cs.c_str());
+						LogInfo("Disconnected from %s at %s", mlink.cs.c_str(), mlink.addr.GetAddress());
 						mlink.addr.Clear(); // initiated with UNLINK, so don't try to reconnect
 						mlink.cs.Clear();   // ^^^^^^^^^ ^^^^ ^^^^^^
 						mlink.state = ELinkState::unlinked;
@@ -490,7 +490,7 @@ void CM17Gateway::ProcessHost()
 					switch (mlink.state)
 					{
 					case ELinkState::linked:
-						if (dest == mlink.cs) // is the destination the linked reflector?
+						if (dest == mlink.cs or strstr(dest.c_str(), "PARROT")) // is the destination the linked reflector?
 						{
 							sendPacket2Dest(Frame);
 						}
@@ -551,6 +551,7 @@ void CM17Gateway::sendLinkRequest()
 	thisCS.CodeOut(mlink.pongPacket.cscode);
 	// send the link request
 	sendPacket(conn.magic, 11, mlink.addr);
+	LogMessage("Link request sent to %s at %s on port %u", mlink.cs.c_str(), mlink.addr.GetAddress(), mlink.addr.GetPort());
 	// finish up
 	lastLinkSent.start();
 	mlink.state = ELinkState::linking;

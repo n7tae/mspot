@@ -110,6 +110,7 @@ void CM17Gateway::doUnlink(std::unique_ptr<SIPFrame> &Frame)
 		memcpy(disc.magic, "DISC", 4);
 		thisCS.CodeOut(disc.cscode);
 		sendPacket(disc.magic, 10, mlink.addr);
+		LogInfo("DISConnect packet sent to %s", mlink.cs.c_str());
 		// the gateway proccess loop will disconnect when is receives the confirming DISC packet.
 	}
 }

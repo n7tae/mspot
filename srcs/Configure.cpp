@@ -490,7 +490,7 @@ bool CConfigure::ReadData(const std::string &path)
 		const auto path = GetString(g_Keys.gateway.section, g_Keys.gateway.myHostPath);
 		checkPath(g_Keys.gateway.section, g_Keys.gateway.myHostPath, path, std::filesystem::file_type::regular);
 	}
-	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.allowNotTranscoded, rval);
+	//isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.allowNotTranscoded, rval);
 	if (isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.audioFolder, rval))
 	{
 		const auto path = GetString(g_Keys.gateway.section, g_Keys.gateway.audioFolder);
