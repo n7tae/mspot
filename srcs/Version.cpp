@@ -28,9 +28,6 @@ void CVersion::mkstring()
 	std::stringstream ss;
 	ss << unsigned(maj) << '.' << unsigned(min) << '.' << unsigned(rev);
 	vstr.assign(ss.str());
-#ifndef NO_DHT
-	vstr.append("-dht");
-#endif
 }
 
 CVersion::CVersion(const CVersion &v) : maj(v.GetMajor()), min(v.GetMinor()), rev(v.GetRevision())
