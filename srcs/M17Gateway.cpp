@@ -516,7 +516,7 @@ void CM17Gateway::ProcessHost()
 						break;
 					case ELinkState::unlinked:
 						wait4end(Frame);
-						if (setDestination(dest))
+						if (not setDestination(dest))
 						{
 							mlink.state = ELinkState::linking;
 						}
@@ -714,11 +714,12 @@ bool CM17Gateway::setDestination(const std::string &callsign)
 	return setDestination(cs);
 }
 
+// returns true on error
 bool CM17Gateway::setDestination(const CCallsign &cs)
 {
 	if (not g_Cfg.IsDestination(cs.c_str()))
 	{
-		LogWarning("%s is not a proper destination connecting destination", cs.c_str());
+		LogWarning("%s is not a proper destination", cs.c_str());
 		return true;
 	}
 

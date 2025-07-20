@@ -92,7 +92,9 @@ private:
 	void sendPacket2Dest(std::unique_ptr<SIPFrame> &frame);
 	void ProcessHost();
 	void sendLinkRequest();
+	// returns true on error
 	bool setDestination(const std::string &cs);
+	// returns true on error
 	bool setDestination(const   CCallsign &cs);
 	void Dump(const char *title, const void *pointer, int length);
 	void addMessage(const std::string &message);
