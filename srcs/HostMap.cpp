@@ -67,14 +67,14 @@ CHostMap::~CHostMap()
 	baseMap.clear();
 }
 
-const SHost *CHostMap::Find(const std::string &cs) const
+const std::shared_ptr<SHost> CHostMap::Find(const std::string &cs) const
 {
 	std::string base;
 	if (getBase(cs, base))
 		return nullptr;
 	auto bit = baseMap.find(base);
 	if (bit != baseMap.end())
-		return &bit->second;
+		return bit->second;
 	return nullptr;
 }
 
@@ -92,40 +92,36 @@ bool CHostMap::getBase(const std::string &cs, std::string &base) const
 	return false;
 }
 
-void CHostMap::Update(const std::string &cs, const std::string &version, const std::string &dn, const std::string &ip4, const std::string &ip6, const std::string &mods, const std::string &smods, const uint16_t port, const std::string &src, const std::string &url)
+void CHostMap::Add(const std::string &cs, const std::string &version, const std::string &dn, const std::string &ip4, const std::string &ip6, const std::string &mods, const std::string &smods, const uint16_t port, const std::string &src, const std::string &url)
 {
 	std::string base;
 	if (getBase(cs, base))
 		return;
 
+	auto host = std::make_shared<SHost>();
 
-
-	auto host = &baseMap[base];
-	host->cs.assign(base);
+	host->cs.assign(cs);
 	if (ip4.size() and hasIPv4)
 		host->ipv4address.assign(ip4);
-	else
-		host->ipv4address.clear();
-	if (dn.size())
-		host->domainname.assign(dn);
-	else
-		host->domainname.clear();
+
 	if (ip6.size() and hasIPv6)
 		host->ipv6address.assign(ip6);
-	else
-		host->ipv6address.clear();
-	if (mods.size())
-		host->mods.assign(mods);
-	else
-		host->mods.clear();
-	if (smods.size())
-		host->smods.assign(smods);
-	else
-		host->smods.clear();
+
+	host->domainname.assign(dn);
+	host->mods.assign(mods);
+	host->smods.assign(smods);
 	host->port = port;
 	// make sure there is an IP path
 	if (host->ipv4address.empty() and host->ipv6address.empty())
-		baseMap.erase(base);
+	{
+		LogInfo("Host %s doesn't have a compatible IP address", cs.c_str());
+		return;
+	}
+	if (baseMap.end() != baseMap.find(base))
+	{
+		LogInfo("Host %s is being redefined", cs.c_str());
+	}
+	baseMap[base] = host;
 }
 
 void CHostMap::ReadAll()
@@ -135,6 +131,7 @@ void CHostMap::ReadAll()
 	hasIPv6 = g_Cfg.GetBoolean(g_Keys.gateway.section, g_Keys.gateway.ipv6);
 	Read(g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.hostPath));
 	Read(g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.myHostPath));
+	LogInfo("Read %u Hosts", baseMap.size());
 }
 
 void CHostMap::Read(const std::string &path)
@@ -155,7 +152,7 @@ void CHostMap::Read(const std::string &path)
 			if (elem.size() == 9)
 				elem.push_back("");
 			if (elem.size() == 10)
-				Update(elem[0], elem[1], elem[2], elem[3], elem[4], elem[5], elem[6], std::stoul(elem[7]), elem[8], elem[9]);
+				Add(elem[0], elem[1], elem[2], elem[3], elem[4], elem[5], elem[6], std::stoul(elem[7]), elem[8], elem[9]);
 			else
 				LogWarning("Line #%u of %s has %u elements, needs 10 item", count, path.c_str(), elem.size());
 
@@ -164,17 +161,4 @@ void CHostMap::Read(const std::string &path)
 	}
 	else
 		LogWarning("Could not open file '%s'", path.c_str());
-}
-
-const std::list<std::string> CHostMap::GetKeys() const
-{
-	std::list<std::string> keys;
-	for (const auto &pair : baseMap)
-		keys.push_back(pair.first);
-	return keys;
-}
-
-size_t CHostMap::Size() const
-{
-	return baseMap.size();
 }

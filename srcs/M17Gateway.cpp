@@ -716,6 +716,12 @@ bool CM17Gateway::setDestination(const std::string &callsign)
 
 bool CM17Gateway::setDestination(const CCallsign &cs)
 {
+	if (not g_Cfg.IsDestination(cs.c_str()))
+	{
+		LogWarning("%s is not a proper destination connecting destination", cs.c_str());
+		return true;
+	}
+
 	auto phost = destMap.Find(cs.c_str());
 
 	if (phost)

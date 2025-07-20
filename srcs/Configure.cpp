@@ -776,6 +776,11 @@ bool CConfigure::IsString(const std::string &section, const std::string &key) co
 	return false;
 }
 
+bool CConfigure::IsDestination(const std::string &cs) const
+{
+	return std::regex_match(cs, MrefdCS) or std::regex_match(cs, UrfdCS);
+}
+
 #ifdef INICHECK
 
 static void PrintUsage(const char *name)

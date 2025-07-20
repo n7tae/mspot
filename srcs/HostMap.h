@@ -21,14 +21,13 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #pragma once
 
-#include <string>
-#include <map>
-#include <list>
 #include <cstdint>
+#include <string>
+#include <memory>
+#include <map>
 
 struct SHost
 {
-	SHost() {}
 	std::string cs, version, domainname, ipv4address, ipv6address, mods, smods, source, url;
 	uint16_t port;
 };
@@ -38,15 +37,13 @@ class CHostMap
 public:
 	CHostMap();
 	~CHostMap();
-	const SHost *Find(const std::string &cs) const;
-	void Update(const std::string &cs, const std::string &version, const std::string &dn, const std::string &ipv4, const std::string &ipvs, const std::string &mods, const std::string &smods, const uint16_t port, const std::string &src, const std::string &url);
+	const std::shared_ptr<SHost> Find(const std::string &cs) const;
 	void ReadAll();
-	const std::list<std::string> GetKeys() const;
-	size_t Size() const;
 
 private:
+	void Add(const std::string &cs, const std::string &version, const std::string &dn, const std::string &ipv4, const std::string &ipvs, const std::string &mods, const std::string &smods, const uint16_t port, const std::string &src, const std::string &url);
 	void Read(const std::string &file);
 	bool getBase(const std::string &cs, std::string &base) const;
-	std::map<std::string, SHost> baseMap;
+	std::map<std::string, std::shared_ptr<SHost>> baseMap;
 	bool hasIPv4, hasIPv6;
 };

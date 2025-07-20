@@ -32,7 +32,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "CRC.h"
 
 // global defs
-CVersion   g_Version(0, 1, 1);
+CVersion   g_Version(0, 1, 2);
 CConfigure g_Cfg;
 CCRC       g_Crc;
 

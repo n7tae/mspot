@@ -22,6 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #pragma once
 
 #include <nlohmann/json.hpp>
+#include <filesystem>
 #include <cstdint>
 #include <string>
 #include <regex>
@@ -48,6 +49,7 @@ public:
 	int GetInt(const std::string &section, const std::string &key) const;
 	bool GetBoolean(const std::string &section, const std::string &key) const;
 	bool IsString(const std::string &section, const std::string &key) const;
+	bool IsDestination(const std::string &dst) const;
 	const nlohmann::json &GetData() { return data; }
 
 private:

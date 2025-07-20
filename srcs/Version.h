@@ -23,15 +23,16 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <cstdint>
 #include <iostream>
+#include <string>
 
 class CVersion
 {
 public:
 	// constructor
 	CVersion() = delete;
-	CVersion(const CVersion &v) : maj(v.GetMajor()), min(v.GetMinor()), rev(v.GetRevision()) {}
-	CVersion(uint8_t a, uint8_t b, uint16_t c) : maj(a), min(b), rev(c) {}
-	CVersion &operator=(const CVersion &v) { maj=v.maj; min=v.min; rev=v.rev; return *this; }
+	CVersion(const CVersion &v);
+	CVersion(uint8_t a, uint8_t b, uint16_t c);
+	CVersion &operator=(const CVersion &v);
 	~CVersion() {}
 
 	// get
@@ -39,14 +40,16 @@ public:
 	unsigned GetMinor(void) const;
 	unsigned GetRevision(void) const;
 	unsigned GetVersion(void) const;
-	const char *GetString(void) const;
+	const char *c_str(void) const;
 
 	// output
 	friend std::ostream &operator <<(std::ostream &os, const CVersion &v);
 
 
 protected:
+	void mkstring();
 	// data
+	std::string vstr;
 	uint8_t maj, min;
 	uint16_t rev;
 };

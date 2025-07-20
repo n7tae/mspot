@@ -19,9 +19,39 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 */
 
-#include <stdio.h>
+#include <sstream>
 
 #include "Version.h"
+
+void CVersion::mkstring()
+{
+	std::stringstream ss;
+	ss << unsigned(maj) << '.' << unsigned(min) << '.' << unsigned(rev);
+	vstr.assign(ss.str());
+#ifndef NO_DHT
+	vstr.append("-dht");
+#endif
+}
+
+CVersion::CVersion(const CVersion &v) : maj(v.GetMajor()), min(v.GetMinor()), rev(v.GetRevision())
+{
+	mkstring();
+}
+
+CVersion::CVersion(uint8_t a, uint8_t b, uint16_t c) : maj(a), min(b), rev(c)
+{
+	mkstring();
+}
+
+CVersion &CVersion::operator=(const CVersion &v) 
+{
+	maj=v.maj; 
+	min=v.min; 
+	rev=v.rev; 
+	vstr.assign(v.vstr);
+	return *this;
+}
+
 
 unsigned CVersion::GetMajor(void) const
 {
@@ -43,19 +73,14 @@ unsigned CVersion::GetVersion() const
 	return (maj<<24) | (min<<16) | rev;
 }
 
-const char *CVersion::GetString() const
+const char *CVersion::c_str() const
 {
-	static char s[16];
-	sprintf(s, "%u.%u.%u", unsigned(maj), unsigned(min), unsigned(rev));
-	return s;
+	return vstr.c_str();
 }
 
 // output
 std::ostream &operator <<(std::ostream &os, const CVersion &v)
 {
-	os << v.GetMajor() << '.' << v.GetMinor() << '.' << v.GetRevision();
-#ifndef NO_DHT
-	os << "-dht";
-#endif
+	os << v.c_str();
 	return os;
 };

@@ -76,7 +76,7 @@ bool CM17Host::Start()
 	LogInfo(HEADER4);
 	LogInfo(HEADER5);
 
-	LogInfo("MMDVMHost-%s is starting", g_Version.GetString());
+	LogInfo("MMDVMHost-%s is starting", g_Version.c_str());
 	LogInfo("Built %s %s", __TIME__, __DATE__);
 
 	m_duplex = g_Cfg.GetBoolean(g_Keys.repeater.section, g_Keys.repeater.isDuplex);
@@ -160,7 +160,7 @@ bool CM17Host::Start()
 	if (m_m17Gateway->Start())
 		return true;
 
-	LogInfo("M17Host-%s is running", g_Version.GetString());
+	LogInfo("M17Host-%s is running", g_Version.c_str());
 	return false;
 }
 
@@ -270,7 +270,7 @@ void CM17Host::Stop()
 	}
 	m_rssi.reset();
 
-	LogInfo("M17Host-%s has stopped", g_Version.GetString());
+	LogInfo("M17Host-%s has stopped", g_Version.c_str());
 }
 
 bool CM17Host::createModem()
