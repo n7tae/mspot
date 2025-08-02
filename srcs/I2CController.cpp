@@ -84,7 +84,7 @@ int CI2CController::read(unsigned char* buffer, unsigned int length)
 		ssize_t n = ::read(m_fd, buffer + offset, 1U);
 		if (n < 0) {
 			if (errno != EAGAIN) {
-				LogError("Error returned from read(), errno=%d", errno);
+				LogError("IC2 controller read() returned error: %s", strerror(errno));
 				return -1;
 			}
 		}
@@ -109,7 +109,7 @@ int CI2CController::write(const unsigned char* buffer, unsigned int length)
 		ssize_t n = ::write(m_fd, buffer + ptr, 1U);
 		if (n < 0) {
 			if (errno != EAGAIN) {
-				LogError("Error returned from write(), errno=%d", errno);
+				LogError("I2C controller write() returned error: %s", strerror(errno));
 				return -1;
 			}
 		}

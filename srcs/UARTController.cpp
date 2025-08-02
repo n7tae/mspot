@@ -251,7 +251,7 @@ int CUARTController::write(const unsigned char* buffer, unsigned int length)
 			n = ::write(m_fd, buffer + ptr, length - ptr);
 		if (n < 0) {
 			if (errno != EAGAIN) {
-				LogError("Error returned from write(), errno=%d", errno);
+				LogError("UART controller write() returned error: %s", strerror(errno));
 				return -1;
 			}
 		}
