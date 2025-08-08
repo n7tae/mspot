@@ -620,7 +620,7 @@ void CM17Control::writeNetwork()
 			if (encryptionType == M17_ENCRYPTION_TYPE_NONE && encryptionSubType == M17_ENCRYPTION_SUB_TYPE_TEXT) {
 				unsigned char meta[20U];
 				m_netLSF.getMeta(meta);
-				CUtils::dump(1U, "M17, LSF text data fragment", meta, M17_META_LENGTH_BYTES);
+				//CUtils::dump(1U, "M17, LSF text data fragment", meta, M17_META_LENGTH_BYTES);
 
 				m_netTextBits |= meta[0U];
 
