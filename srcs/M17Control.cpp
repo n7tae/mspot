@@ -294,7 +294,7 @@ bool CM17Control::writeModem(unsigned char* data, unsigned int len)
 				if (encryptionType == M17_ENCRYPTION_TYPE_NONE && encryptionSubType == M17_ENCRYPTION_SUB_TYPE_TEXT) {
 					unsigned char meta[20U];
 					m_rfCollectedLSF.getMeta(meta);
-					CUtils::dump(1U, "M17, LSF text data fragment", meta, M17_META_LENGTH_BYTES);
+					//CUtils::dump(1U, "M17, LSF text data fragment", meta, M17_META_LENGTH_BYTES);
 
 					m_rfTextBits |= meta[0U];
 
