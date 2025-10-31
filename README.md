@@ -1,6 +1,6 @@
 # *mspot*
 
-An M17-only hot-spot (or repeater)
+An M17-only hot-spot for MMDVM modems running firmware 1.6.1.
 
 ## Description
 
@@ -11,7 +11,7 @@ This open-source project will build an M17-only repeater or hot-spot for amateur
 - **Minimum executable size**: *mspot* is tiny, especially when you compare it to the multi-mode alternatives.
 - **Excellent reliability**: You'll be the judge of that. Try it and find out.
 
-It should support most any MMDVM-type modem because a significant portion of the project is based on a stripped-down earlyer version of G4KLX Jonathan Naylor's [MMDVMHost](https://github.com/g4klx/MMDVMHost). Unlike MMDVMHost, this project does not support any display device. It also does not support file locking, transparent port, or remote control.
+It should support most any MMDVM-type modem because a significant portion of the project is based on a stripped-down earlier version of G4KLX Jonathan Naylor's [MMDVMHost](https://github.com/g4klx/MMDVMHost). Unlike MMDVMHost, this project does not support any display device. It also does not support file locking, transparent port, or remote control.
 
 This project will build *mspot*, a single executable program that has a built-in M17 gateway that will connect to both M17 reflectors and URF reflectors. The gateway portion of *mspot* is unique. It doesn't use the ubiquitous *time-slice* method characterized by a `clock()` routine, but rather uses a kind of *pass the baton* control scheme.
 
