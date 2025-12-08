@@ -110,6 +110,9 @@ void CHostMap::Add(const std::string &cs, const std::string &version, const std:
 	host->domainname.assign(dn);
 	host->mods.assign(mods);
 	host->smods.assign(smods);
+	host->version.assign(version);
+	host->source.assign(src);
+	host->url.assign(url);
 	host->port = port;
 	// make sure there is an IP path
 	if (host->ipv4address.empty() and host->ipv6address.empty())

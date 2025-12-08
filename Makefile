@@ -2,7 +2,7 @@
 #                                                              #
 #            mspot - An M17-only Hotspot/Repeater              #
 #                                                              #
-#         Copyright (c) 2024 by Thomas A. Early N7TAE          #
+#         Copyright (c) 2025 by Thomas A. Early N7TAE          #
 #                                                              #
 # See the LICENSE file for details about the software license. #
 #                                                              #
@@ -11,12 +11,12 @@
 include mspot.mk
 
 ifeq ($(DEBUG), true)
-CPPFLAGS = -g -ggdb -std=c++17 -Wall -Isrcs
+CPPFLAGS = -g -ggdb -std=c++17 -Wall -Wextra -Werror -Isrcs
 else
-CPPFLAGS  = -g -std=c++17 -Wall -Isrcs
+CPPFLAGS  = -g -std=c++17 -Wall -Wextra -Werror -Isrcs
 endif
 
-LIBS    = -pthread
+LIBS    = -pthread -lgpiod
 
 SRCS = $(wildcard srcs/*.cpp)
 OBJS = $(SRCS:.cpp=.o)
@@ -25,7 +25,7 @@ DEPS = $(SRCS:.cpp=.d)
 all : mspot inicheck
 
 mspot : $(OBJS)
-	$(CXX) $(CPPFLAGS) $(OBJS) $(LIBS) -o $@
+	$(CXX) $(CPPFLAGS) $(OBJS) /usr/local/lib/libm17.a $(LIBS) -o $@
 
 inicheck : srcs/Configure.h srcs/Configure.cpp srcs/JsonKeys.h
 	$(CXX) $(CPPFLAGS) -DINICHECK srcs/Configure.cpp -o $@
@@ -40,7 +40,7 @@ clean :
 	$(RM) mspot inicheck srcs/*.o srcs/*.d
 
 .PHONY : install
-install : mspot.service... mspot
+install : mspot.service mspot
 	### Installing mspot ###
 	cp -f mspot $(BINDIR)
 	cp -f mspot.service /etc/systemd/system/

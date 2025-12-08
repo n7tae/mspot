@@ -85,7 +85,7 @@ void CM17Network::write(const unsigned char* data)
 	Host2Gate.Push(frame);
 }
 
-void CM17Network::clock(unsigned int ms)
+void CM17Network::clock(unsigned int /*ms*/)
 {
 
 	auto Frame = Gate2Host.Pop();
