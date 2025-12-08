@@ -1,8 +1,6 @@
-//   Copyright (C) 2020,2021 by Jonathan Naylor G4KLX
-
 /*
 
-         mspot - an M17-only HotSpot using an MMDVM device
+         mspot - an M17-only HotSpot using an RPi CC1200 hat
             Copyright (C) 2025 Thomas A. Early N7TAE
 
 This program is free software; you can redistribute it and/or modify
@@ -21,39 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 */
 
-#pragma once
+#include "GateState.h"
 
-#include "M17Defines.h"
-#include "RingBuffer.h"
-#include "Timer.h"
-
-#include <random>
-#include <cstdint>
-
-class CM17Network {
-public:
-	CM17Network(bool debug);
-	~CM17Network();
-
-	bool open();
-
-	void enable(bool enabled);
-
-	void write(const unsigned char* data);
-
-	bool read(unsigned char* data);
-
-	void reset();
-
-	void close();
-
-	void clock(unsigned int ms);
-
-private:
-	bool             m_debug;
-	bool             m_enabled;
-	uint16_t         m_outId;
-	uint16_t         m_inId;
-	CRingBuffer<unsigned char> m_buffer;
-	std::mt19937     m_random;
-};
+// the one and only state
+CGateState g_GateState;

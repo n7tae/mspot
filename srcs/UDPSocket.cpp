@@ -1,6 +1,6 @@
 /*
 
-         mspot - an M17-only HotSpot using an MMDVM device
+         mspot - an M17-only HotSpot using an RPi CC1200 hat
             Copyright (C) 2025 Thomas A. Early N7TAE
 
 This program is free software; you can redistribute it and/or modify
@@ -50,7 +50,7 @@ bool CUDPSocket::Open(const CSockAddress &addr)
 
 	if (0 > fcntl(m_fd, F_SETFL, O_NONBLOCK))
 	{
-		LogError("cannon set socket %s to non-blocking", addr.GetAddress());
+		LogError("cannot set socket %s to non-blocking", addr.GetAddress());
 		close(m_fd);
 		m_fd = -1;
 		return true;

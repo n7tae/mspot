@@ -1,6 +1,6 @@
 /*
 
-         mspot - an M17-only HotSpot using an MMDVM device
+         mspot - an M17-only HotSpot using an RPi CC1200 hat
             Copyright (C) 2025 Thomas A. Early N7TAE
 
 This program is free software; you can redistribute it and/or modify
@@ -22,91 +22,31 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <string>
 #include <iostream>
 #include <csignal>
+#include <filesystem>
+#include <thread>
+#include <chrono>
 
 #include <pwd.h>
 
 #include "Version.h"
 #include "Configure.h"
-#include "M17Host.h"
+#include "Gateway.h"
+#include "CC1200.h"
 #include "Log.h"
 #include "CRC.h"
 
 // global defs
-CVersion   g_Version(0, 1, 4);
+CVersion   g_Version(1, 0, 0);
 CConfigure g_Cfg;
 CCRC       g_Crc;
+CGateway   g_Gate;
 
 static int  caught_signal = 0;
 
 static void sigHandler(int signum)
 {
-	std::cout << "Caught signal #" << signum << std::endl;
 	caught_signal = signum;
-}
-
-static bool daemonize()
-{
-	// Create new process
-	pid_t pid = fork();
-	if (pid == -1)
-	{
-		fprintf(stderr, "Couldn't fork() , exiting\n");
-		return true;
-	} else if (pid != 0)
-	{
-		exit(EXIT_SUCCESS);
-	}
-
-	// Create new session and process group
-	if (setsid() == -1)
-	{
-		fprintf(stderr, "Couldn't setsid(), exiting\n");
-		return true;
-	}
-
-	// Set the working directory to the root directory
-	if (chdir("/") == -1)
-	{
-		fprintf(stderr, "Couldn't cd /, exiting\n");
-		return true;
-	}
-
-	// If we are currently root...
-	if (getuid() == 0)
-	{
-		struct passwd* user = ::getpwnam(g_Cfg.GetString(g_Keys.repeater.section, g_Keys.repeater.user).c_str());
-		if (user == NULL)
-		{
-			fprintf(stderr, "Could not get the mmdvm user, exiting\n");
-			return true;
-		}
-
-		uid_t mmdvm_uid = user->pw_uid;
-		gid_t mmdvm_gid = user->pw_gid;
-
-		// Set user and group ID's to mmdvm:mmdvm
-		if (setgid(mmdvm_gid) != 0)
-		{
-			fprintf(stderr, "Could not set mmdvm GID, exiting\n");
-			return true;
-		}
-
-		if (setuid(mmdvm_uid) != 0)
-		{
-			fprintf(stderr, "Could not set mmdvm UID, exiting\n");
-			return true;
-		}
-
-		// Double check it worked (AKA Paranoia)
-		if (setuid(0) != -1)
-		{
-			fprintf(stderr, "It's possible to regain root - something is wrong!, exiting\n");
-			return true;
-		}
-	}
-	close(STDIN_FILENO);
-	close(STDOUT_FILENO);
-	return false;
+	LogInfo("Caught signal %d", signum);
 }
 
 static void usage(const std::string &exename)
@@ -124,6 +64,7 @@ int main(int argc, char** argv)
 		usage(argv[0]);
 		return EXIT_FAILURE;
 	}
+	const std::filesystem::path pp(argv[0]);
 	const std::string arg(argv[1]);
 	if (0 == arg.compare("-v") || 0 == arg.compare("--version"))
 	{
@@ -139,59 +80,58 @@ int main(int argc, char** argv)
 	if (g_Cfg.ReadData(arg))
 		return EXIT_FAILURE;
 
-	auto isDaemon = g_Cfg.GetBoolean(g_Keys.repeater.section, g_Keys.repeater.isDaemon);
-
-	auto ret = g_Log.Open(isDaemon,
-		g_Cfg.GetString(g_Keys.log.section, g_Keys.log.filePath),
-		g_Cfg.GetString(g_Keys.log.section, g_Keys.log.fileName),
-		g_Cfg.GetUnsigned(g_Keys.log.section, g_Keys.log.fileLevel),
-		g_Cfg.GetUnsigned(g_Keys.log.section, g_Keys.log.displayLevel),
-		g_Cfg.GetBoolean(g_Keys.log.section, g_Keys.log.rotate));
-	if (!ret)
+	if (g_Log.Open(g_Cfg.GetString(g_Keys.log.section, g_Keys.log.dashpath), g_Cfg.GetUnsigned(g_Keys.log.section, g_Keys.log.level)))
 	{
-		::fprintf(stderr, "M17Host: unable to open the log file\n");
+		::fprintf(stderr, "ERROR: unable to open the dashboard log file\n");
 		return EXIT_FAILURE;
 	}
 
-	if (isDaemon)
-	{
-		if (daemonize())
-			return EXIT_FAILURE;
-	}
+	LogInfo("This software is for use on amateur radio networks only,");
+	LogInfo("Its use on commercial networks is strictly prohibited.");
+	LogInfo("Copyright(C) 2024,2025 by Thomas A. Early, N7TAE");
 
+	LogInfo("%s-%s is starting", pp.filename().c_str(), g_Version.c_str());
+	LogInfo("Built %s %s", __TIME__, __DATE__);
+
+	g_Gate.SetName(pp.filename());
+	CCC1200 modem;
+	
 	do
 	{
 		caught_signal = 0;
 
-		CM17Host host;
-
-		if (host.Start())
+		if (modem.Start())
 			return EXIT_FAILURE;
+		if (g_Gate.Start())
+		{
+			modem.Stop();
+			return EXIT_FAILURE;
+		}
+		
+		pause();	// wait for a signal
 
-		pause();
+		modem.Stop();
+		g_Gate.Stop();
 
-		host.Stop();
-
-
-		switch (caught_signal) {
-			case 0:
-				break;
+		switch (caught_signal)
+		{
 			case 2:
-				::LogInfo("M17Host exited on receipt of SIGINT");
+				::LogInfo("%s exited on receipt of SIGINT", pp.filename().c_str());
 				break;
 			case 15:
-				::LogInfo("M17Host exited on receipt of SIGTERM");
+				::LogInfo("%s exited on receipt of SIGTERM", pp.filename().c_str());
 				break;
 			case 1:
-				::LogInfo("M17Host is restarting on receipt of SIGHUP");
+				::LogInfo("%s is restarting on receipt of SIGHUP", pp.filename().c_str());
+				std::this_thread::sleep_for(std::chrono::seconds(5));
 				break;
 			default:
-				::LogInfo("M17Host exited on receipt of an unknown signal");
+				::LogInfo("%s exited on receipt of an unknown signal", pp.filename().c_str());
 				break;
 		}
 	} while (caught_signal == SIGHUP);
 
 	g_Log.Close();
 
-	return ret ? EXIT_FAILURE : EXIT_SUCCESS;
+	return EXIT_SUCCESS;
 }

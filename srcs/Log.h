@@ -2,7 +2,7 @@
 
 /*
 
-         mspot - an M17-only HotSpot using an MMDVM device
+         mspot - an M17-only HotSpot using a CC1200 Hat
             Copyright (C) 2025 Thomas A. Early N7TAE
 
 This program is free software; you can redistribute it and/or modify
@@ -26,34 +26,28 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <string>
 #include <time.h>
 
+#define LogDash(fmt, ...)    g_Log.Log(0U, fmt, ##__VA_ARGS__)
 #define	LogDebug(fmt, ...)   g_Log.Log(1U, fmt, ##__VA_ARGS__)
 #define	LogMessage(fmt, ...) g_Log.Log(2U, fmt, ##__VA_ARGS__)
 #define	LogInfo(fmt, ...)    g_Log.Log(3U, fmt, ##__VA_ARGS__)
 #define	LogWarning(fmt, ...) g_Log.Log(4U, fmt, ##__VA_ARGS__)
 #define	LogError(fmt, ...)   g_Log.Log(5U, fmt, ##__VA_ARGS__)
-#define	LogFatal(fmt, ...)   g_Log.Log(6U, fmt, ##__VA_ARGS__)
-#define LogLv(lv, fmt, ...)  g_Log.Log(lv, fmt, ##__VA_ARGS__)
 
 class CLog
 {
 public:
-	CLog() : LEVELS(" DDMIWEF") {}
+	CLog() : LEVELS("-DMIWE") {}
 	~CLog() {}
 	void Log(unsigned level, const char* fmt, ...);
-	bool Open(bool daemon, const std::string &path, const std::string &root, unsigned fl, unsigned dl, bool rotate);
+	bool Open(const std::string &dashpath, unsigned l);
 	void Close();
 
 private:
-	bool logOpen();
-	bool logOpenRotate();
-	bool logOpenNoRotate();
 
 	const std::string LEVELS;
-	unsigned m_displayLevel,m_fileLevel;
-	std::string m_filePath, m_fileRoot;
-	bool m_daemon, m_fileRotate;
+	unsigned m_level;
 
-	FILE* m_fpLog = NULL;
+	FILE *m_fp = nullptr;
 	struct tm m_tm;
 };
 

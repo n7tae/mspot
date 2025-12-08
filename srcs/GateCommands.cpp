@@ -1,6 +1,6 @@
 /*
 
-         mspot - an M17-only HotSpot using an MMDVM device
+         mspot - an M17-only HotSpot using an RPi CC1200 hat
             Copyright (C) 2025 Thomas A. Early N7TAE
 
 This program is free software; you can redistribute it and/or modify
@@ -28,15 +28,17 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "SafePacketQueue.h"
 #include "SteadyTimer.h"
-#include "M17Gateway.h"
+#include "Gateway.h"
 #include "Configure.h"
 #include "CRC.h"
 #include "Log.h"
 
 extern CCRC g_Crc;
 extern CConfigure g_Cfg;
-extern IPFrameFIFO Host2Gate;
-extern IPFrameFIFO Gate2Host;
+extern SFrameFIFO SFrameModem2Gate;
+extern SFrameFIFO SFrameGate2Modem;
+extern PFrameFIFO PFrameModem2Gate;
+extern PFrameFIFO PFrameGate2Modem;
 
 static const std::string m17alphabet(" ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/.");
 
@@ -49,31 +51,32 @@ static const std::string fnames[39]
 	"five",  "six",    "seven",    "eight",   "nine",  "dash",    "slash",    "dot"
 };
 
-uint16_t CM17Gateway::makeStreamID()
+uint16_t CGateway::makeStreamID()
 {
 		std::uniform_int_distribution<uint16_t> dist(0x0001, 0xFFFE);
 		return dist(m_random);
 }
 
-void CM17Gateway::wait4end(std::unique_ptr<SIPFrame> &Frame)
+void CGateway::wait4end(std::unique_ptr<CPacket> &Packet)
 {
 	// check the starting packet first
-	if (EOTFNMask & Frame->GetFrameNumber())
+	if (EOTFNMask & Packet->GetFrameNumber())
 		return;
 
 	CSteadyTimer ptime;
 
 	// we're only going to reset the packet timer if subsequent incoming packets have this SID
 	// this is all internal, so we don't need to convert the SID from network byte order.
-	auto streamid = Frame->data.streamid;
+	auto streamid = Packet->GetStreamId();
 
 	while (keep_running)
 	{
-		Frame = Host2Gate.PopWaitFor(100);
-		if (Frame and (Frame->data.streamid == streamid))
+		Packet = Host2Gate.PopWaitFor(100);
+
+		if (Packet and (Packet->GetStreamId() == streamid))
 		{
 			ptime.start();
-			if (0x8000 & Frame->GetFrameNumber())
+			if (0x8000 & Packet->GetFrameNumber())
 				break;
 		}
 		if (ptime.time() > 0.5)
@@ -84,9 +87,9 @@ void CM17Gateway::wait4end(std::unique_ptr<SIPFrame> &Frame)
 	return;
 }
 
-void CM17Gateway::doStatus(std::unique_ptr<SIPFrame> &Frame)
+void CGateway::doStatus(std::unique_ptr<CPacket> &Packet)
 {
-	wait4end(Frame);
+	wait4end(Packet);
 	if (ELinkState::linked == mlink.state)
 		addMessage("repeater is_linked_to destination");
 	else if (ELinkState::linking == mlink.state)
@@ -95,9 +98,9 @@ void CM17Gateway::doStatus(std::unique_ptr<SIPFrame> &Frame)
 		addMessage("repeater is_unlinked");
 }
 
-void CM17Gateway::doUnlink(std::unique_ptr<SIPFrame> &Frame)
+void CGateway::doUnlink(std::unique_ptr<CPacket> &Packet)
 {
-	wait4end(Frame);
+	wait4end(Packet);
 	if (ELinkState::unlinked == mlink.state)
 	{
 		addMessage("repeater is_already_unlinked");
@@ -115,29 +118,29 @@ void CM17Gateway::doUnlink(std::unique_ptr<SIPFrame> &Frame)
 	}
 }
 
-void CM17Gateway::doEcho(std::unique_ptr<SIPFrame> &Frame)
+void CGateway::doEcho(std::unique_ptr<CPacket> &Packet)
 {
-	if (Frame->GetFrameNumber() & 0x8000)
+	if (Packet->GetFrameNumber() & 0x8000)
 	{
 		return;
 	}
-	auto streamID = Frame->data.streamid;
+	auto streamID = Packet->GetStreamId();
 
 	doRecord(' ', streamID);
 }
 
-void CM17Gateway::doRecord(std::unique_ptr<SIPFrame> &Frame)
+void CGateway::doRecord(std::unique_ptr<CPacket> &Packet)
 {
-	if (Frame->GetFrameNumber() & EOTFNMask)
+	if (Packet->GetFrameNumber() & EOTFNMask)
 	{
 		return;
 	}
-	CCallsign dest(Frame->data.lsd.addr_dst);
-	auto streamID = Frame->data.streamid;
+	CCallsign dest(Packet->GetCDstAddress());
+	auto streamID = Packet->GetStreamId();
 	doRecord(dest.GetModule(), streamID);
 }
 
-void CM17Gateway::doRecord(char c, uint16_t streamID)
+void CGateway::doRecord(char c, uint16_t streamID)
 {
 	// record payload in queue
 	using payload = std::array<uint8_t, 16>;
@@ -149,7 +152,7 @@ void CM17Gateway::doRecord(char c, uint16_t streamID)
 		auto frame = Host2Gate.PopWaitFor(100);
 		if (nullptr == frame)
 			continue;
-		if (streamID != frame->data.streamid)
+		if (streamID != frame->GetStreamId())
 			continue;
 		if (timer.time() > 2.0)
 			break;
@@ -157,7 +160,7 @@ void CM17Gateway::doRecord(char c, uint16_t streamID)
 		if (++fn < 3000) // only collect up to 2 minutes
 		{
 			auto newpl = std::make_unique<payload>();
-			memcpy(newpl->data(), frame->data.payload, 16);
+			memcpy(newpl->data(), frame->GetCPayload(), 16);
 			fifo.Push(newpl);
 		}
 		if (frame->GetFrameNumber() & EOTFNMask)
@@ -214,15 +217,15 @@ void CM17Gateway::doRecord(char c, uint16_t streamID)
 	doPlay(c);
 }
 
-void CM17Gateway::doPlay(std::unique_ptr<SIPFrame> &Frame)
+void CGateway::doPlay(std::unique_ptr<CPacket> &Packet)
 {
-	wait4end(Frame);
+	wait4end(Packet);
 	std::this_thread::sleep_for(std::chrono::milliseconds(300));
-	CCallsign dest(Frame->data.lsd.addr_dst);
+	CCallsign dest(Packet->GetCDstAddress());
 	doPlay(dest.GetModule());
 }
 
-void CM17Gateway::doPlay(char c)
+void CGateway::doPlay(char c)
 {
 	// make the file pathname
 	std::filesystem::path pathname(audioPath);
@@ -254,13 +257,13 @@ void CM17Gateway::doPlay(char c)
 	count = count / 16 - 1; // this will be the closing frame number
 
 	// make a frame template
-	SIPFrame master;
-	memcpy(master.data.magic, "M17 ", 4);
-	master.SetStreamID(makeStreamID());
-	memset(master.data.lsd.addr_dst, 0xffu, 6); // set destination to Broadcast
-	thisCS.CodeOut(master.data.lsd.addr_src);
+	CPacket master(true);
+	// memcpy(master.data.magic, "M17 ", 4);
+	master.SetStreamId(makeStreamID());
+	memset(master.GetDstAddress(), 0xffu, 6); // set destination to Broadcast
+	thisCS.CodeOut(master.GetSrcAddress());
 	master.SetFrameType(0x0005 | (can << 7));
-	memset(master.data.lsd.meta, 0, 14);
+	memset(master.GetMetaData(), 0, 14);
 
 	uint16_t fn = 0;
 	std::ifstream ifs(pathname, std::ios::binary);
@@ -269,14 +272,14 @@ void CM17Gateway::doPlay(char c)
 	{
 		while (fn < count)
 		{
-			auto frame = std::make_unique<SIPFrame>();
-			memcpy(frame->data.magic, master.data.magic, IPFRAMESIZE);
-			ifs.read((char *)(frame->data.payload), 16);
+			auto frame = std::make_unique<CPacket>(true);
+			memcpy(frame->GetData()+4, master.GetCData()+4, IPFRAMESIZE-4);
+			ifs.read((char *)(frame->GetPayload()), 16);
 			frame->SetFrameNumber((fn < count) ? fn++ : fn++ & EOTFNMask);
-			g_Crc.setCRC(frame->data.magic, IPFRAMESIZE);
+			frame->CalcCRC();
 			clock = clock + std::chrono::milliseconds(40);
 			std::this_thread::sleep_until(clock);
-			Gate2Host.Push(frame);
+			SFGate2Modem.Push(frame);
 		}
 		ifs.close();
 	}

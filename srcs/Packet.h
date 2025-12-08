@@ -1,6 +1,6 @@
 /*
 
-         mspot - an M17-only HotSpot using an MMDVM device
+         mspot - an M17-only HotSpot using an RPi CC1200 hat
             Copyright (C) 2025 Thomas A. Early N7TAE
 
 This program is free software; you can redistribute it and/or modify
@@ -22,49 +22,65 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #pragma once
 
 #include <cstdint>
+#include <string.h>
+#include <memory>
 
-#include <arpa/inet.h>
+#include "Callsign.h"
 
-#define IPFRAMESIZE 54
-
-// M17 Packet
-
-using SLSD = struct __attribute__((__packed__)) lsd_tag
-{
-	uint8_t  addr_dst[6]; //48 bit int - you'll have to assemble it yourself unfortunately
-	uint8_t  addr_src[6];
-	uint16_t frametype;   //frametype flag field per the M17 spec
-	uint8_t  meta[14];    //meta data (IVs and GNSS)
-}; // 6 + 6 + 2 + 14 = 28 bytes = 224 bits
-
-// the one and only frame
-using SFrame = struct __attribute__((__packed__)) frame_tag
-{
-	uint8_t  magic[4];
-	uint16_t streamid;
-	SLSD     lsd;
-	uint16_t framenumber;
-	uint8_t  payload[16];
-	uint16_t crc;
-}; // 4 + 2 + 28 + 2 + 16 + 2 = 54 bytes = 432 bits
-
-using SIPFrame = struct ipframe_tag
-{
-	SFrame data;
-	uint16_t GetCRC        (void) const        { return ntohs(data.crc);            }
-	uint16_t GetFrameNumber(void) const        { return ntohs(data.framenumber);    }
-	uint16_t GetFrameType  (void) const        { return ntohs(data.lsd.frametype);  }
-	uint16_t GetStreamID   (void) const        { return ntohs(data.streamid);       }
-	void     SetCRC        (const uint16_t cr) { data.crc            = htons(cr);   }
-	void     SetFrameNumber(const uint16_t fn) { data.framenumber    = htons(fn);   }
-	void     SetFrameType  (const uint16_t ft) { data.lsd.frametype = htons(ft);    }
-	void     SetStreamID   (const uint16_t id) { data.streamid       = htons(id);   }
-}; // also 54 bytes
-
-// reflector packet for linking, unlinking, pinging, etc
-using SM17RefPacket = struct __attribute__((__packed__)) reflector_tag
-{
+using SM17RefPacket = struct __attribute__((__packed__)) reflector_tag {
 	char magic[4];
 	uint8_t cscode[6];
 	char mod;
 }; // 11 bytes (but sometimes 4 or 10 bytes)
+
+#define MAX_PACKET_SIZE 859
+
+enum class EPacketType { none, stream, packet };
+
+class CPacket
+{
+public:
+	bool Validate(uint8_t *in, unsigned length);
+	void Initialize(EPacketType t, unsigned length, uint8_t *data);
+	// get pointer to different parts
+	      uint8_t *GetData()        { return data; }
+	const uint8_t *GetCData() const { return data; }
+		  uint8_t *GetDstAddress();
+	const uint8_t *GetCDstAddress() const;
+	      uint8_t *GetSrcAddress();
+	const uint8_t *GetCSrcAddress() const;
+	      uint8_t *GetMetaData();
+	const uint8_t *GetCMetaData() const;
+          uint8_t *GetPayload(bool firsthalf = true);
+	const uint8_t *GetCPayload(bool firsthalf = true) const;
+
+	// get various 16 bit value in host byte order
+	uint16_t GetStreamId()    const;
+	uint16_t GetFrameType()   const;
+	uint16_t GetFrameNumber() const;
+	uint16_t GetCRC(bool first = true) const;
+
+	// set 16 bit values in network byte order
+	void SetStreamId(uint16_t sid);
+	void SetFrameType(uint16_t ft);
+	void SetFrameNumber(uint16_t fn);
+
+	// get the state data
+	size_t          GetSize() const { return size; }
+	EPacketType     GetType() const { return type; }
+	bool       IsLastPacket() const;
+	bool           CheckCRC() const;
+
+	// set state data 
+	void SetSize(size_t n) { size = n; }
+
+	// calculate and set CRC value(s)
+	void CalcCRC();
+
+private:
+	uint16_t get16At(size_t pos) const;
+	void set16At(size_t pos, uint16_t val);
+	EPacketType type;
+	size_t size;
+	uint8_t *data;
+};

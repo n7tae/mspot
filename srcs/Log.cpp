@@ -2,7 +2,7 @@
 
 /*
 
-         mspot - an M17-only HotSpot using an MMDVM device
+         mspot - an M17-only HotSpot using a CC1200 Hat
             Copyright (C) 2025 Thomas A. Early N7TAE
 
 This program is free software; you can redistribute it and/or modify
@@ -30,107 +30,43 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <ctime>
 #include <cassert>
 #include <cstring>
+#include <signal.h>
 
 #include "Log.h"
 
 // the one and only global object
 CLog g_Log;
 
-bool CLog::logOpenRotate()
+bool CLog::Open(const std::string &dashpath, unsigned l)
 {
-	bool status = false;
+	if (l > 6U) l = 6U;
+	m_level = l;
 
-	if (m_fileLevel == 0U)
+	if (dashpath.empty())
 		return true;
 
-	time_t now;
-	time(&now);
-
-	struct tm* tm = ::gmtime(&now);
-
-	if (tm->tm_mday == m_tm.tm_mday && tm->tm_mon == m_tm.tm_mon && tm->tm_year == m_tm.tm_year) {
-		if (m_fpLog != NULL)
-		    return true;
-	} else {
-		if (m_fpLog != NULL)
-			::fclose(m_fpLog);
-	}
-
-	char filename[200U];
-	sprintf(filename, "%s/%s-%04d-%02d-%02d.log", m_filePath.c_str(), m_fileRoot.c_str(), tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday);
-
-	if ((m_fpLog = fopen(filename, "a+t")) != NULL) {
-		status = true;
-
-		if (m_daemon)
-			dup2(fileno(m_fpLog), fileno(stderr));
-	}
-
-	m_tm = *tm;
-
-	return status;
-}
-
-bool CLog::logOpenNoRotate()
-{
-	bool status = false;
-
-	if (m_fileLevel == 0U)
+	m_fp = ::fopen(dashpath.c_str(), "a+t");
+	if (nullptr == m_fp)
+	{
+		fprintf(stderr, "Couldn't open %s: %s", dashpath.c_str(), strerror(errno));
 		return true;
-
-	if (m_fpLog != NULL)
-		return true;
-
-	char filename[200U];
-	sprintf(filename, "%s/%s.log", m_filePath.c_str(), m_fileRoot.c_str());
-
-	if ((m_fpLog = ::fopen(filename, "a+t")) != NULL) {
-		status = true;
-
-		if (m_daemon)
-			dup2(fileno(m_fpLog), fileno(stderr));
 	}
-
-	return status;
-}
-
-bool CLog::logOpen()
-{
-	if (m_fileRotate)
-		return logOpenRotate();
-	else
-		return logOpenNoRotate();
-}
-
-bool CLog::Open(bool d, const std::string &path, const std::string &root, unsigned fl, unsigned dl, bool r)
-{
-	m_filePath     = path;
-	m_fileRoot     = root;
-	m_fileLevel    = fl;
-	m_displayLevel = dl;
-	m_daemon       = d;
-	m_fileRotate   = r;
-
-	if (m_daemon)
-		m_displayLevel = 0U;
-
-	return logOpen();
+	return false;
 }
 
 void CLog::Close()
 {
-	if (m_fpLog != NULL)
-		fclose(m_fpLog);
-	m_fpLog = NULL;
+	if (m_fp != nullptr)
+		fclose(m_fp);
+	m_fp = nullptr;
 }
 
-void CLog::Log(unsigned level, const char* fmt, ...)
+void CLog::Log(unsigned level, const char *fmt, ...)
 {
-	assert(fmt != NULL);
-
+	assert(fmt != nullptr);
 	char buffer[501U];
 	struct timeval now;
-	gettimeofday(&now, NULL);
+	gettimeofday(&now, nullptr);
 
 	struct tm* tm = ::localtime(&now.tv_sec);
 
@@ -139,29 +75,18 @@ void CLog::Log(unsigned level, const char* fmt, ...)
 	va_list vl;
 	va_start(vl, fmt);
 
-	::vsnprintf(buffer + ::strlen(buffer), 500, fmt, vl);
+	vsnprintf(buffer + ::strlen(buffer), 500, fmt, vl);
 
 	va_end(vl);
 
-	if (level >= m_fileLevel && m_fileLevel != 0U)
+	if (0 == level)
 	{
-		bool ret = logOpen();
-		if (!ret)
-			return;
-
-		::fprintf(m_fpLog, "%s\n", buffer);
-		::fflush(m_fpLog);
+		fprintf(m_fp, "%s\n", buffer);
+		fflush(m_fp);
 	}
-
-	if (level >= m_displayLevel && m_displayLevel != 0U)
+	else if (m_level and level >= m_level)
 	{
-		::fprintf(stdout, "%s\n", buffer);
-		::fflush(stdout);
-	}
-
-	if (level == 6U)
-	{		// Fatal
-		::fclose(m_fpLog);
-		exit(1);
+		fprintf(stdout, "%s\n", buffer);
+		fflush(stdout);
 	}
 }

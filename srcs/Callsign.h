@@ -1,6 +1,6 @@
 /*
 
-         mspot - an M17-only HotSpot using an MMDVM device
+         mspot - an M17-only HotSpot using an RPi CC1200 hat
             Copyright (C) 2025 Thomas A. Early N7TAE
 
 This program is free software; you can redistribute it and/or modify
@@ -44,6 +44,7 @@ public:
 	bool operator!=(const CCallsign &rhs) const;
 	char GetModule(void) const;
 	void SetModule(char m);
+	bool IsReflector(void) const;
 private:
 	uint64_t coded;
 	char cs[10];	// big enough to hold a 9-char callsign with a trailling NULL

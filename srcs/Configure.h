@@ -1,6 +1,6 @@
 /*
 
-         mspot - an M17-only HotSpot using an MMDVM device
+         mspot - an M17-only HotSpot using an RPi CC1200 hat
             Copyright (C) 2025 Thomas A. Early N7TAE
 
 This program is free software; you can redistribute it and/or modify
@@ -32,7 +32,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 extern SJsonKeys g_Keys;
 
 enum class ErrorLevel { fatal, mild };
-enum class ESection { none, repeater, log, modem, cwid, gateway };
+enum class ESection { none, repeater, log, modem, gateway };
 
 #define IS_TRUE(a) ((a)=='t' || (a)=='T' || (a)=='1')
 
@@ -41,7 +41,7 @@ class CConfigure
 public:
 	CConfigure();
 	bool ReadData(const std::string &path);
-	bool Contains(const std::string &key) const;
+	bool Contains(const std::string &section, const std::string &key) const;
 	void Dump(bool justpublic) const;
 	std::string GetString(const std::string &section, const std::string &key) const;
 	float GetFloat(const std::string &section, const std::string &key) const;

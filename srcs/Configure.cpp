@@ -1,6 +1,6 @@
 /*
 
-         mspot - an M17-only HotSpot using an MMDVM device
+         mspot - an M17-only HotSpot using an RPi CC1200 hat
             Copyright (C) 2025 Thomas A. Early N7TAE
 
 This program is free software; you can redistribute it and/or modify
@@ -114,8 +114,6 @@ bool CConfigure::ReadData(const std::string &path)
 				section = ESection::repeater;
 			else if (0 == hname.compare(g_Keys.log.section))
 				section = ESection::log;
-			else if (0 == hname.compare(g_Keys.cwid.section))
-				section = ESection::cwid;
 			else if (0 == hname.compare(g_Keys.modem.section))
 				section = ESection::modem;
 			else if (0 == hname.compare(g_Keys.gateway.section))
@@ -157,115 +155,52 @@ bool CConfigure::ReadData(const std::string &path)
 			case ESection::repeater:
 				if (0 == key.compare(g_Keys.repeater.callsign))
 					data[g_Keys.repeater.section][g_Keys.repeater.callsign] = value;
-				else if (0 == key.compare(g_Keys.repeater.can))
-					data[g_Keys.repeater.section][g_Keys.repeater.can] = getUnsigned(value, "Channel Access Number", 0u, 15u, 0u);
-				else if (0 == key.compare(g_Keys.repeater.timeOut))
-					data[g_Keys.repeater.section][g_Keys.repeater.timeOut] = getUnsigned(value, "RF and Net timeouts", 50u, 500u, 180u);
-				else if (0 == key.compare(g_Keys.repeater.isDaemon))
-					data[g_Keys.repeater.section][g_Keys.repeater.isDaemon] = IS_TRUE(value[0]);
-				else if (0 == key.compare(g_Keys.repeater.isDuplex))
-					data[g_Keys.repeater.section][g_Keys.repeater.isDuplex] = IS_TRUE(value[0]);
-				else if (0 == key.compare(g_Keys.repeater.allowEncrypt))
-					data[g_Keys.repeater.section][g_Keys.repeater.allowEncrypt] = IS_TRUE(value[0]);
-				else if (0 == key.compare(g_Keys.repeater.isprivate))
-					data[g_Keys.repeater.section][g_Keys.repeater.isprivate] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.repeater.module))
 					data[g_Keys.repeater.section][g_Keys.repeater.module] = value;
-				else if (0 == key.compare(g_Keys.repeater.user))
-					data[g_Keys.repeater.section][g_Keys.repeater.user] = value;
+				else if (0 == key.compare(g_Keys.repeater.can))
+					data[g_Keys.repeater.section][g_Keys.repeater.can] = getUnsigned(value, "Channel Access Number", 0u, 15u, 0u);
+				else if (0 == key.compare(g_Keys.repeater.txframetype))
+					data[g_Keys.repeater.section][g_Keys.repeater.txframetype] = IS_TRUE(value[0]);
+				else if (0 == key.compare(g_Keys.repeater.isprivate))
+					data[g_Keys.repeater.section][g_Keys.repeater.isprivate] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.repeater.debug))
 					data[g_Keys.repeater.section][g_Keys.repeater.debug] = IS_TRUE(value[0]);
 				else
 					badParam(g_Keys.repeater.section, key);
 				break;
 			case ESection::modem:
-				if (0 == key.compare(g_Keys.modem.protocol))
-					data[g_Keys.modem.section][g_Keys.modem.protocol] = value;
-
-				else if (0 == key.compare(g_Keys.modem.uartPort))
-					data[g_Keys.modem.section][g_Keys.modem.uartPort] = value;
+				if      (0 == key.compare(g_Keys.modem.gpiochipDevice))
+					data[g_Keys.modem.section][g_Keys.modem.gpiochipDevice] = value;
+				else if (0 == key.compare(g_Keys.modem.uartDevice))
+					data[g_Keys.modem.section][g_Keys.modem.uartDevice] = value;
 				else if (0 == key.compare(g_Keys.modem.uartSpeed))
 					data[g_Keys.modem.section][g_Keys.modem.uartSpeed] = getUnsigned(value, "Uart Speed", 38400u, 921600u, 460800u);
-
-				else if (0 == key.compare(g_Keys.modem.i2cAddress))
-					data[g_Keys.modem.section][g_Keys.modem.i2cAddress] = getUnsigned(value, "I2CAddress", 0x0u, 0xffu, 0x22u);
-				else if (0 == key.compare(g_Keys.modem.i2cPort))
-					data[g_Keys.modem.section][g_Keys.modem.i2cPort] = value;
-
-				else if (0 == key.compare(g_Keys.modem.localAddress))
-					data[g_Keys.modem.section][g_Keys.modem.localAddress] = value;
-				else if (0 == key.compare(g_Keys.modem.localPort))
-					data[g_Keys.modem.section][g_Keys.modem.localPort] = getUnsigned(value, "UDP Local Port", 1025u, 49000u, 3335u);
-				else if (0 == key.compare(g_Keys.modem.modemAddress))
-					data[g_Keys.modem.section][g_Keys.modem.modemAddress] = value;
-				else if (0 == key.compare(g_Keys.modem.modemPort))
-					data[g_Keys.modem.section][g_Keys.modem.modemPort] = getUnsigned(value, "UDP Modem Port", 1025u, 49000u, 3334u);
-
-				else if (0 == key.compare(g_Keys.modem.txHang))
-					data[g_Keys.modem.section][g_Keys.modem.txHang] = getUnsigned(value, "Transmit Hang ms 0-255", 0u, 255u, 5u);
-				else if (0 == key.compare(g_Keys.modem.txDelay))
-					data[g_Keys.modem.section][g_Keys.modem.txDelay] = getUnsigned(value, "Transmit Delay (in 10ms units)", 1u, 255u, 10u);
-				else if (0 == key.compare(g_Keys.modem.pttInvert))
-					data[g_Keys.modem.section][g_Keys.modem.pttInvert] = IS_TRUE(value[0]);
-				else if (0 == key.compare(g_Keys.modem.rxInvert))
-					data[g_Keys.modem.section][g_Keys.modem.rxInvert] = IS_TRUE(value[0]);
-				else if (0 == key.compare(g_Keys.modem.txInvert))
-					data[g_Keys.modem.section][g_Keys.modem.txInvert] = IS_TRUE(value[0]);
-
+				else if (0 == key.compare(g_Keys.modem.boot0))
+					data[g_Keys.modem.section][g_Keys.modem.boot0] = getUnsigned(value, "BOOT0 Pin", 0, 54, 20);
+				else if (0 == key.compare(g_Keys.modem.nrst))
+					data[g_Keys.modem.section][g_Keys.modem.nrst] = getUnsigned(value, "nRST Pin", 0, 54, 21);
 				else if (0 == key.compare(g_Keys.modem.rxFreq))
+
 					data[g_Keys.modem.section][g_Keys.modem.rxFreq] = getUnsigned(value, "Receive Frequency", 130000000u, 1000000000u, 446500000u);
 				else if (0 == key.compare(g_Keys.modem.txFreq))
 					data[g_Keys.modem.section][g_Keys.modem.txFreq] = getUnsigned(value, "Transmit Frequency", 130000000u, 1000000000u, 446500000u);
 
-				else if (0 == key.compare(g_Keys.modem.rxOffset))
-					data[g_Keys.modem.section][g_Keys.modem.rxOffset] = getInt(value, "Receive Offset (Hz)", -1000000, 1000000, 0);
-				else if (0 == key.compare(g_Keys.modem.txOffset))
-					data[g_Keys.modem.section][g_Keys.modem.txOffset] = getInt(value, "Transmit Offset (Hz)", -1000000, 1000000, 0);
-
-				else if (0 == key.compare(g_Keys.modem.rfLevel))
-					data[g_Keys.modem.section][g_Keys.modem.rfLevel] = getFloat(value, "RF Level 0 - 100%", 0.0f, 100.0f, 50.0f);
-				else if (0 == key.compare(g_Keys.modem.rxLevel))
-					data[g_Keys.modem.section][g_Keys.modem.rxLevel] = getFloat(value, "Receive Level  0 - 100%", 0.0f, 100.0f, 50.0f);
-				else if (0 == key.compare(g_Keys.modem.txLevel))
-					data[g_Keys.modem.section][g_Keys.modem.txLevel] = getFloat(value, "Transmit Level  0 - 100%", 0.0f, 100.0f, 50.0f);
-				else if (0 == key.compare(g_Keys.modem.cwLevel))
-					data[g_Keys.modem.section][g_Keys.modem.cwLevel] = getFloat(value, "CW Transmit Level  0 - 100%", 0.0f, 100.0f, 50.0f);
-
-				else if (0 == key.compare(g_Keys.modem.rxDCOffset))
-					data[g_Keys.modem.section][g_Keys.modem.rxDCOffset] = getInt(value, "Receive DC Offset -128-127", -128, 127, 0);
-				else if (0 == key.compare(g_Keys.modem.txDCOffset))
-					data[g_Keys.modem.section][g_Keys.modem.txDCOffset] = getInt(value, "Transmit DC Offset -128-127", -128, 127, 0);
-
-				else if (0 == key.compare(g_Keys.modem.rssiMapFile))
-					data[g_Keys.modem.section][g_Keys.modem.rssiMapFile] = value;
-				else if (0 == key.compare(g_Keys.modem.trace))
-					data[g_Keys.modem.section][g_Keys.modem.trace] = IS_TRUE(value[0]);
+				else if (0 == key.compare(g_Keys.modem.afc))
+					data[g_Keys.modem.section][g_Keys.modem.afc] = IS_TRUE(value[0]);
+				else if (0 == key.compare(g_Keys.modem.freqCorr))
+					data[g_Keys.modem.section][g_Keys.modem.freqCorr] = getInt(value, "Receive Offset (Hz)", -32768, 32767, 0);
+				else if (0 == key.compare(g_Keys.modem.txPower))
+					data[g_Keys.modem.section][g_Keys.modem.txPower] = getFloat(value, "Transmit Power (dBm)", -20.0f, 10.0f, 10.0f);
 				else if (0 == key.compare(g_Keys.modem.debug))
 					data[g_Keys.modem.section][g_Keys.modem.debug] = IS_TRUE(value[0]);
 				else
 					badParam(g_Keys.modem.section, key);
 				break;
-			case ESection::cwid:
-				if (0 == key.compare(g_Keys.cwid.enable))
-					data[g_Keys.cwid.section][g_Keys.cwid.enable] = IS_TRUE(value[0]);
-				else if (0 == key.compare(g_Keys.cwid.time))
-					data[g_Keys.cwid.section][g_Keys.cwid.time] = getUnsigned(value, "CW Id Time", 0, 100, 10);
-				else if (0 == key.compare(g_Keys.cwid.message))
-					data[g_Keys.cwid.section][g_Keys.cwid.message] = value;
-				else
-					badParam(g_Keys.cwid.section, key);
-				break;
 			case ESection::log:
-				if (0 == key.compare(g_Keys.log.displayLevel))
-					data[g_Keys.log.section][g_Keys.log.displayLevel] = getUnsigned(value, "Display Level 0-6", 0u, 6u, 2u);
-				else if (0 == key.compare(g_Keys.log.fileLevel))
-					data[g_Keys.log.section][g_Keys.log.fileLevel] = getUnsigned(value, "File Level 0-6", 0u, 6u, 2u);
-				else if (0 == key.compare(g_Keys.log.fileName))
-					data[g_Keys.log.section][g_Keys.log.fileName] = value;
-				else if (0 == key.compare(g_Keys.log.filePath))
-					data[g_Keys.log.section][g_Keys.log.filePath] = value;
-				else if (0 == key.compare(g_Keys.log.rotate))
-					data[g_Keys.log.section][g_Keys.log.rotate] = IS_TRUE(value[0]);
+				if (0 == key.compare(g_Keys.log.level))
+					data[g_Keys.log.section][g_Keys.log.level] = getUnsigned(value, "Display Level 0-6", 0u, 6u, 3u);
+				else if (0 == key.compare(g_Keys.log.dashpath))
+					data[g_Keys.log.section][g_Keys.log.dashpath] = value;
 				else
 					badParam(g_Keys.log.section, key);
 				break;
@@ -326,146 +261,51 @@ bool CConfigure::ReadData(const std::string &path)
 		}
 		data[g_Keys.repeater.section][g_Keys.repeater.module] = std::string(1, mod);
 	}
-	if (isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.isDaemon, rval))
-	{
-		if (isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.user, rval))
-		{
-			const auto user = GetString(g_Keys.repeater.section, g_Keys.repeater.user);
-			struct passwd *pwitem = getpwnam(user.c_str());
-			if (nullptr == pwitem)
-			{
-				std::cerr << "ERROR: user '" << user << "' was not found in the user db" << std::endl;
-				rval = true;
-			}
-		}
-	}
-	isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.isDuplex,     rval);
-	isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.timeOut,      rval);
 	isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.can,          rval);
+	isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.txframetype,  rval);
 	isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.isprivate,    rval);
-	isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.allowEncrypt, rval);
 	isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.debug,        rval);
 
 	// Modem section
-	if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.protocol, rval))
+	if (not data[g_Keys.modem.section].contains(g_Keys.modem.boot0))
+		data[g_Keys.modem.section][g_Keys.modem.boot0] = 20u;
+	if (not data[g_Keys.modem.section].contains(g_Keys.modem.nrst))
+		data[g_Keys.modem.section][g_Keys.modem.boot0] = 21u;
+	if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.uartDevice, rval))
 	{
-		const auto protocol = GetString(g_Keys.modem.section, g_Keys.modem.protocol);
-		if (0 == protocol.compare("uart"))
+		const auto path = GetString(g_Keys.modem.section, g_Keys.modem.uartDevice);
+		checkPath(g_Keys.modem.section, g_Keys.modem.uartDevice, path, std::filesystem::file_type::character);
+	}
+	if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.uartSpeed, rval))
+	{
+		const auto speed = GetUnsigned(g_Keys.modem.section, g_Keys.modem.uartSpeed);
+		switch (speed)
 		{
-			if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.uartPort, rval))
-			{
-				const auto path = GetString(g_Keys.modem.section, g_Keys.modem.uartPort);
-				checkPath(g_Keys.modem.section, g_Keys.modem.uartPort, path, std::filesystem::file_type::character);
-			}
-			if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.uartSpeed, rval))
-			{
-				const auto speed = GetUnsigned(g_Keys.modem.section, g_Keys.modem.uartSpeed);
-				switch (speed)
-				{
-					case 38400u:
-					case 57600u:
-					case 115200u:
-					case 230400u:
-					case 460800u:
-					case 921600u:
-						break;
-					default:
-						std::cerr << "Uart Speed of " << speed << " is not acceptable" << std::endl;
-						rval = true;
-				}
-			}
-		}
-		else if (0 == protocol.compare("udp"))
-		{
-			if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.localAddress, rval))
-			{
-				const auto addr = GetString(g_Keys.modem.section, g_Keys.modem.localAddress);
-				if (not(std::regex_match(addr, IPv4RegEx)) and not(std::regex_match(addr, IPv6RegEx)))
-				{
-					std::cerr << "ERROR: [" << g_Keys.modem.section << "]" << g_Keys.modem.localAddress << " does not look like an internet address" << std::endl;
-					rval = true;
-				}
-			}
-			isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.localPort, rval);
-
-			if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.modemAddress, rval))
-			{
-				const auto addr = GetString(g_Keys.modem.section, g_Keys.modem.modemAddress);
-				if (not(std::regex_match(addr, IPv4RegEx)) and not(std::regex_match(addr, IPv6RegEx)))
-				{
-					std::cerr << "ERROR: [" << g_Keys.modem.section << "]" << g_Keys.modem.modemAddress << " does not look like an internet address" << std::endl;
-					rval = true;
-				}
-			}
-			isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.localPort, rval);
-		}
-		else if (0 == protocol.compare("i2c"))
-		{
-			if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.i2cAddress, rval))
-			{
-				const auto path = GetString(g_Keys.modem.section, g_Keys.modem.i2cAddress);
-				checkPath(g_Keys.modem.section, g_Keys.modem.i2cAddress, path, std::filesystem::file_type::character);
-			}
-			isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.i2cPort, rval);
-		}
-		else if (0 == protocol.compare("null"))
-		{
-			;
-		}
-		else
-		{
-			std::cerr << "ERROR: Unknown Protocol '" << protocol << "'" << std::endl;
-			rval = true;
+			case 38400u:
+			case 57600u:
+			case 115200u:
+			case 230400u:
+			case 460800u:
+			case 921600u:
+				break;
+			default:
+				std::cerr << "Uart Speed of " << speed << " is not acceptable" << std::endl;
+				rval = true;
 		}
 	}
-	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.txHang,     rval);
-	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.txDelay,    rval);
-	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.pttInvert,  rval);
-	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.rxInvert,   rval);
-	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.txInvert,   rval);
-
-	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.rxFreq,     rval);
-	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.txFreq,     rval);
-
-	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.rxOffset,   rval);
-	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.txOffset,   rval);
-
-	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.rfLevel,    rval);
-	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.rxLevel,    rval);
-	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.txLevel,    rval);
-	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.cwLevel,    rval);
-
-	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.rxDCOffset, rval);
-	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.txDCOffset, rval);
-
-	if (Contains(g_Keys.modem.rssiMapFile))
-	{
-		const auto path = GetString(g_Keys.modem.section, g_Keys.modem.rssiMapFile);
-		checkPath(g_Keys.modem.section, g_Keys.modem.rssiMapFile, path, std::filesystem::file_type::regular);
-	}
-	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.trace, rval);
-	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.debug, rval);
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.rxFreq,   rval);
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.txFreq,   rval);
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.afc,      rval);
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.freqCorr, rval);
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.txPower,  rval);
+	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.debug,    rval);
 
 	// Log section
-	isDefined(ErrorLevel::fatal, g_Keys.log.section, g_Keys.log.displayLevel, rval);
-	isDefined(ErrorLevel::fatal, g_Keys.log.section, g_Keys.log.fileLevel,    rval);
-	isDefined(ErrorLevel::fatal, g_Keys.log.section, g_Keys.log.fileName,     rval);
-	if(isDefined(ErrorLevel::fatal, g_Keys.log.section, g_Keys.log.filePath,  rval))
+	isDefined(ErrorLevel::fatal, g_Keys.log.section, g_Keys.log.level, rval);
+	if (isDefined(ErrorLevel::fatal, g_Keys.log.section, g_Keys.log.dashpath, rval))
 	{
-		const std::string path = GetString(g_Keys.log.section, g_Keys.log.filePath);
-		checkPath(g_Keys.log.section, g_Keys.log.filePath, path, std::filesystem::file_type::directory);
-	}
-	isDefined(ErrorLevel::fatal, g_Keys.log.section, g_Keys.log.rotate,       rval);
-
-	// CW Id section
-	if (isDefined(ErrorLevel::fatal, g_Keys.cwid.section, g_Keys.cwid.enable, rval))
-	{
-		if (GetBoolean(g_Keys.cwid.section, g_Keys.cwid.enable))
-		{
-			isDefined(ErrorLevel::fatal, g_Keys.cwid.section, g_Keys.cwid.time, rval);
-			if (not IsString(g_Keys.cwid.section, g_Keys.cwid.message))
-				data[g_Keys.cwid.section][g_Keys.cwid.message] = std::string();
-		}
+		const auto path = GetString(g_Keys.log.section, g_Keys.log.dashpath);
+		checkPath(g_Keys.log.section, g_Keys.log.dashpath, path, std::filesystem::file_type::regular);
 	}
 
 	// Gateway section
@@ -626,7 +466,7 @@ void CConfigure::checkPath(const std::string &section, const std::string &key, c
 		switch(rtype)
 		{
 		case std::filesystem::file_type::block:
-			std::cout << "a block device";
+			std::cout << "is a block device";
 			break;
 		case std::filesystem::file_type::directory:
 			std::cout << "is a directory";
@@ -668,9 +508,9 @@ void CConfigure::Dump(bool justpublic) const
 	std::cout << tmpjson.dump(4) << std::endl;
 }
 
-bool CConfigure::Contains(const std::string &key) const
+bool CConfigure::Contains(const std::string &section, const std::string &key) const
 {
-	return data.contains(key);
+	return data.contains(section) and data[section].contains(key);
 }
 
 std::string CConfigure::GetString(const std::string &section, const std::string &key) const

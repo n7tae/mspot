@@ -1,6 +1,6 @@
 /*
 
-         mspot - an M17-only HotSpot using an MMDVM device
+         mspot - an M17-only HotSpot using an RPi CC1200 hat
             Copyright (C) 2025 Thomas A. Early N7TAE
 
 This program is free software; you can redistribute it and/or modify
@@ -27,8 +27,8 @@ class CCRC
 {
 public:
 	CCRC();
-	void setCRC(uint8_t *data, unsigned size);
-	bool checkCRC(const uint8_t *data, unsigned size) const;
+	void SetCRC(uint8_t *data, unsigned size);
+	bool CheckCRC(const uint8_t *data, unsigned size) const;
 
 private:
 	uint16_t crc_tab16[256];

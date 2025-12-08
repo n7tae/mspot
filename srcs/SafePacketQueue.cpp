@@ -1,6 +1,6 @@
 /*
 
-         mspot - an M17-only HotSpot using an MMDVM device
+         mspot - an M17-only HotSpot using an RPi CC1200 hat
             Copyright (C) 2025 Thomas A. Early N7TAE
 
 This program is free software; you can redistribute it and/or modify
@@ -21,8 +21,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
  #include <memory>
 
  #include "SafePacketQueue.h"
- #include "Packet.h"
 
 // global packet FIFO queues
-IPFrameFIFO Host2Gate;
-IPFrameFIFO Gate2Host;
+SFrameFIFO SFrameModem2Gate;
+SFrameFIFO SFrameGate2Modem;
+
+PFrameFIFO PFrameModem2Gate;
+PFrameFIFO PFrameGate2Modem;

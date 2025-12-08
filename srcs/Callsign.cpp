@@ -1,6 +1,6 @@
 /*
 
-         mspot - an M17-only HotSpot using an MMDVM device
+         mspot - an M17-only HotSpot using an RPi CC1200 hat
             Copyright (C) 2025 Thomas A. Early N7TAE
 
 This program is free software; you can redistribute it and/or modify
@@ -56,7 +56,7 @@ void CCallsign::Clear()
 void CCallsign::CSIn(const std::string &callsign)
 {
 	Clear();
-	if(0 == callsign.find("@ALL"))
+	if (0 == callsign.find("@ALL"))
 	{
 		strcpy(cs, "@ALL");
 		coded = 0xffffffffffffu;
@@ -68,7 +68,7 @@ void CCallsign::CSIn(const std::string &callsign)
 
 	// 'skip' will be used to delay encoding until a char with pos > 0 is found;
 	bool skip = true;
-	for(int i=8; i>=0; i--) // processing the cs  backwards, from the end to the beginning
+	for (int i=8; i>=0; i--) // processing the cs  backwards, from the end to the beginning
 	{
 		while (0 == cs[i])
 			i--; // skip traling nulls
@@ -191,4 +191,9 @@ void CCallsign::SetModule(char m)
 	call.resize(8, ' ');
 	call.append(1, m);
 	CSIn(call);
+}
+
+bool CCallsign::IsReflector() const
+{
+	return (0 == memcmp(cs, "M17-", 4)) or (0 == memcmp(cs, "URF", 3));
 }

@@ -1,6 +1,6 @@
 /*
 
-         mspot - an M17-only HotSpot using an MMDVM device
+         mspot - an M17-only HotSpot using an RPi CC1200 hat
             Copyright (C) 2025 Thomas A. Early N7TAE
 
 This program is free software; you can redistribute it and/or modify
@@ -34,13 +34,14 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "Configure.h"
 #include "UDPSocket.h"
 #include "Callsign.h"
-#include "GateState.h"
 #include "Packet.h"
 #include "HostMap.h"
 #include "Stream.h"
 
 enum class ELinkState { unlinked, linking, linked };
 enum class EInternetType { ipv4only, ipv6only, both };
+
+#define IPFRAMESIZE 54
 
 using SM17Link = struct sm17link_tag
 {
@@ -59,38 +60,41 @@ using SMessageTask = struct message_tag
 	std::atomic<bool> isDone;
 };
 
-class CM17Gateway
+class CGateway
 {
 public:
-	CM17Gateway() : EOTFNMask(0x8000u) {}
 	bool Start();
 	void Stop();
+	void SetName(const std::string &name) { progName.assign(name); }
+	const CCallsign &GetLink() { return mlink.cs; }
+	const std::string &GetName() { return progName; }
 
 private:
-	const uint16_t EOTFNMask;
+	std::string progName;
 	CCallsign thisCS;
 	uint16_t can;
+	bool txTypeIsV3;
 	std::string audioPath;
 	EInternetType internetType;
 	std::atomic<bool> keep_running;
 	CUDPSocket ipv4, ipv6;
 	SM17Link mlink;
 	CSteadyTimer linkingTime, lastLinkSent;
-	CStream gateStream, hostStream;
+	CStream gateStream, modemStream;
 	std::mutex stateLock;
 	CSockAddress from17k;
 	std::future<void> gateFuture, hostFuture;
-	CGateState gateState;
 	CHostMap destMap;
 	std::mt19937 m_random;
 	std::queue<std::string> voiceQueue;
 	std::unique_ptr<SMessageTask> msgTask;
+	std::map<uint16_t, std::unique_ptr<SuperFrame>> streamSFMap;
 
 	void ProcessGateway();
 	void sendPacket(const void *buf, const size_t size, const CSockAddress &addr) const;
-	void sendPacket2Host(const uint8_t *buf);
-	void sendPacket2Dest(std::unique_ptr<SIPFrame> &frame);
-	void ProcessHost();
+	void IPPacket2Superframe(CPacket &pack);
+	void sendPacket2Dest(std::unique_ptr<SuperFrame> packet);
+	void ProcessModem();
 	void sendLinkRequest();
 	// returns true on error
 	bool setDestination(const std::string &cs);
@@ -103,12 +107,12 @@ private:
 
 	// for executing rf based commands!
 	uint16_t makeStreamID();
-	void doUnlink(std::unique_ptr<SIPFrame> &);
-	void doEcho(std::unique_ptr<SIPFrame> &);
-	void doRecord(std::unique_ptr<SIPFrame> &);
+	void doUnlink(std::unique_ptr<SuperFrame> &);
+	void doEcho(std::unique_ptr<SuperFrame> &);
+	void doRecord(std::unique_ptr<SuperFrame> &);
 	void doRecord(char, uint16_t);
-	void doPlay(std::unique_ptr<SIPFrame> &);
+	void doPlay(std::unique_ptr<SuperFrame> &);
 	void doPlay(char c);
-	void doStatus(std::unique_ptr<SIPFrame> &);
-	void wait4end(std::unique_ptr<SIPFrame> &);
+	void doStatus(std::unique_ptr<SuperFrame> &);
+	void wait4end(std::unique_ptr<SuperFrame> &);
 };

@@ -1,6 +1,6 @@
 /*
 
-         mspot - an M17-only HotSpot using an MMDVM device
+         mspot - an M17-only HotSpot using an RPi CC1200 hat
             Copyright (C) 2025 Thomas A. Early N7TAE
 
 This program is free software; you can redistribute it and/or modify
@@ -26,7 +26,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <condition_variable>
 #include <memory>
 
-#include "Packet.h"
+#include "SuperFrame.h"
 
 template <class T>
 class CSafePacketQueue
@@ -95,4 +95,5 @@ private:
 	std::condition_variable c;
 };
 
-using IPFrameFIFO = CSafePacketQueue<std::unique_ptr<SIPFrame>>;
+using SFrameFIFO  = CSafePacketQueue<std::unique_ptr<SuperFrame>>;
+using PFrameFIFO  = CSafePacketQueue<std::unique_ptr<PacketFrame>>;

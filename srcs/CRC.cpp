@@ -1,6 +1,6 @@
 /*
 
-         mspot - an M17-only HotSpot using an MMDVM device
+         mspot - an M17-only HotSpot using an RPi CC1200 hat
             Copyright (C) 2025 Thomas A. Early N7TAE
 
 This program is free software; you can redistribute it and/or modify
@@ -23,6 +23,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 
 #include "CRC.h"
 
@@ -49,19 +50,21 @@ CCRC::CCRC()
 	}
 }
 
-void CCRC::setCRC(uint8_t *data, unsigned size)
+void CCRC::SetCRC(uint8_t *data, unsigned size)
 {
+	assert(size > 1u);
 	auto crc = calcCRC(data, size);
 	data[size-2] = crc/0x100u;
 	data[size-1] = crc%0x100u;
 }
 
-bool CCRC::checkCRC(const uint8_t *data, unsigned size) const
+// returns true if the CRC is NOT valid
+bool CCRC::CheckCRC(const uint8_t *data, unsigned size) const
 {
-	auto crc = calcCRC(data, size);
-	return crc == uint16_t(0x100u * unsigned(data[size-2]) + unsigned(data[size-1]));
+	return 0u != calcCRC(data, size + 2);
 }
 
+// calculates the 16-bt CRC for the first size-2 bytes
 uint16_t CCRC::calcCRC(const uint8_t *data, unsigned size) const
 {
 	uint16_t crc = CRC_START_16;

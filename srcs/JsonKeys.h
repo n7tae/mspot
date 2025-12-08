@@ -1,6 +1,6 @@
 /*
 
-         mspot - an M17-only HotSpot using an MMDVM device
+         mspot - an M17-only HotSpot using an RPi CC1200 hat
             Copyright (C) 2025 Thomas A. Early N7TAE
 
 This program is free software; you can redistribute it and/or modify
@@ -29,38 +29,29 @@ struct SJsonKeys
 {
 	struct Repeater
 	{
-		const std::string section, callsign, module, timeOut, isDuplex, isDaemon, allowEncrypt, user, can, isprivate, debug;
+		const std::string section, callsign, module, can, txframetype, isprivate, debug;
 	}
 	repeater
 	{
-		"Repeater", "Callsign", "Module", "Timeout", "IsDuplex", "IsDaemon", "AllowEncrypt", "UserName", "CAN", "IsPrivate", "Debug"
+		"Repeater", "Callsign", "Module", "CAN", "TxFrameTYPEv3", "IsPrivate", "Debug"
 	};
 
 	struct LOG
 	{
-		const std::string section, displayLevel, fileLevel, filePath, fileName, rotate;
+		const std::string section, level, dashpath;
 	}
 	log
 	{
-		"Log", "DisplayLevel", "FileLevel", "FilePath", "FileName", "FileRotate"
-	};
-
-	struct CWID
-	{
-		const std::string section, enable, time, message;
-	}
-	cwid
-	{
-		"CW Id", "Enable", "Time", "Message"
+		"Log", "Level", "DashboardPath"
 	};
 
 	struct MODEM
 	{
-		const std::string section, protocol, uartPort, uartSpeed, i2cPort, i2cAddress, modemAddress, modemPort, localAddress, localPort, rxFreq, txFreq, rxOffset, txOffset, rxDCOffset, txDCOffset, rxInvert, txInvert, pttInvert, txHang, txDelay, txLevel, rxLevel, rfLevel, cwLevel, rssiMapFile, trace, debug;
+		const std::string section, gpiochipDevice, uartDevice, uartSpeed, boot0, nrst, rxFreq, txFreq, afc, freqCorr, txPower, debug;
 	}
 	modem
 	{
-		"Modem", "Protocol", "UartPort", "UartSpeed", "I2CPort", "I2CAddress", "ModemAddress", "ModemPort", "LocalAddress", "LocalPort", "RXFrequency", "TXFrequency", "RXOffset", "TXOffset", "RXDCOffset", "TXDCOffset", "RXInvert", "TXInvert", "PTTInvert", "TXHang", "TXDelay", "TXLevel", "RXLevel", "RFLevel", "CWLevel", "RssiMapFilePath", "Trace", "Debug"
+		"Modem", "GpioChipDevice", "UartDevice", "UartSpeed", "BOOT0", "nRST", "RXFrequency", "TXFrequency", "AFC", "FreqCorrection", "TXPower", "Debug"
 	};
 
 	struct GATEWAY
