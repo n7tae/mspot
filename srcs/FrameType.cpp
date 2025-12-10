@@ -20,18 +20,18 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include <cassert>
-#include "SuperFrame.h";
+#include "FrameType.h";
 
 uint16_t CFrameType::GetFrameType(bool isv3)
 {
 	if (isv3)
 	{
 		if (not m_v3type)
-			BuildV3();
+			buildV3();
 		return m_v3type;
 	} else {
 		if (not m_legacytype)
-			BuildLegacy();
+			buildLegacy();
 		return m_legacytype;
 	}
 }
@@ -182,7 +182,7 @@ void CFrameType::SetFrameType(uint16_t t)
 	}
 }
 
-void CFrameType::BuildLegacy()
+void CFrameType::buildLegacy()
 {
 	// payload type
 	switch (m_payload)
@@ -242,7 +242,7 @@ void CFrameType::BuildLegacy()
 		m_legacytype |= 0x800u;
 }
 
-void CFrameType::BuildV3()
+void CFrameType::buildV3()
 {
 	switch (m_payload)
 	{
@@ -306,54 +306,3 @@ void CFrameType::BuildV3()
 	m_v3type <<= 4;
 	m_v3type |= m_can;
 }
-
-void SuperFrame::AddData(unsigned index, const uint8_t *data)
-{
-	memcpy(payload[index % 6], data, 16);
-	set.set(index);
-}
-
-const uint8_t *SuperFrame::GetFrame(unsigned index) const
-{
-	return payload[index % 6];
-}
-
-static const uint8_t quiet[16] { 0x01u, 0x00u, 0x09u, 0x43u, 0x9Cu, 0xE4u, 0x21u, 0x08u, 0x01u, 0x00u, 0x09u, 0x43u, 0x9Cu, 0xE4u, 0x21u, 0x08u };
-
-void SuperFrame::QuietFill()
-{
-	
-	for (unsigned n=0; n<6; n++)
-	{
-		if (not set[n])
-		{
-			memcpy(payload[n], quiet, 16);
-			set.set(n);
-		}
-	}
-}
-
-bool SuperFrame::IsNotSet() const
-{
-	return not set.all();
-}
-
-void PacketFrame::AddData(unsigned n, const uint8_t *data)
-{
-	assert(0 < n and n < 26);
-	memcpy(payload[payload.size()].data(), data, n);
-	if (n < 25)
-		memset(payload[payload.size()].data()+n, 0, 25-n);
-	plSize += n;
-}
-
-const uint8_t *PacketFrame::GetFrame(unsigned index) const
-{
-	assert(index < 33);
-	return payload[index].data();
-}
-uint16_t PacketFrame::GetSize() const
-{
-	return plSize;
-}
-

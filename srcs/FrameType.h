@@ -23,11 +23,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <cstring>
 #include <cstdint>
-#include <memory>
-#include <bitset>
-#include <vector>
-#include <array>
-#include "LSF.h"
 
 enum class EPayloadType { dataonly, c2_3200, c2_1600, packet };
 enum class EEncryptType { none, scram8, scram16, scram24, aes128, aes192, aes256 };
@@ -36,6 +31,7 @@ enum class EMetaDatType { none, gnss, ecd, text, aes };
 class CFrameType
 {
 public:
+	CFrameType() : m_isSigned(false), m_isV3(false), m_can(0) { buildLegacy(); }
 	void SetFrameType(uint16_t t);
 	uint16_t GetFrameType(bool wantV3);
 	EPayloadType GetPayloadType()  const { return m_payload;  }
@@ -43,10 +39,10 @@ public:
 	EMetaDatType GetMetaDataType() const { return m_metatype; }
 	bool GetIsSigned() const { return m_isSigned; }
 	uint8_t GetCan() const { return m_can; }
-	void SetPayloadType(EPayloadType t) { m_payload = t; }
-	void SetEncryptType(EEncryptType t) { m_encrypt = t; }
-	void SetMetaDataType(EMetaDatType t) { m_metatype = t; }
-	void SetSigned(bool issigned) { m_isSigned = issigned; }
+	void SetPayloadType(EPayloadType t) { m_payload = t; m_isV3 ? buildV3() : buildLegacy(); }
+	void SetEncryptType(EEncryptType t) { m_encrypt = t; m_isV3 ? buildV3() : buildLegacy(); }
+	void SetMetaDataType(EMetaDatType t) { m_metatype = t; m_isV3 ? buildV3() : buildLegacy(); }
+	void SetSigned(bool issigned) { m_isSigned = issigned; m_isV3 ? buildV3() : buildLegacy(); }
 	void SetCan(uint8_t can) { m_can = can;}
 
 private:
@@ -57,40 +53,6 @@ private:
 	EMetaDatType m_metatype;
 	uint16_t m_legacytype, m_v3type;
 
-	void BuildLegacy();
-	void BuildV3();
-};
-
-struct BaseFrame
-{
-	SLSF lsf;
-	CFrameType ft;
-	virtual void AddData(unsigned index, const uint8_t *data) = 0;
-	virtual const uint8_t *GetFrame(unsigned index) const = 0;
-	virtual ~BaseFrame() {}
-};
-
-struct SuperFrame : public BaseFrame
-{
-	uint16_t superFN;
-	void AddData(unsigned index, const uint8_t *data);
-	const uint8_t *GetFrame(unsigned index) const;
-	bool IsLast() const { return isLast; }
-	void QuietFill();
-	bool IsNotSet() const;
-
-private:
-	uint8_t payload[6][16];
-	bool isLast;
-	std::bitset<6> set;
-};
-
-struct PacketFrame : public BaseFrame
-{
-	void AddData(unsigned size, const uint8_t *data);
-	const uint8_t *GetFrame(unsigned index) const;
-	uint16_t GetSize() const;
-private:
-	uint16_t plSize;
-	std::vector<std::array<uint8_t, 25>> payload;
+	void buildLegacy();
+	void buildV3();
 };

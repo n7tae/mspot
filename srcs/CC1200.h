@@ -19,6 +19,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 */
 
+#pragma once
+
 #include <future>
 
 #include <termios.h>
@@ -31,8 +33,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <m17.h>
 
-#include "Callsign.h"
-#include "Gateway.h"
 #include "Packet.h"
 
 enum class ERxState
@@ -71,17 +71,21 @@ private:
 	uint32_t getMilliseconds(void);
 	bool setIinterface(uint32_t speed, int parity);
 	void loadConfig(void);
-	bool sendPING(void);
-	ssize_t getResponse(void);
-	bool dev_set_freq(unsigned r_or_t, uint32_t freq);
-	bool dev_set_freq_corr(int16_t corr);
-	bool dev_set_afc(bool en);
-	bool dev_set_tx_power(float power);
-	bool dev_start_tx(void);
-	bool dev_start_rx(void);
-	bool dev_stop_rx(void);
-	void writeBSB(int8_t *bsb_samples);
-	void filter_symbols(int8_t out[SYM_PER_FRA*5], const int8_t in[SYM_PER_FRA], const float* flt, uint8_t phase_inv);
+	bool testPING(void);
+	bool readDev(void *buf, int size);
+	void writeDev(void *buf, int size, const char *where);
+	bool setRxFreq(uint32_t freq);
+	bool setTxFreq(uint32_t freq);
+	bool setFreqCorr(int16_t corr);
+	bool setAFC(bool afc);
+	bool setTxPower(float power);
+	bool startTx(void);
+	bool startRx(void);
+	bool stopTx(void);
+	bool stopRx(void);
+	bool txrxControl(uint8_t cmd, uint8_t onORoff, const char *what);
+	void filterSymbols(int8_t *out, const int8_t *in, const float *flt, uint8_t phase_inv);
+
 	struct gpiod_line_request *gpioLineRequest(unsigned int offset, int value, const std::string &consumer);
 	bool gpioSetValue(unsigned offset, int value);
 
@@ -90,10 +94,12 @@ private:
 	std::future<void> runFuture;
 
 	// data
+	volatile bool uartLock; 
 	std::string progName;
 	std::atomic<bool> keep_running;
 	struct gpiod_chip *gpioChip;
 	gpiod_line_request *reqBoot0, *reqNrst;
 	int fd; // for the modem
+	unsigned sfCounter;
 	std::unique_ptr<CPacket> lsfPack;
 };

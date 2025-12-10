@@ -40,10 +40,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 extern CConfigure g_Cfg;
 extern CCRC       g_Crc;
 extern CGateState g_GateState;
-extern SFrameFIFO SFrameModem2Gate;
-extern SFrameFIFO SFrameGate2Modem;
-extern PFrameFIFO PFrameModem2Gate;
-extern PFrameFIFO PFrameGate2Modem;
+extern IPFrameFIFO Modem2Gate;
+extern IPFrameFIFO Gate2Modem;
 
 static const uint8_t quiet[] { 0x01u, 0x00u, 0x09u, 0x43u, 0x9Cu, 0xE4u, 0x21u, 0x08u };
 
@@ -456,7 +454,7 @@ void CGateway::ProcessModem()
 	addMessage("welcome repeater");
 	while (keep_running)
 	{
-		auto pFrame = PFrameModem2Gate.Pop();
+		auto pFrame = Modem2Gate.Pop();
 		if (pFrame)
 		{
 			// convert the PacketFrame to IP Packet
@@ -466,7 +464,7 @@ void CGateway::ProcessModem()
 			memcpy(buf, "M17P", 4);
 			CPacket pack;
 			pack.Validate(buf, size);
-			memcpy(pack.GetDstAddress(), pFrame->lsf.GetCDstAddress(), 30);
+			memcpy(pack.GetDstAddress(), pFrame->GetCDstAddress(), 30);
 			for (unsigned i=0; remaining; i++) {
 				auto count = (remaining > 24u) ? 25 : remaining;
 				memcpy(pack.GetPayload()+(25u * i), pFrame->GetFrame(i), count);

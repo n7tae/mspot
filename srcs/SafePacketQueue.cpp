@@ -23,8 +23,5 @@ with this program; if not, write to the Free Software Foundation, Inc.,
  #include "SafePacketQueue.h"
 
 // global packet FIFO queues
-SFrameFIFO SFrameModem2Gate;
-SFrameFIFO SFrameGate2Modem;
-
-PFrameFIFO PFrameModem2Gate;
-PFrameFIFO PFrameGate2Modem;
+IPFrameFIFO Modem2Gate;
+IPFrameFIFO Gate2Modem;

@@ -26,7 +26,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <condition_variable>
 #include <memory>
 
-#include "SuperFrame.h"
+#include "Packet.h"
 
 template <class T>
 class CSafePacketQueue
@@ -95,5 +95,4 @@ private:
 	std::condition_variable c;
 };
 
-using SFrameFIFO  = CSafePacketQueue<std::unique_ptr<SuperFrame>>;
-using PFrameFIFO  = CSafePacketQueue<std::unique_ptr<PacketFrame>>;
+using IPFrameFIFO  = CSafePacketQueue<std::unique_ptr<CPacket>>;

@@ -24,8 +24,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <cstdint>
 #include <string.h>
 #include <memory>
+#include <vector>
 
 #include "Callsign.h"
+#include "FrameType.h"
 
 using SM17RefPacket = struct __attribute__((__packed__)) reflector_tag {
 	char magic[4];
@@ -40,11 +42,11 @@ enum class EPacketType { none, stream, packet };
 class CPacket
 {
 public:
-	bool Validate(uint8_t *in, unsigned length);
-	void Initialize(EPacketType t, unsigned length, uint8_t *data);
+	EPacketType Validate(uint8_t *in, unsigned length);
+	void Initialize(EPacketType t, unsigned length = 54);
 	// get pointer to different parts
-	      uint8_t *GetData()        { return data; }
-	const uint8_t *GetCData() const { return data; }
+	      uint8_t *GetData()        { return data.data(); }
+	const uint8_t *GetCData() const { return data.data(); }
 		  uint8_t *GetDstAddress();
 	const uint8_t *GetCDstAddress() const;
 	      uint8_t *GetSrcAddress();
@@ -66,21 +68,21 @@ public:
 	void SetFrameNumber(uint16_t fn);
 
 	// get the state data
-	size_t          GetSize() const { return size; }
-	EPacketType     GetType() const { return type; }
+	size_t          GetSize() const { return data.size(); }
+	EPacketType     GetType() const { return ptype; }
 	bool       IsLastPacket() const;
 	bool           CheckCRC() const;
-
-	// set state data 
-	void SetSize(size_t n) { size = n; }
 
 	// calculate and set CRC value(s)
 	void CalcCRC();
 
+	// TYPE helper
+	CFrameType TYPE;
+
 private:
 	uint16_t get16At(size_t pos) const;
 	void set16At(size_t pos, uint16_t val);
-	EPacketType type;
-	size_t size;
-	uint8_t *data;
+
+	EPacketType ptype;
+	std::vector<uint8_t> data;
 };

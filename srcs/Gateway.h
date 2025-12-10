@@ -88,12 +88,11 @@ private:
 	std::mt19937 m_random;
 	std::queue<std::string> voiceQueue;
 	std::unique_ptr<SMessageTask> msgTask;
-	std::map<uint16_t, std::unique_ptr<SuperFrame>> streamSFMap;
 
 	void ProcessGateway();
 	void sendPacket(const void *buf, const size_t size, const CSockAddress &addr) const;
 	void IPPacket2Superframe(CPacket &pack);
-	void sendPacket2Dest(std::unique_ptr<SuperFrame> packet);
+	void sendPacket2Dest(std::unique_ptr<CPacket> packet);
 	void ProcessModem();
 	void sendLinkRequest();
 	// returns true on error
@@ -107,12 +106,12 @@ private:
 
 	// for executing rf based commands!
 	uint16_t makeStreamID();
-	void doUnlink(std::unique_ptr<SuperFrame> &);
-	void doEcho(std::unique_ptr<SuperFrame> &);
-	void doRecord(std::unique_ptr<SuperFrame> &);
+	void doUnlink(std::unique_ptr<CPacket> &);
+	void doEcho(std::unique_ptr<CPacket> &);
+	void doRecord(std::unique_ptr<CPacket> &);
 	void doRecord(char, uint16_t);
-	void doPlay(std::unique_ptr<SuperFrame> &);
+	void doPlay(std::unique_ptr<CPacket> &);
 	void doPlay(char c);
-	void doStatus(std::unique_ptr<SuperFrame> &);
-	void wait4end(std::unique_ptr<SuperFrame> &);
+	void doStatus(std::unique_ptr<CPacket> &);
+	void wait4end(std::unique_ptr<CPacket> &);
 };
