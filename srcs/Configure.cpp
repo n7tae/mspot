@@ -159,8 +159,8 @@ bool CConfigure::ReadData(const std::string &path)
 					data[g_Keys.repeater.section][g_Keys.repeater.module] = value;
 				else if (0 == key.compare(g_Keys.repeater.can))
 					data[g_Keys.repeater.section][g_Keys.repeater.can] = getUnsigned(value, "Channel Access Number", 0u, 15u, 0u);
-				else if (0 == key.compare(g_Keys.repeater.txframetype))
-					data[g_Keys.repeater.section][g_Keys.repeater.txframetype] = IS_TRUE(value[0]);
+				else if (0 == key.compare(g_Keys.repeater.radioTypeIsV3))
+					data[g_Keys.repeater.section][g_Keys.repeater.radioTypeIsV3] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.repeater.isprivate))
 					data[g_Keys.repeater.section][g_Keys.repeater.isprivate] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.repeater.debug))
@@ -262,7 +262,7 @@ bool CConfigure::ReadData(const std::string &path)
 		data[g_Keys.repeater.section][g_Keys.repeater.module] = std::string(1, mod);
 	}
 	isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.can,          rval);
-	isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.txframetype,  rval);
+	isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.radioTypeIsV3,rval);
 	isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.isprivate,    rval);
 	isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.debug,        rval);
 
@@ -614,11 +614,6 @@ bool CConfigure::IsString(const std::string &section, const std::string &key) co
 		return data[section][key].is_string();
 	}
 	return false;
-}
-
-bool CConfigure::IsDestination(const std::string &cs) const
-{
-	return std::regex_match(cs, MrefdCS) or std::regex_match(cs, UrfdCS);
 }
 
 #ifdef INICHECK

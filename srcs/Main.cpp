@@ -110,8 +110,8 @@ int main(int argc, char** argv)
 		
 		pause();	// wait for a signal
 
-		modem.Stop();
 		g_Gate.Stop();
+		modem.Stop();
 
 		switch (caught_signal)
 		{

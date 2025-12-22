@@ -1,6 +1,6 @@
 /*
 
-         mspot - an M17-only HotSpot using an RPi CC1200 hat
+         mspot - an M17-only HotSpot using an MMDVM device
             Copyright (C) 2025 Thomas A. Early N7TAE
 
 This program is free software; you can redistribute it and/or modify
@@ -31,15 +31,19 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <map>
 
 #include "SafePacketQueue.h"
-#include "Gateway.h"
+#include "FrameType.h"
 #include "Configure.h"
+#include "GateState.h"
+#include "Gateway.h"
+#include "Random.h"
 #include "CRC.h"
 #include "Log.h"
-#include "GateState.h"
 
 extern CConfigure g_Cfg;
 extern CCRC       g_Crc;
+extern CRandom    g_RNG;
 extern CGateState g_GateState;
+
 extern IPFrameFIFO Modem2Gate;
 extern IPFrameFIFO Gate2Modem;
 
@@ -123,7 +127,6 @@ constexpr uint64_t CalcCSCode(const char *cs)
 
 void CGateway::Stop()
 {
-	LogInfo ("Shutting down the Gateway");
 	keep_running = false;
 	if (gateFuture.valid())
 		gateFuture.get();
@@ -188,9 +191,8 @@ bool CGateway::Start()
 	}
 
 	can = g_Cfg.GetUnsigned(g_Keys.repeater.section, g_Keys.repeater.can);
-	LogInfo("CAN = %u", can);
-	txTypeIsV3 = g_Cfg.GetUnsigned(g_Keys.repeater.section, g_Keys.repeater.txframetype);
-	LogInfo("Transmissions will use %s TYPE format", txTypeIsV3 ? "Spec V#3" : "Legacy");
+	radioTypeIsV3 = g_Cfg.GetBoolean(g_Keys.repeater.section, g_Keys.repeater.radioTypeIsV3);
+	LogInfo("Radio is using %s TYPE values", radioTypeIsV3 ? "V#3" : "Legacy");
 
 	mlink.state = ELinkState::unlinked;
 	keep_running = true;
@@ -219,11 +221,13 @@ bool CGateway::Start()
 	hostFuture = std::async(std::launch::async, &CGateway::ProcessModem, this);
 	if (not hostFuture.valid())
 	{
-		LogError("Could not start the ProcessHost() thread");
+		LogError("Could not start the ProcessModem() thread");
 		keep_running = false;
 		return true;
 	}
 
+	std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+	addMessage("welcome repeater");
 	return false;
 }
 
@@ -266,10 +270,13 @@ void CGateway::ProcessGateway()
 			}
 			break;
 		case ELinkState::unlinked:
-			if (not mlink.addr.AddressIsZero() and mlink.cs.IsReflector())
+			if (not mlink.addr.AddressIsZero())
 			{
-				sendLinkRequest();
-				linkingTime.start();
+				if (mlink.isReflector)
+				{
+					sendLinkRequest();
+					linkingTime.start();
+				}
 			}
 			break;
 		}
@@ -325,7 +332,7 @@ void CGateway::ProcessGateway()
 			return;
 		}
 
-		uint8_t buf[MAX_PACKET_SIZE];
+		uint8_t buf[100];
 		socklen_t fromlen = sizeof(struct sockaddr_storage);
 		int length = 0;
 
@@ -333,12 +340,12 @@ void CGateway::ProcessGateway()
 		{
 			if (pfds[0].revents & POLLIN)
 			{
-				length = recvfrom(pfds[0].fd, buf, MAX_PACKET_SIZE, 0, from17k.GetPointer(), &fromlen);
+				length = recvfrom(pfds[0].fd, buf, 100, 0, from17k.GetPointer(), &fromlen);
 				pfds[0].revents &= ~POLLIN;
 			}
 			else if (pfds[1].revents & POLLIN)
 			{
-				length = recvfrom(pfds[1].fd, buf, MAX_PACKET_SIZE, 0, from17k.GetPointer(), &fromlen);
+				length = recvfrom(pfds[1].fd, buf, 100, 0, from17k.GetPointer(), &fromlen);
 				pfds[1].revents &= ~POLLIN;
 			}
 
@@ -346,15 +353,14 @@ void CGateway::ProcessGateway()
 			{
 				if (pfds[i].revents)
 				{
-					LogError("poll() returned revents %d from IPv%c port", pfds[i].revents, i ? '6' : '4');
+					LogError("poll() returned revents %d from IPv%s port", pfds[i].revents, i ? '6' : '4');
 					return;
 				}
 			}
 		}
 
-		if (length > 0)
+		if (length)
 		{
-			CPacket pack;
 			switch (length)	// process known packets
 			{
 			case 4:  				// DISC, ACKN or NACK
@@ -387,13 +393,12 @@ void CGateway::ProcessGateway()
 					}
 					else
 					{
-						Dump("Invalid packet", buf, length);
+						Dump("Uknown Packet", buf, length);;
 					}
 				}
 				else
 				{
-					LogMessage("Invalid Packet from %s port %u", from17k.GetAddress(), from17k.GetPort());
-					Dump("Inalid 4 byte Packet", buf, length);
+					Dump("Unexpected Packet", buf, length);
 				}
 				break;
 			case 10: 				// PING or DISC
@@ -420,20 +425,25 @@ void CGateway::ProcessGateway()
 					}
 					else
 					{
-						Dump("Inalid 10 byte Packet", buf, length);
+						Dump("Unknown Packet", buf, length);
 					}
 				}
 				break;
 			default:
-				if (pack.Validate(buf, length)) {
-					// It doesn't look like a packet
-					Dump("Invalid Packet", buf, length);
-				} else if (pack.CheckCRC()) {
-					// It has bad CRC(s)
-					Dump("Packet failed CRC", buf, length);
-				} else if (g_GateState.TryState(EGateState::gatein)) {
-					// process it
-					IPPacket2Superframe(pack);
+				auto t = validate(buf, length);
+				if (EPacketType::none == t)
+				{
+					Dump("Unknown Packet", buf, length);
+				} else {
+					auto pack = std::make_unique<CPacket>();
+					pack->Initialize(t, buf, length);
+					if (pack->CheckCRC())
+					{
+						Dump("Incoming Gateway Packet failed CRC check", buf, length);
+						pack.reset();
+					} else {
+						sendPacket2Modem(std::move(pack));
+					}
 				}
 				break;
 			}
@@ -450,101 +460,54 @@ void CGateway::ProcessGateway()
 
 void CGateway::ProcessModem()
 {
-	std::this_thread::sleep_for(std::chrono::seconds(3));
-	addMessage("welcome repeater");
 	while (keep_running)
 	{
-		auto pFrame = Modem2Gate.Pop();
-		if (pFrame)
+		auto pack = Modem2Gate.PopWaitFor(100);
+		if (pack)
 		{
-			// convert the PacketFrame to IP Packet
-			auto remaining = pFrame->GetSize();
-			auto size = remaining + 34u;
-			uint8_t buf[size];
-			memcpy(buf, "M17P", 4);
-			CPacket pack;
-			pack.Validate(buf, size);
-			memcpy(pack.GetDstAddress(), pFrame->GetCDstAddress(), 30);
-			for (unsigned i=0; remaining; i++) {
-				auto count = (remaining > 24u) ? 25 : remaining;
-				memcpy(pack.GetPayload()+(25u * i), pFrame->GetFrame(i), count);
-				remaining -= count;
-			}
-
-			if (pack.CheckCRC()) {
-				Dump("RF Packet Data has at least one bad CRC", pack.GetCData(), size);
-			} else {
-				const CCallsign dst(pack.GetCDstAddress());
-				if (ELinkState::linked == mlink.state) {
-					if ((0==dst.GetCS(4).compare("M17-")) or (0==dst.GetCS(3).compare("URF"))) {
-						if (dst != mlink.cs) {
-							LogError("You can't send PM data to %s because you are linked to %s!", dst.c_str(), mlink.cs.c_str());
-						} else {
-							sendPacket(pack.GetCData(), size, mlink.addr);
-						}
-					} else {
-						sendPacket(pack.GetCData(), size, mlink.addr);
-					}
-				} else if (ELinkState::unlinked == mlink.state) {
-					if ((0==dst.GetCS(4).compare("M17-")) or (0==dst.GetCS(3).compare("URF"))) {
-						LogError("You can't send a PM  data to a %s because you are not linked to it!", dst.c_str());
-					} else if (dst != mlink.cs) {
-						if (setDestination(dst)) {
-							LogError("Could not find and address for %s to send PM data", dst.c_str());
-						} else {
-							sendPacket(pack.GetCData(), size, mlink.addr);
-						}
-					}
-				}
-			}
-			g_GateState.Idle();
-		}
-		auto sFrame = SFrameModem2Gate.PopWaitFor(100);
-		if (sFrame)
-		{
-			const CCallsign dst(sFrame->lsf.GetCDstAddress());
+			const CCallsign dst(pack->GetCDstAddress());
 			switch (dst.GetBase())
 			{
 			case CalcCSCode("E"):
 			case CalcCSCode("ECHO"):
-				doEcho(sFrame);
+				doEcho(pack);
 				g_GateState.Idle();
 				break;
 			case CalcCSCode("I"):
 			case CalcCSCode("STATUS"):
-				doStatus(sFrame);
+				doStatus(pack);
 				g_GateState.Idle();
 				break;
 			case CalcCSCode("U"):
 			case CalcCSCode("UNLINK"):
-				doUnlink(sFrame);
+				doUnlink(pack);
 				g_GateState.Idle();
 				break;
 			case CalcCSCode("RECORD"):
-				doRecord(sFrame);
+				doRecord(pack);
 				g_GateState.Idle();
 				break;
 			case CalcCSCode("PLAY"):
-				doPlay(sFrame);
+				doPlay(pack);
 				g_GateState.Idle();
 				break;
 			default:
 				switch (mlink.state)
 				{
 				case ELinkState::linked:
-					if ((dst == mlink.cs) or (not dst.IsReflector())) { // is the destination the linked reflector?
-						sendPacket2Dest(std::move(sFrame));
-					} else {
+					if (dst != mlink.cs and dst.IsReflector()) // is the destination the linked reflector?
+					{
 						addMessage("repeater is_already_linked");
-						wait4end(sFrame);
+						wait4end(pack);
 						LogWarning("Destination is %s but you are already linked to %s", dst.c_str(), mlink.cs.c_str());
 						g_GateState.Idle();
+					} else {
+						sendPacket2Dest(std::move(pack));
 					}
 					break;
 				case ELinkState::linking:
-					wait4end(sFrame);
-					if ((dst == mlink.cs) or (not dst.IsReflector())) {
-						addMessage("repeater is_linking");
+					wait4end(pack);
+					if (dst == mlink.cs) {
 						LogInfo("%s is not yet linked", dst.c_str());
 					} else {
 						addMessage("repeater is_already_linking");
@@ -553,27 +516,26 @@ void CGateway::ProcessModem()
 					g_GateState.Idle();
 					break;
 				case ELinkState::unlinked:
-					if (not dst.IsReflector()) {
-						if (dst != mlink.cs) {
-							if (setDestination(dst)) {
-								addMessage("link_refused"); // I need to develop a new voice message, "destination not found"
-								wait4end(sFrame);
-								LogWarning("IP address for %s was not found", dst.c_str());
-								g_GateState.Idle();
-							} else {
-								sendPacket2Dest(std::move(sFrame));
-							}
-						} else {
-							sendPacket2Dest(std::move(sFrame));
-						}
-					} else {
-						// here is a linking command
-						wait4end(sFrame);
+					if (dst.IsReflector()) {
+						wait4end(pack);
 						if (not setDestination(dst))
 						{
-							mlink.state = ELinkState::linking;
+							if (mlink.isReflector)
+								mlink.state = ELinkState::linking;
+							else
+								LogInfo("IP Address for %s found: %s", dst.c_str(), mlink.addr.GetAddress());
 						}
 						g_GateState.Idle();
+					} else {
+						if (dst == mlink.cs) {
+							sendPacket2Dest(std::move(pack));
+						} else {
+							wait4end(pack);
+							if (not setDestination(dst))
+							{
+								LogInfo("IP Address for %s found: %s", dst.c_str(), mlink.addr.GetAddress());
+							}
+						}
 					}
 				}
 			}
@@ -592,8 +554,6 @@ void CGateway::ProcessModem()
 
 void CGateway::sendLinkRequest()
 {
-	mlink.from_mod = thisCS.GetModule();
-
 	// make a CONN packet
 	SM17RefPacket conn;
 	memcpy(conn.magic, "CONN", 4);
@@ -610,75 +570,94 @@ void CGateway::sendLinkRequest()
 	mlink.state = ELinkState::linking;
 }
 
-// this also opens and closes the gateStream if the Packet is stream
-void CGateway::IPPacket2Superframe(CPacket &pack)
+// this also opens and closes the gateStream
+void CGateway::sendPacket2Modem(std::unique_ptr<CPacket> pack)
 {
-	static int superFN;
-	static int inetFNstart;
-	// Stream Packet!
-	const auto sid = pack.GetStreamId();
+	if (EPacketType::packet == pack->GetType())
+	{
+		if (g_GateState.TryState(EGateState::gatepacketin))
+			Gate2Modem.Push(pack);
+		else
+		{
+			const CCallsign dst(pack->GetCDstAddress());
+			const CCallsign src(pack->GetCSrcAddress());
+			LogInfo("PM data received from the Gateway, but the system was busy.");
+			LogInfo("SRC = %s, DST = %s", src.c_str(), dst.c_str());
+			if (0x5u == *pack->GetCPayload() and 0 == pack->GetCData()[pack->GetSize()-3])
+				LogInfo("SMS MSG: %s", (const char *)(pack->GetCPayload()+1));
+			else
+				Dump("Non-SMS DATA", pack->GetCPayload(), pack->GetSize()-34);
+		}
+		return;
+	}
+	const auto sid = pack->GetStreamId();
 	if (gateStream.IsOpen())	// is the stream open?
 	{
 		if (gateStream.GetStreamID() == sid)
 		{
 			gateStream.CountnTouch();
-			const auto fn = pack.GetFrameNumber() & 0x7fffu;
-			SFrameGate2Modem.Push(Packet);
-			if (fn & EOTFNMask)
+			auto islast = pack->IsLastPacket();
+			Gate2Modem.Push(pack);
+			if (islast)
 			{
 				gateStream.CloseStream(false); // close the stream
 				g_GateState.Idle();
 			}
 		}
+		else
+		{
+			pack.reset();  // this frame doesn't belong to the open stream
+		}
 	}
 	else
-	{	// here is where we open a new stream
-		const auto fn = pack.GetFrameNumber();
-		if (pack.IsLastPacket() or (fn % 6u))	// don't open a stream on a last packet
-			return;								// and it has to be the first frame in a superframe
-
+	{
+		if (pack->IsLastPacket()) // don't open a stream on a last packet
+		{
+			pack.reset();
+			g_GateState.Idle();
+			return;
+		}
 		// don't open a stream if this packet has the same SID as the last stream
 		// and the last stream closed less than 1 second ago
 		// NOTE: It's theoretically possible that this is actually a new stream that has the same SID.
 		//       In that case, up to a second of the beginning of the stream will be lost. Sorry.
-		const auto sid = pack.GetStreamId();
 		if (sid == gateStream.GetPreviousID() and gateStream.GetLastTime() < 1.0)
+		{
+			pack.reset();
 			return;
-
-		streamSFMap.clear();
-		auto sFrame = std::make_unique<SuperFrame>();
-		sFrame->superFN = 0u;
-		superFN = 0;
-		inetFNstart = fn;
-		memcpy(sFrame->lsf.GetDstAddress(), pack.GetCDstAddress(), 28);
-		sFrame->ft.SetFrameType(pack.GetFrameType());
-		sFrame->ft.SetMetaDataType(EMetaDatType::ecd);
-		thisCS.CodeOut(sFrame->lsf.GetMetaData());
-		mlink.cs.CodeOut(sFrame->lsf.GetMetaData()+6);
-		memset(sFrame->lsf.GetMetaData()+12, 0, 2);
-		sFrame->lsf.CalcCRC();
-		sFrame->AddData(0, pack.GetCPayload());
-		streamSFMap[0] = std::move(sFrame);
+		}
 
 		// Open the stream
-		gateStream.OpenStream(pack.GetCSrcAddress(), sid, from17k.GetAddress());
-		gateStream.CountnTouch();
+		if (g_GateState.TryState(EGateState::gatestreamin))
+		{
+			gateStream.OpenStream(pack->GetCSrcAddress(), sid, from17k.GetAddress());
+			Gate2Modem.Push(pack);
+			gateStream.CountnTouch();
+		}
 	}
+	return;
 }
 
-// this also opens and closes the modemStream if the packet is stream
-void CGateway::sendPacket2Dest(std::unique_ptr<SuperFrame> Packet)
+// this also opens and closes the modemStream
+void CGateway::sendPacket2Dest(std::unique_ptr<CPacket> pack)
 {
-	// Stream Packet!
-	auto framesid = Packet->GetStreamId();
+	if (EPacketType::packet == pack->GetType())
+	{
+		sendPacket(pack->GetCData(), pack->GetSize(), mlink.addr);
+		g_GateState.Idle();
+		return;
+	}
+
+	auto framesid = pack->GetStreamId();
 	if (modemStream.IsOpen())	// is the stream open?
 	{
 		if (modemStream.GetStreamID() == framesid)
 		{	// Here's the next stream packet
-			auto fn = Packet->GetFrameNumber();
-			sendPacket(Packet->GetCData(), Packet->GetSize(), mlink.addr);
+			auto islast = pack->IsLastPacket();
+			pack->CalcCRC();
+			sendPacket(pack->GetCData(), pack->GetSize(), mlink.addr);
 			modemStream.CountnTouch();
-			if (fn & EOTFNMask)
+			if (islast)
 			{
 				gateStream.CloseStream(false);
 				g_GateState.Idle();
@@ -686,28 +665,28 @@ void CGateway::sendPacket2Dest(std::unique_ptr<SuperFrame> Packet)
 		}
 		else
 		{
-			Packet.reset(); // this frame has the wrong SID
+			pack.reset(); // this frame has the wrong SID
 		}
 	}
 	else
 	{
-		if (EOTFNMask & Packet->GetFrameNumber()) // don't open a stream on a last packet
+		if (not pack->IsLastPacket()) // don't open a stream on a last packet
 		{
-			Packet.reset();
+			pack.reset();
 			g_GateState.Idle();
 			return;
 		}
 		// don't open a stream if this packet has the same SID as the last stream
 		if (framesid == modemStream.GetPreviousID() && modemStream.GetLastTime() < 1.0)
 		{
-			Packet.reset();
+			pack.reset();
 			g_GateState.Idle();
 			return;
 		}
 
 		// Open the Stream!!
-		modemStream.OpenStream(Packet->GetCSrcAddress(), Packet->GetStreamId(), "MSpot");
-		sendPacket(Packet->GetCData(), Packet->GetSize(), mlink.addr);
+		modemStream.OpenStream(pack->GetCSrcAddress(), pack->GetStreamId(), "MSpot");
+		sendPacket(pack->GetCData(), pack->GetSize(), mlink.addr);
 		modemStream.CountnTouch();
 	}
 }
@@ -773,12 +752,6 @@ bool CGateway::setDestination(const std::string &callsign)
 // returns true on error
 bool CGateway::setDestination(const CCallsign &cs)
 {
-	// if (not g_Cfg.IsDestination(cs.c_str()))
-	// {
-	// 	LogWarning("%s is not a proper destination", cs.c_str());
-	// 	return true;
-	// }
-
 	auto phost = destMap.Find(cs.c_str());
 
 	if (phost)
@@ -808,6 +781,7 @@ bool CGateway::setDestination(const CCallsign &cs)
 		// this is the default IPv4 address
 		mlink.addr.Initialize(phost->ipv4address, phost->port);
 		mlink.cs = cs;
+		mlink.isReflector = cs.IsReflector();
 		return false;
 	}
 
@@ -945,23 +919,29 @@ void CGateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 
 unsigned CGateway::PlayVoiceFiles(std::string message)
 {
-	unsigned count = 0u;	// this counts the number of 20ms half-payloads
+	CFrameType ft;
+	ft.SetPayloadType(EPayloadType::c2_3200);
+	ft.SetEncryptType(EEncryptType::none);
+	ft.SetSigned(false);
+	ft.SetMetaDataType(EMetaDatType::none);
+	ft.SetCan(can);
 
 	// make a voice frame template
 	// we'll still need to add the payload, frame counter and the CRC before sending it to the modem.
-	CPacket master(true);
-	// memcpy(master.data.magic, "M17 ", 4);
-	master.SetStreamId(makeStreamID());
+	CPacket master;
+	master.Initialize(EPacketType::stream, 54);
+	master.SetStreamId(g_RNG.Get());
 	memset(master.GetDstAddress(), 0xffu, 6); // set destination to Broadcast
 	thisCS.CodeOut(master.GetSrcAddress());
-	master.SetFrameType(0x0005 | (can << 7));
-	memset(master.GetMetaData(), 0, 14);
+	master.SetFrameType(ft.GetFrameType(radioTypeIsV3 ? EVersionType::v3 : EVersionType::legacy));
 
 	auto clock = std::chrono::steady_clock::now(); // start the packet clock
 	std::ifstream ifile;
 
 	std::queue<std::string> words;
 	split(message, ' ', words);
+
+	unsigned count = 0u;	// this counts the number of 20ms half-payloads
 
 	// start with 320ms of quiet
 	for (unsigned i=0; i<16; i++)
@@ -972,11 +952,11 @@ unsigned CGateway::PlayVoiceFiles(std::string message)
 			uint16_t fn = ((count / 2u) % 0x8000u);
 			master.SetFrameNumber(fn);
 			master.CalcCRC();
-			auto frame = std::make_unique<CPacket>(true);
-			memcpy(frame->GetData()+4, master.GetCData()+4, IPFRAMESIZE-4);
+			auto pack = std::make_unique<CPacket>();
+			pack->Initialize(EPacketType::stream, master.GetCData());
 			clock = clock + std::chrono::milliseconds(40);
 			std::this_thread::sleep_until(clock);
-			SFGate2Modem.Push(frame);
+			Gate2Modem.Push(pack);
 		}
 		else
 		{	// counter is even, this goes in the first half
@@ -1026,11 +1006,11 @@ unsigned CGateway::PlayVoiceFiles(std::string message)
 				master.CalcCRC(); // seal it with the CRC
 
 				// make the packet to pass to the modem
-				auto frame = std::make_unique<CPacket>(true);
-				memcpy(frame->GetData()+4, master.GetCData()+4, IPFRAMESIZE-4);
+				auto pack = std::make_unique<CPacket>();
+				pack->Initialize(EPacketType::stream, master.GetCData());
 				clock = clock + std::chrono::milliseconds(40);
 				std::this_thread::sleep_until(clock); // the frames will go out every 40 milliseconds
-				SFGate2Modem.Push(frame);
+				Gate2Modem.Push(pack);
 			}
 			else
 			{	// counter is even, this is the first 20 ms of C2_3200 data
@@ -1050,11 +1030,11 @@ unsigned CGateway::PlayVoiceFiles(std::string message)
 					uint16_t fn = ((count / 2u) % 0x8000u);
 					master.SetFrameNumber(fn);
 					master.CalcCRC();
-					auto frame = std::make_unique<CPacket>(true);
-					memcpy(frame->GetData()+4, master.GetCData()+4, IPFRAMESIZE-4);
+					auto pack = std::make_unique<CPacket>();
+					pack->Initialize(EPacketType::stream, master.GetCData());
 					clock = clock + std::chrono::milliseconds(40);
 					std::this_thread::sleep_until(clock);
-					SFGate2Modem.Push(frame);
+					Gate2Modem.Push(pack);
 				}
 				else
 				{	// counter is even, this goes in the first half
@@ -1070,15 +1050,37 @@ unsigned CGateway::PlayVoiceFiles(std::string message)
 		uint16_t fn = ((count %0x8000u) / 2u) + 0x8000u;
 		master.SetFrameNumber(fn);
 		master.CalcCRC();
-		auto frame = std::make_unique<CPacket>(true);
-		memcpy(frame->GetData()+4, master.GetCData()+4, IPFRAMESIZE+4);
+		auto pack = std::make_unique<CPacket>();
+		pack->Initialize(EPacketType::stream, master.GetCData());
 		clock = clock + std::chrono::milliseconds(40);
 		std::this_thread::sleep_until(clock);
-		SFGate2Modem.Push(frame);
+		Gate2Modem.Push(pack);
 	}
 
 	// this thread can be harvested
 	msgTask->isDone = true;
 	// return the number of packets sent
 	return count / 2u;
+}
+
+EPacketType CGateway::validate(uint8_t *in, unsigned length)
+{
+	if (0 == memcmp(in, "M17", 3))
+	{
+		if (' ' == in[3] and 54u == length)
+		{
+			CFrameType type(0x100u*in[18]+in[19]);
+			if (EPayloadType::packet != type.GetPayloadType())
+			{
+				return EPacketType::stream;
+			}
+		} else if ('P' == in[3] and 37 < length and length <= MAX_PACKET_SIZE) {
+			CFrameType type(0x100u*in[16]+in[17]);
+			if (EPayloadType::packet == type.GetPayloadType())
+			{
+				return EPacketType::packet;
+			}
+		}
+	}
+	return EPacketType::none;
 }

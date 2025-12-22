@@ -27,7 +27,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <vector>
 
 #include "Callsign.h"
-#include "FrameType.h"
 
 using SM17RefPacket = struct __attribute__((__packed__)) reflector_tag {
 	char magic[4];
@@ -42,8 +41,8 @@ enum class EPacketType { none, stream, packet };
 class CPacket
 {
 public:
-	EPacketType Validate(uint8_t *in, unsigned length);
 	void Initialize(EPacketType t, unsigned length = 54);
+	void Initialize(EPacketType t, const uint8_t *in, unsigned length = 54);
 	// get pointer to different parts
 	      uint8_t *GetData()        { return data.data(); }
 	const uint8_t *GetCData() const { return data.data(); }
@@ -75,9 +74,6 @@ public:
 
 	// calculate and set CRC value(s)
 	void CalcCRC();
-
-	// TYPE helper
-	CFrameType TYPE;
 
 private:
 	uint16_t get16At(size_t pos) const;

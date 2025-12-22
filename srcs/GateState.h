@@ -22,7 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <mutex>
 
-enum class EGateState { idle, gatein, modemin, messagein };
+enum class EGateState { idle, gatestreamin, gatepacketin, messagein, modemin };
 
 class CGateState
 {
@@ -35,8 +35,10 @@ public:
 		std::lock_guard<std::mutex> lg(mtx);
 		switch (currentState)
 		{
-			case EGateState::gatein:
-			return "gatein";
+			case EGateState::gatestreamin:
+			return "gatestreamin";
+			case EGateState::gatepacketin:
+			return "gatepacketin";
 			case EGateState::messagein:
 			return "messagein";
 			case EGateState::modemin:
@@ -46,12 +48,17 @@ public:
 		}
 	}
 
-	void Idle()	{ SetState(EGateState::idle); }
-
-	void SetState(EGateState newstate)
+	void Set2IdleIf(EGateState state)
 	{
 		std::lock_guard<std::mutex> lg(mtx);
-		currentState = newstate;
+		if (currentState == state)
+			currentState = EGateState::idle;
+	}
+
+	void Idle()
+	{
+		std::lock_guard<std::mutex> lg(mtx);
+		currentState = EGateState::idle;
 	}
 
 	bool SetStateOnlyIfIdle(EGateState newstate)

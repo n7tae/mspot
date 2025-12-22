@@ -54,8 +54,9 @@ public:
 	// set 16 bit values in network byte order
 	void SetFrameType(uint16_t ft) { data[12] = ft >> 8; data[13] = ft & 0xffu; }
 
-	// calculate and set CRC value(s)
+	// returns true if the crc is bad
 	bool CheckCRC() { return g_Crc.CheckCRC(data, 30u); }
+	// calcualte and set the crc
 	void CalcCRC() { g_Crc.SetCRC(data, 30u); }
 
 private:

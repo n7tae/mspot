@@ -19,52 +19,31 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 */
 
+#include <cassert>
+
 #include "Packet.h"
 #include "CRC.h"
 
-static CCRC CRC;
-
-// returns true if there is a problem with the data, doesn't check CRC
-EPacketType CPacket::Validate(uint8_t *in, unsigned length)
-{
-	if (0 == memcmp(in, "M17", 3))
-	{
-		if (' ' == in[3] and 54u == length)
-		{
-			TYPE.GetFrameType(0x100u*in[18]+in[19]);
-			if (EPayloadType::packet != TYPE.GetPayloadType())
-			{
-				ptype = EPacketType::stream;
-				data.resize(length);
-				memcpy(data.data(), in, length);
-				return EPacketType::stream;
-			}
-		} else if ('P' == data[3] and length > 37 and length <= MAX_PACKET_SIZE) {
-			TYPE.GetFrameType(0x100u*in[16]+in[17]);
-			if (EPayloadType::packet == TYPE.GetPayloadType())
-			{
-				ptype = EPacketType::packet;
-				data.resize(length);
-				memcpy(data.data(), in, length);
-				return EPacketType::packet;
-			}
-		}
-	}
-	return EPacketType::none;
-}
+extern CCRC g_Crc;
 
 void CPacket::Initialize(EPacketType t, unsigned length)
 {
+	assert(EPacketType::none != t);
+	assert(length > 37u);
 	ptype = t;
+	data.resize(length, 0);
 	if (EPacketType::stream == t)
 	{
 		memcpy(data.data(), "M17 ", 4);
-		data.resize(54);
 	} else if (EPacketType::packet == t) {
 		memcpy(data.data(), "M17P", 4);
-		data.resize(length);
 	}
-	data.shrink_to_fit();
+}
+
+void CPacket::Initialize(EPacketType t, const uint8_t *in, unsigned length)
+{
+	Initialize(t, length);
+	memcpy(data.data()+4, in+4, length-4);
 }
 
 uint8_t *CPacket::GetDstAddress()
@@ -175,16 +154,16 @@ bool CPacket::IsLastPacket() const
 {
 	if (EPacketType::stream == ptype)
 		return 0x8000u == (0x8000u & GetFrameNumber());
-	return false;
+	return true;
 }
 
 bool CPacket::CheckCRC() const
 {
 	if ((EPacketType::stream == ptype))
 	{
-		return (CRC.CheckCRC(data.data(), 54));
+		return (g_Crc.CheckCRC(data.data(), 54));
 	} else {
-		return CRC.CheckCRC(data.data()+4, 30) or CRC.CheckCRC(data.data()+34, data.size()-34);
+		return g_Crc.CheckCRC(data.data()+4, 30) or g_Crc.CheckCRC(data.data()+34, data.size()-34);
 	}
 }
 
@@ -192,13 +171,13 @@ void CPacket::CalcCRC()
 {
 	if ((EPacketType::stream == ptype))
 	{
-		CRC.SetCRC(data.data(), 54);
+		g_Crc.SetCRC(data.data(), 54);
 	}
 	else
-	{	// set the CRC for the LSF
-		CRC.SetCRC(data.data()+4, 30);
+	{	// set the g_Crc for the LSF
+		g_Crc.SetCRC(data.data()+4, 30);
 		// now for the payload
-		CRC.SetCRC(data.data()+34, data.size()-34);
+		g_Crc.SetCRC(data.data()+34, data.size()-34);
 	}
 }
 

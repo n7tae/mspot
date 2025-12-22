@@ -1,6 +1,6 @@
 /*
 
-         mspot - an M17-only HotSpot using an RPi CC1200 hat
+         mspot - an M17-only HotSpot using an MMDVM device
             Copyright (C) 2025 Thomas A. Early N7TAE
 
 This program is free software; you can redistribute it and/or modify
@@ -28,17 +28,18 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "SafePacketQueue.h"
 #include "SteadyTimer.h"
-#include "Gateway.h"
+#include "FrameType.h"
 #include "Configure.h"
+#include "Gateway.h"
+#include "Random.h"
 #include "CRC.h"
 #include "Log.h"
 
 extern CCRC g_Crc;
+extern CRandom g_RNG;
 extern CConfigure g_Cfg;
-extern SFrameFIFO SFrameModem2Gate;
-extern SFrameFIFO SFrameGate2Modem;
-extern PFrameFIFO PFrameModem2Gate;
-extern PFrameFIFO PFrameGate2Modem;
+extern IPFrameFIFO Modem2Gate;
+extern IPFrameFIFO Gate2Modem;
 
 static const std::string m17alphabet(" ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/.");
 
@@ -51,32 +52,24 @@ static const std::string fnames[39]
 	"five",  "six",    "seven",    "eight",   "nine",  "dash",    "slash",    "dot"
 };
 
-uint16_t CGateway::makeStreamID()
-{
-		std::uniform_int_distribution<uint16_t> dist(0x0001, 0xFFFE);
-		return dist(m_random);
-}
-
-void CGateway::wait4end(std::unique_ptr<CPacket> &Packet)
+void CGateway::wait4end(std::unique_ptr<CPacket> &pack)
 {
 	// check the starting packet first
-	if (EOTFNMask & Packet->GetFrameNumber())
+	if (pack->IsLastPacket())
 		return;
 
 	CSteadyTimer ptime;
 
 	// we're only going to reset the packet timer if subsequent incoming packets have this SID
-	// this is all internal, so we don't need to convert the SID from network byte order.
-	auto streamid = Packet->GetStreamId();
+	auto streamid = pack->GetStreamId();
 
 	while (keep_running)
 	{
-		Packet = Host2Gate.PopWaitFor(100);
-
-		if (Packet and (Packet->GetStreamId() == streamid))
+		pack = Modem2Gate.PopWaitFor(100);
+		if (pack and (pack->GetStreamId() == streamid))
 		{
 			ptime.start();
-			if (0x8000 & Packet->GetFrameNumber())
+			if (pack->IsLastPacket())
 				break;
 		}
 		if (ptime.time() > 0.5)
@@ -87,9 +80,9 @@ void CGateway::wait4end(std::unique_ptr<CPacket> &Packet)
 	return;
 }
 
-void CGateway::doStatus(std::unique_ptr<CPacket> &Packet)
+void CGateway::doStatus(std::unique_ptr<CPacket> &pack)
 {
-	wait4end(Packet);
+	wait4end(pack);
 	if (ELinkState::linked == mlink.state)
 		addMessage("repeater is_linked_to destination");
 	else if (ELinkState::linking == mlink.state)
@@ -98,9 +91,9 @@ void CGateway::doStatus(std::unique_ptr<CPacket> &Packet)
 		addMessage("repeater is_unlinked");
 }
 
-void CGateway::doUnlink(std::unique_ptr<CPacket> &Packet)
+void CGateway::doUnlink(std::unique_ptr<CPacket> &pack)
 {
-	wait4end(Packet);
+	wait4end(pack);
 	if (ELinkState::unlinked == mlink.state)
 	{
 		addMessage("repeater is_already_unlinked");
@@ -118,26 +111,26 @@ void CGateway::doUnlink(std::unique_ptr<CPacket> &Packet)
 	}
 }
 
-void CGateway::doEcho(std::unique_ptr<CPacket> &Packet)
+void CGateway::doEcho(std::unique_ptr<CPacket> &pack)
 {
-	if (Packet->GetFrameNumber() & 0x8000)
+	if (pack->IsLastPacket())
 	{
 		return;
 	}
-	auto streamID = Packet->GetStreamId();
+	auto streamID = pack->GetStreamId();
 
 	doRecord(' ', streamID);
 }
 
-void CGateway::doRecord(std::unique_ptr<CPacket> &Packet)
+void CGateway::doRecord(std::unique_ptr<CPacket> &pack)
 {
-	if (Packet->GetFrameNumber() & EOTFNMask)
+	if (pack->IsLastPacket())
 	{
 		return;
 	}
-	CCallsign dest(Packet->GetCDstAddress());
-	auto streamID = Packet->GetStreamId();
-	doRecord(dest.GetModule(), streamID);
+	CCallsign dst(pack->GetCDstAddress());
+	auto streamID = pack->GetStreamId();
+	doRecord(dst.GetModule(), streamID);
 }
 
 void CGateway::doRecord(char c, uint16_t streamID)
@@ -149,10 +142,10 @@ void CGateway::doRecord(char c, uint16_t streamID)
 	CSteadyTimer timer;
 	while (true) // record the payloads in fifo
 	{
-		auto frame = Host2Gate.PopWaitFor(100);
-		if (nullptr == frame)
+		auto pack = Modem2Gate.PopWaitFor(100);
+		if (nullptr == pack)
 			continue;
-		if (streamID != frame->GetStreamId())
+		if (streamID != pack->GetStreamId())
 			continue;
 		if (timer.time() > 2.0)
 			break;
@@ -160,10 +153,10 @@ void CGateway::doRecord(char c, uint16_t streamID)
 		if (++fn < 3000) // only collect up to 2 minutes
 		{
 			auto newpl = std::make_unique<payload>();
-			memcpy(newpl->data(), frame->GetCPayload(), 16);
+			memcpy(newpl->data(), pack->GetCPayload(), 16);
 			fifo.Push(newpl);
 		}
-		if (frame->GetFrameNumber() & EOTFNMask)
+		if (pack->IsLastPacket())
 			break;
 	}
 	if (fn > 3000)
@@ -217,12 +210,12 @@ void CGateway::doRecord(char c, uint16_t streamID)
 	doPlay(c);
 }
 
-void CGateway::doPlay(std::unique_ptr<CPacket> &Packet)
+void CGateway::doPlay(std::unique_ptr<CPacket> &pack)
 {
-	wait4end(Packet);
+	wait4end(pack);
 	std::this_thread::sleep_for(std::chrono::milliseconds(300));
-	CCallsign dest(Packet->GetCDstAddress());
-	doPlay(dest.GetModule());
+	CCallsign dst(pack->GetCDstAddress());
+	doPlay(dst.GetModule());
 }
 
 void CGateway::doPlay(char c)
@@ -256,14 +249,20 @@ void CGateway::doPlay(char c)
 
 	count = count / 16 - 1; // this will be the closing frame number
 
-	// make a frame template
-	CPacket master(true);
-	// memcpy(master.data.magic, "M17 ", 4);
-	master.SetStreamId(makeStreamID());
+	// make the TYPE
+	CFrameType ft;
+	ft.SetPayloadType(EPayloadType::c2_3200);
+	ft.SetEncryptType(EEncryptType::none);
+	ft.SetSigned(false);
+	ft.SetMetaDataType(EMetaDatType::none);
+	ft.SetCan(can);
+	// now build a master
+	CPacket master;
+	master.Initialize(EPacketType::stream);
+	master.SetStreamId(g_RNG.Get());
 	memset(master.GetDstAddress(), 0xffu, 6); // set destination to Broadcast
 	thisCS.CodeOut(master.GetSrcAddress());
-	master.SetFrameType(0x0005 | (can << 7));
-	memset(master.GetMetaData(), 0, 14);
+	master.SetFrameType(ft.GetFrameType(radioTypeIsV3 ? EVersionType::v3 : EVersionType::legacy));
 
 	uint16_t fn = 0;
 	std::ifstream ifs(pathname, std::ios::binary);
@@ -272,14 +271,14 @@ void CGateway::doPlay(char c)
 	{
 		while (fn < count)
 		{
-			auto frame = std::make_unique<CPacket>(true);
-			memcpy(frame->GetData()+4, master.GetCData()+4, IPFRAMESIZE-4);
-			ifs.read((char *)(frame->GetPayload()), 16);
-			frame->SetFrameNumber((fn < count) ? fn++ : fn++ & EOTFNMask);
-			frame->CalcCRC();
+			auto pack = std::make_unique<CPacket>();
+			pack->Initialize(EPacketType::stream, master.GetCData(), 54);
+			ifs.read((char *)(pack->GetPayload()), 16);
+			pack->SetFrameNumber((fn < count) ? fn++ : fn++ & 0x8000u);
+			pack->CalcCRC();
 			clock = clock + std::chrono::milliseconds(40);
 			std::this_thread::sleep_until(clock);
-			SFGate2Modem.Push(frame);
+			Gate2Modem.Push(pack);
 		}
 		ifs.close();
 	}

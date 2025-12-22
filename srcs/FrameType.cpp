@@ -20,19 +20,19 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include <cassert>
-#include "FrameType.h";
+#include "FrameType.h"
 
-uint16_t CFrameType::GetFrameType(bool isv3)
+uint16_t CFrameType::GetFrameType(EVersionType vt)
 {
-	if (isv3)
+	if (EVersionType::v3 == vt)
 	{
-		if (not m_v3type)
+		if (not m_v3)
 			buildV3();
-		return m_v3type;
+		return m_v3;
 	} else {
-		if (not m_legacytype)
+		if (not m_legacy)
 			buildLegacy();
-		return m_legacytype;
+		return m_legacy;
 	}
 }
 
@@ -41,9 +41,9 @@ void CFrameType::SetFrameType(uint16_t t)
 	if (0xf000u & t)	// this has to be V#3 TYPE
 	{
 		// internalize the V#3 TYPE
-		m_legacytype = 0u;
-		m_isV3 = true;
-		m_v3type = t;
+		m_legacy = 0u;
+		m_version = EVersionType::v3;
+		m_v3 = t;
 		switch (t >> 12)	// 1. Do the payload
 		{
 		case 1u:
@@ -55,6 +55,7 @@ void CFrameType::SetFrameType(uint16_t t)
 			break;
 		case 3u:
 			m_payload = EPayloadType::c2_1600;
+			break;
 		case 15u:
 			m_payload = EPayloadType::packet;
 			break;
@@ -106,9 +107,9 @@ void CFrameType::SetFrameType(uint16_t t)
 		}
 		m_can = t & 0xfu;	// 5. Get the CAN
 	} else {	// and this had to be a legacy TYPE
-		m_isV3 = false;
-		m_legacytype = t;
-		m_v3type = 0;
+		m_version = EVersionType::legacy;
+		m_legacy = t;
+		m_v3 = 0;
 		// 1 Get the payload type
 		if (t & 1u)
 		{
@@ -188,16 +189,16 @@ void CFrameType::buildLegacy()
 	switch (m_payload)
 	{
 	case EPayloadType::packet:
-		m_legacytype = 1u;
+		m_legacy = 1u;
 		break;
 	case EPayloadType::dataonly:
-		m_legacytype = 2u;
+		m_legacy = 2u;
 		break;
 	case EPayloadType::c2_3200:
-		m_legacytype = 4u;
+		m_legacy = 4u;
 		break;
 	case EPayloadType::c2_1600:
-		m_legacytype = 6u;
+		m_legacy = 6u;
 		break;
 	}
 
@@ -206,22 +207,22 @@ void CFrameType::buildLegacy()
 	case EEncryptType::none:
 		break;
 	case EEncryptType::scram8:
-		m_legacytype |= 0x8u;
+		m_legacy |= 0x8u;
 		break;
 	case EEncryptType::scram16:
-		m_legacytype |= 0x28u;
+		m_legacy |= 0x28u;
 		break;
 	case EEncryptType::scram24:
-		m_legacytype |= 0x48u;
+		m_legacy |= 0x48u;
 		break;
 	case EEncryptType::aes128:
-		m_legacytype |= 0x18u;
+		m_legacy |= 0x18u;
 		break;
 	case EEncryptType::aes192:
-		m_legacytype |= 0x38u;
+		m_legacy |= 0x38u;
 		break;
 	case EEncryptType::aes256:
-		m_legacytype |= 0x58u;
+		m_legacy |= 0x58u;
 		break;
 	}
 
@@ -230,16 +231,16 @@ void CFrameType::buildLegacy()
 	default:
 		break;
 	case EMetaDatType::gnss:
-		m_legacytype |= 0x20;
+		m_legacy |= 0x20;
 		break;
 	case EMetaDatType::ecd:
-		m_legacytype |= 0x40u;
+		m_legacy |= 0x40u;
 	}
 
-	m_legacytype |= (m_can << 7);
+	m_legacy |= (m_can << 7);
 
 	if (m_isSigned)
-		m_legacytype |= 0x800u;
+		m_legacy |= 0x800u;
 }
 
 void CFrameType::buildV3()
@@ -247,62 +248,62 @@ void CFrameType::buildV3()
 	switch (m_payload)
 	{
 		case EPayloadType::packet:
-			m_v3type = 0xfu;
+			m_v3 = 0xfu;
 			break;
 		case EPayloadType::dataonly:
-			m_v3type = 0x1u;
+			m_v3 = 0x1u;
 			break;
 		default:
 		case EPayloadType::c2_3200:
-			m_v3type = 0x2u;
+			m_v3 = 0x2u;
 			break;
 		case EPayloadType::c2_1600:
-			m_v3type = 0x3u;
+			m_v3 = 0x3u;
 	}
-	m_v3type <<= 3;
+	m_v3 <<= 3;
 	switch (m_encrypt)
 	{
 	case EEncryptType::none:
 		break;
 	case EEncryptType::scram8:
-		m_v3type |= 1u;
+		m_v3 |= 1u;
 		break;
 	case EEncryptType::scram16:
-		m_v3type |= 2u;
+		m_v3 |= 2u;
 		break;
 	case EEncryptType::scram24:
-		m_v3type |= 3u;
+		m_v3 |= 3u;
 		break;
 	case EEncryptType::aes128:
-		m_v3type |= 4u;
+		m_v3 |= 4u;
 		break;
 	case EEncryptType::aes192:
-		m_v3type |= 5u;
+		m_v3 |= 5u;
 		break;
 	case EEncryptType::aes256:
-		m_v3type |= 6u;
+		m_v3 |= 6u;
 	}
-	m_v3type <<= 1;
+	m_v3 <<= 1;
 	if (m_isSigned)
-		m_v3type |= 1u;
-	m_v3type <<= 4;
+		m_v3 |= 1u;
+	m_v3 <<= 4;
 	switch (m_metatype)
 	{
 	case EMetaDatType::none:
 		break;
 	case EMetaDatType::gnss:
-		m_v3type |= 1u;
+		m_v3 |= 1u;
 		break;
 	case EMetaDatType::ecd:
-		m_v3type |= 2u;
+		m_v3 |= 2u;
 		break;
 	case EMetaDatType::text:
-		m_v3type |= 3u;
+		m_v3 |= 3u;
 		break;
 	case EMetaDatType::aes:
-		m_v3type |= 0xf;
+		m_v3 |= 0xf;
 		break;
 	}
-	m_v3type <<= 4;
-	m_v3type |= m_can;
+	m_v3 <<= 4;
+	m_v3 |= m_can;
 }

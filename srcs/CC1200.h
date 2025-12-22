@@ -33,7 +33,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <m17.h>
 
+#include "FrameType.h"
 #include "Packet.h"
+#include "LSF.h"
 
 enum class ERxState
 {
@@ -56,7 +58,7 @@ using SConfig = struct config_tag
 	unsigned can;
 	int freqCorr;
 	float power;
-	bool afc, isprivate, debug;
+	bool afc, isprivate, isV3, debug;
 };
 
 class CCC1200
@@ -72,7 +74,7 @@ private:
 	bool setIinterface(uint32_t speed, int parity);
 	void loadConfig(void);
 	bool testPING(void);
-	bool readDev(void *buf, int size);
+	bool readDev(uint8_t *buf, int size);
 	void writeDev(void *buf, int size, const char *where);
 	bool setRxFreq(uint32_t freq);
 	bool setTxFreq(uint32_t freq);
@@ -84,8 +86,8 @@ private:
 	bool stopTx(void);
 	bool stopRx(void);
 	bool txrxControl(uint8_t cmd, uint8_t onORoff, const char *what);
-	void filterSymbols(int8_t *out, const int8_t *in, const float *flt, uint8_t phase_inv);
-
+	//void filterSymbols(int8_t *out, const int8_t *in, const float *flt, uint8_t phase_inv);
+	void filterSymbols(int8_t* __restrict out, const int8_t* __restrict in, const float* __restrict flt, uint8_t phase_inv);
 	struct gpiod_line_request *gpioLineRequest(unsigned int offset, int value, const std::string &consumer);
 	bool gpioSetValue(unsigned offset, int value);
 
@@ -101,5 +103,6 @@ private:
 	gpiod_line_request *reqBoot0, *reqNrst;
 	int fd; // for the modem
 	unsigned sfCounter;
-	std::unique_ptr<CPacket> lsfPack;
+	uint16_t streamID;
+	SLSF lsf;
 };

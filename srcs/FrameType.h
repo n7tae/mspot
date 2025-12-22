@@ -27,31 +27,34 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 enum class EPayloadType { dataonly, c2_3200, c2_1600, packet };
 enum class EEncryptType { none, scram8, scram16, scram24, aes128, aes192, aes256 };
 enum class EMetaDatType { none, gnss, ecd, text, aes };
+enum class EVersionType { legacy, v3 };
 
 class CFrameType
 {
 public:
-	CFrameType() : m_isSigned(false), m_isV3(false), m_can(0) { buildLegacy(); }
+	CFrameType(uint16_t t = 0u) { SetFrameType(t); }
 	void SetFrameType(uint16_t t);
-	uint16_t GetFrameType(bool wantV3);
+	uint16_t GetFrameType(EVersionType vt);
+	uint16_t GetOriginType() { return GetFrameType(m_version);  }
 	EPayloadType GetPayloadType()  const { return m_payload;  }
 	EEncryptType GetEncryptType()  const { return m_encrypt;  }
 	EMetaDatType GetMetaDataType() const { return m_metatype; }
 	bool GetIsSigned() const { return m_isSigned; }
 	uint8_t GetCan() const { return m_can; }
-	void SetPayloadType(EPayloadType t) { m_payload = t; m_isV3 ? buildV3() : buildLegacy(); }
-	void SetEncryptType(EEncryptType t) { m_encrypt = t; m_isV3 ? buildV3() : buildLegacy(); }
-	void SetMetaDataType(EMetaDatType t) { m_metatype = t; m_isV3 ? buildV3() : buildLegacy(); }
-	void SetSigned(bool issigned) { m_isSigned = issigned; m_isV3 ? buildV3() : buildLegacy(); }
-	void SetCan(uint8_t can) { m_can = can;}
+	void SetPayloadType(EPayloadType t)  { m_payload = t;  (EVersionType::v3==m_version) ? buildV3() : buildLegacy(); }
+	void SetEncryptType(EEncryptType t)  { m_encrypt = t;  (EVersionType::v3==m_version) ? buildV3() : buildLegacy(); }
+	void SetMetaDataType(EMetaDatType t) { m_metatype = t; (EVersionType::v3==m_version) ? buildV3() : buildLegacy(); }
+	void SetSigned(bool issigned) { m_isSigned = issigned; (EVersionType::v3==m_version) ? buildV3() : buildLegacy(); }
+	void SetCan(uint8_t can)      { m_can = can;           (EVersionType::v3==m_version) ? buildV3() : buildLegacy(); }
 
 private:
-	bool m_isSigned, m_isV3;
+	bool m_isSigned;
 	uint16_t m_can;
+	EVersionType m_version;
 	EPayloadType m_payload;
 	EEncryptType m_encrypt;
 	EMetaDatType m_metatype;
-	uint16_t m_legacytype, m_v3type;
+	uint16_t m_legacy, m_v3;
 
 	void buildLegacy();
 	void buildV3();

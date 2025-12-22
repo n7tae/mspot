@@ -19,7 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 */
 
-#include "GateState.h"
+#include "Random.h"
 
-// the one and only Tx/Rx state
-CGateState g_GateState;
+// the one and only global instance
+CRandom g_RNG;

@@ -24,14 +24,21 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <unistd.h>
 #include <fcntl.h>
 
+#include "SafePacketQueue.h"
+#include "GateState.h"
 #include "Callsign.h"
 #include "Gateway.h"
 #include "CC1200.h"
+#include "Random.h"
 #include "LSF.h"
 #include "Log.h"
 
-extern CGateway g_Gate;
-extern CCRC     g_Crc;
+extern CGateway    g_Gate;
+extern CRandom     g_RNG;
+extern CCRC        g_Crc;
+extern CGateState  g_GateState;
+extern IPFrameFIFO Modem2Gate;
+extern IPFrameFIFO Gate2Modem;
 
 #define RX_SYMBOL_SCALING_COEFF	(1.0f/(0.8f/(40.0e3f/2097152*0xAD)*130.0f))	
 // CC1200 User's Guide, p. 24
@@ -45,10 +52,6 @@ extern CCRC     g_Crc;
 // +0.8kHz is the deviation for symbol +1
 // 40.0e3 is F_TCXO in kHz
 // 64 is `CFM_TX_DATA_IN` register value for max. F_DEV
-
-static uint8_t tx_buff[512] = { 0 };
-static uint8_t rx_buff[65536] = { 0 };
-static int tx_len = 0, rx_len = 0;
 
 //device stuff
 uint8_t cmd[8];
@@ -113,8 +116,9 @@ static ERxState rx_state = ERxState::idle;
 static int8_t lsf_sync_ext[16];				//extended LSF syncword
 static uint16_t sample_cnt = 0;				//sample counter (for RX sync timeout)
 static uint16_t fn, last_fn=0xffffu;		//current and last received FN (stream mode)
-static uint8_t pkt_fn, last_pkt_fn = 0xff;	//current and last received FN (packet mode)
-static uint8_t lsf_b[30];					//raw decoded LSF
+static uint8_t payload[825];                // buffer for the packet payload
+static uint8_t *ppayload = payload;         // ptr to the payload
+static uint16_t plsize = 0;                 // # of bytes in the payload
 static bool first_frame = true;				//first decoded frame after SYNC?
 static uint8_t lich_parts = 0;				//LICH chunks received (bit flags)
 static bool got_lsf = false;				//got LSF? either from LSF or reconstructed from LICH
@@ -138,9 +142,6 @@ uint32_t CCC1200::getMilliseconds(void)
 
 	return s*1000 + ms;
 }
-
-//UART magic
-static int fd; //UART handle
 
 speed_t CCC1200::getBaud(uint32_t baud)
 {
@@ -257,6 +258,7 @@ void CCC1200::loadConfig()
 	cfg.nrst     = g_Cfg.GetUnsigned(g_Keys.modem.section,    g_Keys.modem.nrst);
 	cfg.can      = g_Cfg.GetUnsigned(g_Keys.repeater.section, g_Keys.repeater.can);
 	cfg.debug    = g_Cfg.GetBoolean( g_Keys.repeater.section, g_Keys.repeater.debug);
+	cfg.isV3     = g_Cfg.GetBoolean( g_Keys.repeater.section, g_Keys.repeater.radioTypeIsV3);
 	// the callsign has to be assembled from two items
 	cfg.callSign.CSIn(g_Cfg.GetString(g_Keys.repeater.section, g_Keys.repeater.callsign));
 	cfg.callSign.SetModule(g_Cfg.GetString(g_Keys.repeater.section, g_Keys.repeater.module).at(0));
@@ -334,7 +336,7 @@ bool CCC1200::gpioSetValue(unsigned offset, int value)
 	return false;
 }
 
-bool CCC1200::readDev(void *buf, int size)
+bool CCC1200::readDev(uint8_t *buf, int size)
 {
 	int rd = 0;
 	while (rd < size)
@@ -349,6 +351,7 @@ bool CCC1200::readDev(void *buf, int size)
 		}
 		rd += r;
 	}
+	return false;
 }
 
 void CCC1200::writeDev(void *buf, int size, const char *where)
@@ -461,7 +464,7 @@ bool CCC1200::setTxFreq(uint32_t freq)
 bool CCC1200::setFreqCorr(int16_t corr)
 {
 	uint8_t cid = CMD_SET_FREQ_CORR;
-	uint8_t cmd[5] = {cid, 5, 0, corr&0xff, (corr>>8)&0xff};
+	uint8_t cmd[5] = { cid, 5, 0, uint8_t(corr & 0xff), uint8_t((corr>>8) & 0xff) };
 	uint8_t resp[4] = { 0 };
 
 	uartLock = true;            //prevent main loop from reading
@@ -492,7 +495,7 @@ bool CCC1200::setFreqCorr(int16_t corr)
 bool CCC1200::setAFC(bool en)
 {
 	uint8_t cid = CMD_SET_AFC;
-	uint8_t cmd[4] = { cid, 4, 0, en?1:0 };
+	uint8_t cmd[4] = { cid, 4, 0, uint8_t(en ? 1 : 0) };
 	uint8_t resp[4] = { 0 };
 
 	uartLock;            //prevent main loop from reading
@@ -508,7 +511,7 @@ bool CCC1200::setAFC(bool en)
 
     uartLock = false;
 
-	const char goodResp[] { cid, 4, 0, 0 };
+	const uint8_t goodResp[] { cid, 4, 0, 0 };
 
     if (memcmp(resp, goodResp, 4))
 	{
@@ -523,7 +526,7 @@ bool CCC1200::setAFC(bool en)
 bool CCC1200::setTxPower(float power) //powr in dBm
 {
 	uint8_t cid = CMD_SET_TX_POWER;
-	uint8_t cmd[4] = {cid, 4, 0, roundf(power*4.0f)};
+	uint8_t cmd[4] = {cid, 4, 0, uint8_t(roundf(power*4.0f)) };
 	uint8_t resp[4] = { 0 };
 
 	uartLock = true;		//prevent main loop from reading
@@ -598,43 +601,60 @@ bool CCC1200::stopTx(void)
 	return txrxControl(CMD_TX_START, 0, "stopTx");
 }
 
-//samples per symbol (sps) = 5
-void CCC1200::filterSymbols(int8_t out[SYM_PER_FRA*5], const int8_t in[SYM_PER_FRA], const float* flt, uint8_t phase_inv)
+//new, polyphase filter implementation
+void CCC1200::filterSymbols(int8_t* __restrict out, const int8_t* __restrict in, const float* __restrict flt, uint8_t phase_inv)
 {
 	#define FLT_LEN 41
-	static int8_t last[FLT_LEN]; //memory for last symbols
+    #define TAPS_PER_PHASE 9
 
-	if(out!=NULL)
+	//history
+	static float sr[TAPS_PER_PHASE * 2] = {0};
+	static uint8_t w = 0;
+
+	//precompute gain and sign once
+    static const float gain = TX_SYMBOL_SCALING_COEFF*sqrtf(5.0f);
+	const float sign = phase_inv ? -1.0f : 1.0f;
+
+	for (uint16_t i = 0; i < SYM_PER_FRA; i++)
 	{
-		for(uint8_t i=0; i<SYM_PER_FRA; i++)
+		//insert new sample per symbol
+		const float x = (float)in[i] * sign;
+
+		//store once, duplicated for linear access
+		float * __restrict hp = &sr[w];
+		hp[0]			   = x;
+		hp[TAPS_PER_PHASE] = x;
+
+		//phase pointer
+		const float * __restrict tp = flt;
+
+		//generate sps (5) output samples
+		for (uint8_t ph = 0; ph < 5; ph++)
 		{
-			for(uint8_t j=0; j<5; j++)
-			{
-				for(uint8_t k=0; k<FLT_LEN-1; k++)
-					last[k]=last[k+1];
+			float acc;
 
-				if(j==0)
-				{
-					if(phase_inv) //optional phase inversion
-						last[FLT_LEN-1]=-in[i];
-					else
-						last[FLT_LEN-1]= in[i];
-				}
-				else
-					last[FLT_LEN-1]=0;
+			//fully unrolled 9-tap dot product
+			acc  = hp[0] * tp[0];
+			acc += hp[1] * tp[1];
+			acc += hp[2] * tp[2];
+			acc += hp[3] * tp[3];
+			acc += hp[4] * tp[4];
+			acc += hp[5] * tp[5];
+			acc += hp[6] * tp[6];
+			acc += hp[7] * tp[7];
+			acc += hp[8] * tp[8];
 
-				float acc=0.0f;
-				for(uint8_t k=0; k<FLT_LEN; k++)
-					acc+=last[k]*flt[k];
+			out[i*5 + ph] = (int8_t)(acc * gain);
 
-				out[i*5+j]=acc*TX_SYMBOL_SCALING_COEFF*sqrtf(5.0f); //crank up the gain
-			}
+			//advance to next phase coefficients
+			tp += TAPS_PER_PHASE;
 		}
-	}
-	else
-	{
-		for(uint8_t i=0; i<FLT_LEN; i++)
-			last[i]=0;
+
+		//circular index update without modulo
+		if (w == 0)
+			w = TAPS_PER_PHASE-1;
+		else
+			w--;
 	}
 }
 
@@ -753,7 +773,7 @@ void CCC1200::run()
 		//are there any new baseband samples to process?
 		if (keep_running and not uartLock and FD_ISSET(fd, &rfds))
 		{
-			read(fd, (uint8_t*)&rx_bsb_sample, 1);
+			read(fd, &rx_bsb_sample, 1);
 
 			//wait for rx baseband data header
 			if (uart_rx_sync)
@@ -819,8 +839,7 @@ void CCC1200::run()
 				float dist_str_b = eucl_norm(&symbols[8], str_sync_symbols, 8);
 				float dist_str = sqrtf(dist_str_a*dist_str_a+dist_str_b*dist_str_b);
 
-				//LSF received at idle state
-				if(dist_lsf<=4.5f and rx_state==ERxState::idle)
+				if (dist_lsf <= 4.5f and rx_state == ERxState::idle) //LSF received at idle state
 				{
 					//find L2's minimum
 					uint8_t sample_offset=0;
@@ -831,10 +850,10 @@ void CCC1200::run()
 
 						float d = eucl_norm(symbols, lsf_sync_ext, 16);
 
-						if(d<dist_lsf)
+						if(d < dist_lsf)
 						{
-							dist_lsf=d;
-							sample_offset=i;
+							dist_lsf = d;
+							sample_offset = i;
 						}
 					}
 
@@ -845,62 +864,61 @@ void CCC1200::run()
 						pld[i] = f_flt_buff[16*5+i*5+sample_offset]; //add symbol timing correction
 					}
 
-					SLSF lsf;
-					CFrameType type;
-					const CCallsign dst(lsf.GetCDstAddress());
-					const CCallsign src(lsf.GetCSrcAddress());
-					type.GetFrameType(lsf.GetFrameType());
-					const bool crcIsOK = not lsf.CheckCRC();
+					uint32_t e = decode_LSF((lsf_t *)lsf.GetData(), pld);
+					const auto ft = lsf.GetFrameType();
+					CFrameType type(ft);
 
-					if (type.GetPayloadType()!=EPayloadType::packet and type.GetEncryptType()==EEncryptType::none and not lsf.CheckCRC()) // does this SM data work for me?
+					if (lsf.CheckCRC()) // does this LSF have a correct CRC?
 					{
+						LogError("LSF received, but CRC is not valid");
+					} else {
 						got_lsf = true;
-						type.SetMetaDataType(EMetaDatType::none);
-						sFrame = std::make_unique<SuperFrame>();
-						sfCounter = 0u;
-						sFrame->superFN = 0u;
-						dst.CodeOut(sFrame->lsf.GetDstAddress());
-						src.CodeOut(sFrame->lsf.GetSrcAddress());
+						streamID = g_RNG.Get(); // this is a new stream, so make an ID
+						const auto can = type.GetCan();
+						const CCallsign dst(lsf.GetCDstAddress());
+						const CCallsign src(lsf.GetCSrcAddress());
+						if (EMetaDatType::none != type.GetMetaDataType())
+						{
+							// clear any META data if it's not already none
+							type.SetMetaDataType(EMetaDatType::none);
+							memset(lsf.GetMetaData(), 0, 14);
+							lsf.SetFrameType(type.GetOriginType());
+							lsf.CalcCRC();
+						}
 						rx_state = ERxState::sync;	//change RX state
 						sample_cnt = 0;		//reset rx timeout timer
 
-						last_fn=0xFFFFU;
+						last_fn = 0xffffu;
 
-						LogInfo("CRC OK | DST: %-9s | SRC: %-9s | TYPE: %04X (CAN=%d) | MER: %-3.1f%%", dst.c_str(), src.c_str(), ft, can, (float)e/0xFFFFU/SYM_PER_PLD/2.0f*100.0f);
+						LogInfo("LSF OK | DST: %-9s | SRC: %-9s | TYPE: 0x%04x (CAN=%d) | MER: %-3.1f%%", dst.c_str(), src.c_str(), ft, can, float(e)/0xFFFFU/SYM_PER_PLD/2.0f*100.0f);
 
-					} else {
-						if (not crcIsOK)
-							LogInfo("CRC is not valid");
-						if (not isSM)
-							LogError("Was evaluated as SM by TYPE says it is PM");
 					}
 				}
 
-				//stream frame received
-				else if(dist_str<=5.0f)
+				else if (dist_str <= 5.0f) //stream frame received
 				{
-					rx_state=RX_SYNCD;
-					sample_cnt=0;		//reset rx timeout timer
+					rx_state = ERxState::sync;
+					sample_cnt = 0;		//reset rx timeout timer
 
 					//find L2's minimum
-					uint8_t sample_offset=0;
+					uint8_t sample_offset = 0;
 					for(uint8_t i=1; i<=2; i++)
 					{
 						for(uint8_t j=0; j<16; j++)
-							symbols[j]=f_flt_buff[j*5+i];
+							symbols[j] = f_flt_buff[j*5+i];
 						
-						float tmp_a=eucl_norm(&symbols[8], str_sync_symbols, 8);
+						float tmp_a = eucl_norm(&symbols[8], str_sync_symbols, 8);
 						for(uint8_t j=0; j<16; j++)
-							symbols[j]=f_flt_buff[960+j*5+i];
+							symbols[j] = f_flt_buff[960+j*5+i];
 						
-						float tmp_b=eucl_norm(&symbols[8], str_sync_symbols, 8);
+						float tmp_b = eucl_norm(&symbols[8], str_sync_symbols, 8);
 
-						float d=sqrtf(tmp_a*tmp_a+tmp_b*tmp_b);
+						float d = sqrtf(tmp_a*tmp_a+tmp_b*tmp_b);
 
-						if(d<dist_str)
+						if (d < dist_str)
 						{
-							dist_str=d;
-							sample_offset=i;
+							dist_str = d;
+							sample_offset = i;
 						}
 					}
 
@@ -908,100 +926,82 @@ void CCC1200::run()
 					
 					for(uint16_t i=0; i<SYM_PER_PLD; i++)
 					{
-						pld[i]=f_flt_buff[16*5+i*5+sample_offset];
+						pld[i] = f_flt_buff[16*5+i*5+sample_offset];
 					}
 
 					uint8_t lich[6];
 					uint8_t lich_cnt;
-					uint8_t frame_data[128/8];
+					uint8_t frame_data[16];
 					uint32_t e = decode_str_frame(frame_data, lich, &fn, &lich_cnt, pld);
-					
 					//set the last FN number to FN-1 if this is a late-join and the frame data is valid
-					if(first_frame && (fn%6)==lich_cnt)
+					if(first_frame and (fn%6)==lich_cnt)
 					{
-						last_fn=fn-1;
+						last_fn = fn - 1;
+					}
+
+					if (got_lsf)
+					{
+						g_GateState.TryState(EGateState::modemin);
+						auto pack = std::make_unique<CPacket>();
+						pack->Initialize(EPacketType::stream);
+						pack->SetStreamId(streamID);
+						memcpy(pack->GetDstAddress(), lsf.GetCData(), 28);
+						pack->SetFrameNumber(fn);
+						memcpy(pack->GetPayload(), frame_data, 16);
+						pack->CalcCRC();
+						Modem2Gate.Push(pack);
+						LogDebug("RF Frame: FN:0x%04x | LICH_CNT:%u | MER: %-3.1f%%", fn, lich_cnt, float(e)/0xffffu/SYM_PER_PLD/2.0f*100.0f);
 					}
 					
-					if(((last_fn+1)&0xFFFFU)==fn) //new frame. TODO: maybe a timeout would be better
+					
+					if (((last_fn+1) & 0xffffu) == fn) //new frame. TODO: maybe a timeout would be better
 					{
-						if(lich_parts!=0x3FU) //6 chunks = 0b111111
+						if (lich_parts != 0x3fu) //6 chunks = 0b111111
 						{
+							static SLSF lichlsf;
 							//reconstruct LSF chunk by chunk
-							memcpy(&lsf_b[lich_cnt*5], lich, 40/8); //40 bits
-							lich_parts|=(1<<lich_cnt);
-							if(lich_parts==0x3FU && got_lsf==false) //collected all of them?
+							memcpy(lichlsf.GetData()+(lich_cnt * 5u), lich, 5u); //40 bits
+							lich_parts |= (1 << lich_cnt);
+							if(lich_parts == 0x3fu) // collected all of them?
 							{
-								if(!CRC_M17(lsf_b, 30)) //CRC check
+								auto ft = lichlsf.GetFrameType();
+								CFrameType type(ft);
+								if(lichlsf.CheckCRC()) //CRC check
 								{
-									got_lsf = true;
-									m17stream.sid=rand()%0x10000U;
-
-									uint8_t call_dst[12]={0}, call_src[12]={0};
-									uint16_t type=((uint16_t)lsf_b[12]<<8)|lsf_b[13];
-									uint8_t can=(type>>7)&0xF;
-
-									decode_callsign_bytes(call_dst, &lsf_b[0]);
-									decode_callsign_bytes(call_src, &lsf_b[6]);
-
-									time(&rawtime);
-									timeinfo=localtime(&rawtime);
-									dbg_print(TERM_SKYBLUE, "[%02d:%02d:%02d] ",
-										timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-									dbg_print(TERM_YELLOW, "LSF REC: DST: %-9s | SRC: %-9s | TYPE: %04X (CAN=%d)\n",
-										call_dst, call_src, type, can);
-
-									if(logfile!=NULL)
+									LogError("Lich LSF failed CRC check");
+								} else {
+									if (not got_lsf)
 									{
-										time(&rawtime);
-										timeinfo=localtime(&rawtime);
-										fprintf(logfile, "\"%02d:%02d:%02d\" \"%s\" \"%s\" \"RF\" \"%d\" \"--\"\n",
-											timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec,
-											call_src, call_dst, can);
+										got_lsf = true;
+										streamID = g_RNG.Get(); // a NEW stream, make a new ID
+										auto can = type.GetCan();
+										const CCallsign dst(lichlsf.GetCDstAddress());
+										const CCallsign src(lichlsf.GetCSrcAddress());
+										if (EMetaDatType::none != type.GetMetaDataType())
+										{
+											type.SetMetaDataType(EMetaDatType::none);
+											memset(lichlsf.GetMetaData(), 0, 14);
+											lichlsf.SetFrameType(type.GetOriginType());
+											lichlsf.CalcCRC();
+										}
+										LogInfo("Lich LSF OK: DST: %-9s | SRC: %-9s | TYPE: 0x%04x (CAN=%u)", dst.c_str(), dst.c_str(), ft, can);
+
+										LogDash("\"%s\" \"%s\" \"RF\" \"%d\" \"--\"", src.c_str(), dst.c_str(), can);
 									}
-								}
-								else
-								{
-									dbg_print(TERM_YELLOW, "LSF CRC ERR\n");
-									lich_parts=0; //reset flags
+									// we now have a viable LSF!
+									memcpy(lsf.GetData(), lichlsf.GetCData(), 30);
 								}
 							}
 						}
 
-						time(&rawtime);
-						timeinfo=localtime(&rawtime);
-
-						dbg_print(TERM_SKYBLUE, "[%02d:%02d:%02d]",
-							timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-						dbg_print(TERM_YELLOW, " RF FRM: ");
-						dbg_print(TERM_YELLOW, " FN:%04X | LICH_CNT:%d", fn, lich_cnt);
-						/*dbg_print(TERM_YELLOW, " | PLD: ");
-						for(uint8_t i=0; i<128/8; i++)
-							dbg_print(TERM_YELLOW, "%02X", frame_data[2+i]);*/
-						dbg_print(TERM_YELLOW, " | MER: %-3.1f%%\n",
-							(float)e/0xFFFFU/SYM_PER_PLD/2.0f*100.0f);
-
-						if(got_lsf)
-						{
-							m17stream.fn=(fn>>8)|((fn&0xFF)<<8);
-							uint8_t refl_pld[(32+16+224+16+128+16)/8];					//single frame
-							sprintf((char*)&refl_pld[0], "M17 ");						//MAGIC
-							*((uint16_t*)&refl_pld[4])=m17stream.sid;					//SID
-							memcpy(&refl_pld[6], &lsf_b[0], 224/8);						//LSD
-							*((uint16_t*)&refl_pld[34])=m17stream.fn;					//FN
-							memcpy(&refl_pld[36], frame_data, 128/8);					//payload
-							uint16_t crc_val=CRC_M17(refl_pld, 52);						//CRC
-							*((uint16_t*)&refl_pld[52])=(crc_val>>8)|(crc_val<<8);		//endianness swap
-							refl_send(refl_pld, sizeof(refl_pld));						//send a single frame to the reflector
-						}
-
-						last_fn=fn;
+						last_fn = fn;
 					}
 
 					first_frame = false;
 				}
 
 				//TODO: handle packet mode reception over RF
-				else if(dist_pkt<=5.0f && rx_state==RX_SYNCD)
+				else if(dist_pkt <= 5.0f and rx_state == ERxState::sync)
 				{
 					//find L2's minimum
 					uint8_t sample_offset=0;
@@ -1020,181 +1020,119 @@ void CCC1200::run()
 					}
 
 					float pld[SYM_PER_PLD];
-					uint8_t pkt_frame_data[25] = {0};
-					uint8_t eof = 0;
+					uint8_t eof = 0, pkt_fn = 0;
 					
 					for(uint16_t i=0; i<SYM_PER_PLD; i++)
 					{
-						pld[i]=f_flt_buff[8*5+i*5+sample_offset];
+						pld[i] = f_flt_buff[8*5+i*5+sample_offset];
 					}
 
-					//debug data dump
-					//fwrite((uint8_t*)&f_flt_buff[sample_offset], SYM_PER_FRA*5*sizeof(float), 1, fp);
+					/*uint32_t e = */decode_pkt_frame(ppayload, &eof, &pkt_fn, pld);
+					plsize += eof ? pkt_fn : 25;
+					ppayload += 25;
+					sample_cnt=0;		//reset rx timeout timer
 
-					/*uint32_t e = */decode_pkt_frame(pkt_frame_data, &eof, &pkt_fn, pld);
-
-					//TODO: this will only properly decode single-framed packets
-					if(last_pkt_fn==0xFF && eof==1 && CRC_M17(pkt_frame_data, strlen((char*)pkt_frame_data)+3)==0)
+					if(eof)
 					{
-						sample_cnt=0;		//reset rx timeout timer
-						last_pkt_fn=pkt_fn;
-
-						time(&rawtime);
-						timeinfo=localtime(&rawtime);
-
-						dbg_print(TERM_SKYBLUE, "[%02d:%02d:%02d]",
-							timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-						dbg_print(TERM_YELLOW, " RF PKT: ");
-						/*for(uint8_t i=0; i<25; i++)
-							dbg_print(0, "%02X ", pkt_frame_data[i]);
-						dbg_print(0, "\n");*/
-						dbg_print(0, "%s\n", (char*)&pkt_frame_data[1]);
-						uint8_t refl_pld[4+sizeof(lsf)+strlen((char*)pkt_frame_data)+3];					//single frame
-						sprintf((char*)&refl_pld[0], "M17P");						//MAGIC
-						memcpy(&refl_pld[4], &lsf, sizeof(lsf));					//LSF
-						memcpy(&refl_pld[34], &pkt_frame_data, strlen((char*)pkt_frame_data)+3); //PKT data + CRC
-						/*debug logging
-						time(&rawtime);
-						timeinfo=localtime(&rawtime);
-
-						dbg_print(TERM_SKYBLUE, "[%02d:%02d:%02d]",
-							timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-						dbg_print(TERM_YELLOW, " refl_pld: ");
-						for(uint8_t i=0; i<sizeof(refl_pld); i++)
-							dbg_print(0, "%02X ", refl_pld[i]);
-						dbg_print(0, "\n");
-						*/
-						refl_send(refl_pld, 4+sizeof(lsf)+strlen((char*)pkt_frame_data)+3);						//send to the reflector
+						if (plsize < 825u)
+							memset(payload+plsize, 0, 825u-plsize);
+						if (g_Crc.CheckCRC(payload, plsize))
+						{
+							LogWarning("RF PKT: Payload CRC failed");
+						} else {
+							if (got_lsf)
+							{
+								g_GateState.TryState(EGateState::modemin);
+								auto pkt = std::make_unique<CPacket>();
+								pkt->Initialize(EPacketType::packet, plsize+34);
+								memcpy(pkt->GetData()+4, lsf.GetCData(), 30);
+								memcpy(pkt->GetData()+35, payload, plsize);
+								Modem2Gate.Push(pkt);
+							} else {
+								LogWarning("Got a Packet Payload, but not the LSF!");
+							}
+							if (0x5u == *payload and 0u == payload[plsize-3])
+								LogInfo("SMS Msg: %s", (char *)(payload+1));
+						}
 					}
 				}
 				
 				//RX sync timeout
-				if(rx_state==RX_SYNCD)
+				if(rx_state == ERxState::sync)
 				{
 					sample_cnt++;
-					if(sample_cnt==960*2)
+					if(sample_cnt == 960*2)
 					{
-						rx_state=RX_IDLE;
+						rx_state = ERxState::idle;
 						sample_cnt=0;
 						first_frame = true;
 						last_fn=0xFFFFU; //TODO: there's a small chance that this will cause problems (it's a valid frame number)
-						last_pkt_fn=0xFF;
 						lich_parts=0;
+						ppayload = payload;
+						plsize = 0;
 						got_lsf = false;
 					}
 				}
 			}
 
 			//all data has been used
-			uart_rx_data_valid = 0;
+			uart_rx_data_valid = false;
 		}
 
 		//receive a packet - blocking
-		if (FD_ISSET(sockt, &rfds))
+		auto pack = Gate2Modem.Pop();
+		if (pack)
 		{
-			rx_len = recvfrom(sockt, rx_buff, MAX_UDP_LEN, 0, (struct sockaddr*)&saddr, (socklen_t*)&saddr_size);
-
-			//debug
-			//dbg_print(0, "Size:%d\nPayload:%s\n", rx_len, rx_buff);
-
-			//PING-PONG
-			if(strstr((char*)rx_buff, "PING")==(char*)rx_buff)
+			if(EPacketType::stream == pack->GetType())
 			{
-				last_refl_ping = time(NULL);
-				sprintf((char*)tx_buff, "PONGxxxxxx"); //that "xxxxxx" is just a placeholder
-				memcpy(&tx_buff[4], config.enc_node, sizeof(config.enc_node));
-				refl_send(tx_buff, 4+6); //PONG
-				//dbg_print(TERM_YELLOW, "PING\n");
-			}
+				tx_timer = getMilliseconds();
 
-			//M17 stream frame data - "Steaming Mode IP Packet, Single Packet Method"
-			else if(strstr((char*)rx_buff, "M17 ")==(char*)rx_buff)
-			{
-				tx_timer=get_ms();
+				int8_t frame_symbols[SYM_PER_FRA];					//raw frame symbols
+				int8_t bsb_samples[963] = { CMD_TX_DATA, -61, 3 };	//baseband samples wrapped in a frame
 
-				m17stream.sid=((uint16_t)rx_buff[4]<<8)|rx_buff[5];
-				m17stream.fn=((uint16_t)rx_buff[34]<<8)|rx_buff[35];
-				static uint8_t dst_call[10]={0};
-				static uint8_t src_call[10]={0};
-				memcpy(m17stream.pld, &rx_buff[(32+16+224+16)/8U], 128/8);
-
-				int8_t frame_symbols[SYM_PER_FRA];						//raw frame symbols
-				int8_t bsb_samples[SYM_PER_FRA*5];						//filtered baseband samples = symbols*sps
-				uint8_t bsb_chunk[963] = {CMD_TX_DATA, 0xC3, 0x03};		//baseband samples wrapped in a frame
-
-				if(tx_state==TX_IDLE) //first received frame
+				if(tx_state == ETxState::idle) //first received frame
 				{
-					tx_state=TX_ACTIVE;
+					tx_state = ETxState::active;
 
 					//TODO: this needs to happen every time a new transmission appears
 					//dev_stop_rx();
 					//dbg_print(0, "RX stop\n");
-					usleep(10e3);
-
-					//extract data
-					memcpy(m17stream.lsf.dst, "\xFF\xFF\xFF\xFF\xFF\xFF", 6);
-					memcpy(m17stream.lsf.src, &rx_buff[6+6], 6);
-					decode_callsign_bytes(dst_call, m17stream.lsf.dst);
-					decode_callsign_bytes(src_call, m17stream.lsf.src);
+					std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
 					//set TYPE field
-					memcpy(m17stream.lsf.type, &rx_buff[18], 2);
-					m17stream.lsf.type[1]|=0x2U<<5; //no encryption, so the subtype field defines the META field contents: extended callsign data
+					CFrameType type(pack->GetFrameType());
+					type.SetMetaDataType(EMetaDatType::ecd);
+					pack->SetFrameType(type.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
 
 					//generate META field
-					//remove trailing spaces and suffixes
-					uint8_t trimmed_src[12], enc_trimmed_src[6];
-					for(uint8_t i=0; i<12; i++)
-					{
-						if(src_call[i]!=' ')
-							trimmed_src[i]=src_call[i];
-						else
-						{
-							trimmed_src[i]=0;
-							break;
-						}
-					}
-					encode_callsign_bytes(enc_trimmed_src, trimmed_src);
+					cfg.callSign.CodeOut(pack->GetMetaData());
+					g_Gate.GetLink().CodeOut(pack->GetMetaData()+6);
+					memset(pack->GetMetaData()+12, 0, 2);
 
-					uint8_t ext_ref[12], enc_ext_ref[6];
-					sprintf((char*)ext_ref, "%s %c", config.reflector, config.module);
-					encode_callsign_bytes(enc_ext_ref, ext_ref);
-
-					memcpy(&m17stream.lsf.meta[0], m17stream.lsf.src, 6); //originator
-					memcpy(&m17stream.lsf.meta[6], enc_ext_ref, 6); //reflector
-					memset(&m17stream.lsf.meta[12], 0, 2);
-					memcpy(m17stream.lsf.src, enc_trimmed_src, 6);
+					memcpy(lsf.GetData(), pack->GetCDstAddress(), 28);
+					lsf.CalcCRC();
 
 					//append CRC
-					uint16_t ccrc=LSF_CRC(&m17stream.lsf);
-					m17stream.lsf.crc[0]=ccrc>>8;
-					m17stream.lsf.crc[1]=ccrc&0xFF;
+					pack->CalcCRC();
+					const CCallsign dst(pack->GetCDstAddress());
+					const CCallsign src(pack->GetCSrcAddress());
 
 					//log to file
-					if(logfile!=NULL)
-					{
-						time(&rawtime);
-						timeinfo=localtime(&rawtime);
-						fprintf(logfile, "\"%02d:%02d:%02d\" \"%s\" \"%s\" \"Internet\" \"--\" \"--\"\n",
-							timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec,
-							src_call, dst_call);
-					}
+					LogDash("\"%s\" \"%s\" \"Internet\" \"--\" \"--\"", src.c_str(), dst.c_str());
 
-					time(&rawtime);
-					timeinfo=localtime(&rawtime);
-					dbg_print(TERM_SKYBLUE, "[%02d:%02d:%02d]",
-						timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-					dbg_print(TERM_GREEN, " Stream TX start\n");
+					LogInfo("Stream TX start");
 
 					//stop RX, set PA_EN=1 and initialize TX
-					while (dev_stop_rx() != 0) usleep(40e3);
-					usleep(2e3);
-					gpio_set(config.pa_en, 1);
-					while (dev_start_tx() != 0) usleep(40e3);
-					usleep(10e3);
+					while (stopRx())
+						std::this_thread::sleep_for(std::chrono::milliseconds(40));
+					std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+					while (startTx())
+						std::this_thread::sleep_for(std::chrono::milliseconds(40));
+					std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
 					//flush the RRC baseband filter
-					filterSymbols(NULL, NULL, NULL, 0);
+					filterSymbols(nullptr, nullptr, nullptr, 0);
 				
 					//generate frame symbols, filter them and send out to the device
 					//we need to prepare 3 frames to begin the transmission - preamble, LSF and stream frame 0
@@ -1203,138 +1141,112 @@ void CCC1200::run()
 					gen_preamble_i8(frame_symbols, &frame_buff_cnt, PREAM_LSF);
 
 					//filter and send out to the device
-					filterSymbols(bsb_samples, frame_symbols, rrc_taps_5, 0);
-					memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
-					write(fd, (uint8_t*)bsb_chunk, sizeof(bsb_chunk));
+					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+					writeDev(bsb_samples, sizeof(bsb_samples), "SM LSF preamble");
 
 					//now the LSF
-					gen_frame_i8(frame_symbols, NULL, FRAME_LSF, &(m17stream.lsf), 0, 0);
+					gen_frame_i8(frame_symbols, NULL, FRAME_LSF, (lsf_t *)(lsf.GetCData()), 0, 0);
 
 					//filter and send out to the device
-					filterSymbols(bsb_samples, frame_symbols, rrc_taps_5, 0);
-					memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
-					write(fd, (uint8_t*)bsb_chunk, sizeof(bsb_chunk));
+					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+					writeDev(bsb_samples, sizeof(bsb_samples), "SM LSF");
 
 					//finally, the first frame
-					gen_frame_i8(frame_symbols, m17stream.pld, FRAME_STR, &(m17stream.lsf), (m17stream.fn&0x7FFFU)%6, m17stream.fn);
+					gen_frame_i8(frame_symbols, pack->GetCPayload(), FRAME_STR, (lsf_t *)(lsf.GetCData()), (pack->GetFrameNumber()&0x7fffu)%6, pack->GetFrameNumber());
 
 					//filter and send out to the device
-					filterSymbols(bsb_samples, frame_symbols, rrc_taps_5, 0);
-					memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
-					write(fd, (uint8_t*)bsb_chunk, sizeof(bsb_chunk));
+					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+					writeDev(bsb_samples, sizeof(bsb_samples), "SM First Frame");
 				}
 				else
 				{
+					auto fn = pack->GetFrameNumber();
+					uint8_t lich_cnt = (fn & 0x7fffu) % 6;
+					if (0 == lich_cnt)
+					{
+						memcpy(lsf.GetData(), pack->GetCDstAddress(), 28);
+						lsf.CalcCRC();
+					}
 					//only one frame is needed
-					gen_frame_i8(frame_symbols, m17stream.pld, FRAME_STR, &(m17stream.lsf), (m17stream.fn&0x7FFFU)%6, m17stream.fn);
+					gen_frame_i8(frame_symbols, pack->GetCPayload(), FRAME_STR, (lsf_t *)(lsf.GetCData()), lich_cnt, fn);
 
 					//filter and send out to the device
-					filterSymbols(bsb_samples, frame_symbols, rrc_taps_5, 0);
-					memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
-					write(fd, (uint8_t*)bsb_chunk, sizeof(bsb_chunk));
+					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+					writeDev(bsb_samples, sizeof(bsb_samples), "SM Frame");
 				}
 
-				time(&rawtime);
-				timeinfo=localtime(&rawtime);
-
-				/*dbg_print(TERM_YELLOW, "[%02d:%02d:%02d] NET FRM: ",
-						timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-				dbg_print(TERM_YELLOW, "SID: %04X | FN: %04X | DST: %-9s | SRC: %-9s | TYPE: %04X | META: ",
-						m17stream.sid, m17stream.fn&0x7FFFU, dst_call, src_call, ((uint16_t)m17stream.lsf.type[0]<<8)|m17stream.lsf.type[1]);
-				for(uint8_t i=0; i<14; i++)
-					dbg_print(TERM_YELLOW, "%02X", m17stream.lsf.meta[i]);
-				dbg_print(TERM_YELLOW, "\n");*/
-
-				if(m17stream.fn&0x8000U) //last stream frame
+				if(pack->IsLastPacket()) //last stream frame
 				{
 					//send the final EOT marker
 					uint32_t frame_buff_cnt=0;
 					gen_eot_i8(frame_symbols, &frame_buff_cnt);
 
 					//filter and send out to the device
-					filterSymbols(bsb_samples, frame_symbols, rrc_taps_5, 0);
-					memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
-					write(fd, (uint8_t*)bsb_chunk, sizeof(bsb_chunk));
+					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+					writeDev(bsb_samples, sizeof(bsb_samples), "SM EOT");
 
-					time(&rawtime);
-					timeinfo=localtime(&rawtime);
-
-					dbg_print(TERM_SKYBLUE, "[%02d:%02d:%02d]",
-						timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-					dbg_print(TERM_GREEN, " Stream TX end\n");
-					usleep(8*40e3); //wait 320ms (8 M17 frames) - let the transmitter consume all the buffered samples
-					
-					//disable TX
-					gpio_set(config.pa_en, 0);
+					LogInfo("Stream TX end");
+					//wait 320ms (8 M17 frames) - let the transmitter consume all the buffered samples
+					std::this_thread::sleep_for(std::chrono::milliseconds(320));
 
 					//restart RX
-					while (dev_stop_tx() != 0) usleep(40e3);
-					while (dev_start_rx() != 0) usleep(40e3);
-					time(&rawtime);
-					timeinfo=localtime(&rawtime);
-					dbg_print(TERM_SKYBLUE, "[%02d:%02d:%02d]",
-						timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-					dbg_print(TERM_GREEN, " RX start\n");
+					while (stopTx())
+						std::this_thread::sleep_for(std::chrono::milliseconds(40));
+					while (startRx())
+						std::this_thread::sleep_for(std::chrono::milliseconds(40));
+					LogInfo("RX start");
 
-					tx_state=TX_IDLE;
+					tx_state = ETxState::idle;
+					g_GateState.Set2IdleIf(EGateState::gatestreamin);
 				}
 			}
 
 			//M17 packet data - "Packet Mode IP Packet"
-			else if(strstr((char*)rx_buff, "M17P")==(char*)rx_buff)
+			else if(EPacketType::packet == pack->GetType())
 			{
-				time(&rawtime);
-				timeinfo=localtime(&rawtime);
-				dbg_print(TERM_SKYBLUE, "[%02d:%02d:%02d]", timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-				dbg_print(TERM_GREEN, " M17 Inet packet received\n");
+				LogInfo("M17 Inet PM received");
 
-				uint8_t call_dst[10], call_src[10], can, type;
-				decode_callsign_bytes(call_dst, &rx_buff[4+0]);
-				decode_callsign_bytes(call_src, &rx_buff[4+6]);
-				can=(*((uint16_t*)&rx_buff[4+6+6])>>7)&0xF;
-				type=rx_buff[4+240/8];
+				const CCallsign dst(pack->GetCDstAddress());
+				const CCallsign src(pack->GetCSrcAddress());
+				CFrameType type(pack->GetFrameType());
 				
-				dbg_print(TERM_DEFAULT, " ├ "); dbg_print(TERM_YELLOW, "DST: "); dbg_print(TERM_DEFAULT, "%s\n", call_dst);
-				dbg_print(TERM_DEFAULT, " ├ "); dbg_print(TERM_YELLOW, "SRC: "); dbg_print(TERM_DEFAULT, "%s\n", call_src);
-				dbg_print(TERM_DEFAULT, " ├ "); dbg_print(TERM_YELLOW, "CAN: "); dbg_print(TERM_DEFAULT, "%d\n", can);
-				if(type!=5) //assuming 1-byte type specifier
+				LogInfo(" ├ DST: %s", dst.c_str());
+				LogInfo(" ├ SRC: %s", src.c_str());
+				LogInfo(" ├ CAN: %u", type.GetCan());
+				if(*pack->GetCPayload() != 0x5u) //assuming 1-byte type specifier
 				{
-					dbg_print(TERM_DEFAULT, " └ "); dbg_print(TERM_YELLOW, "TYPE: "); dbg_print(TERM_DEFAULT, "%d\n", type);
+					LogInfo(" ├ TYPE: %u", *pack->GetCPayload());
+					LogInfo(" └ SIZE: %u", pack->GetSize()-34u);
 				}
 				else
 				{
-					dbg_print(TERM_DEFAULT, " ├ "); dbg_print(TERM_YELLOW, "TYPE: "); dbg_print(TERM_DEFAULT, "SMS\n");
-					dbg_print(TERM_DEFAULT, " └ "); dbg_print(TERM_YELLOW, "MSG: "); dbg_print(TERM_DEFAULT, "%s\n", &rx_buff[4+240/8+1]);
+					auto pnull = pack->GetPayload()+pack->GetSize()-3u;
+					LogInfo(" ├ TYPE: SMS");
+					if (*pnull) //this should be a null byte
+					{
+						LogWarning(" ├ SMS msg not properly terminated!");
+						pnull = 0;
+						pack->CalcCRC();
+					}
+					LogInfo(" └ MSG: %s", (char *)pack->GetCPayload());
 				}
 
 				//TODO: handle TX here
 				int8_t frame_symbols[SYM_PER_FRA];						//raw frame symbols
-				int8_t bsb_samples[SYM_PER_FRA*5];						//filtered baseband samples = symbols*sps
-				uint8_t bsb_chunk[963] = {CMD_TX_DATA, 0xC3, 0x03};		//baseband samples wrapped in a frame
+				int8_t bsb_samples[963] = {CMD_TX_DATA, -61, 3 };		//baseband samples wrapped in a frame
 
 				//log to file
-				FILE* logfile=fopen((char*)config.log_path, "awb");
-				if(logfile!=NULL)
-				{
-					time(&rawtime);
-					timeinfo=localtime(&rawtime);
-					fprintf(logfile, "\"%02d:%02d:%02d\" \"%s\" \"%s\" \"Internet\" \"--\" \"--\"\n",
-						timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec,
-						call_src, call_dst);
-				}
+				LogDash("\"%s\" \"%s\" \"Internet\" \"--\" \"--\"", src.c_str(), dst.c_str());
 				
-				time(&rawtime);
-				timeinfo=localtime(&rawtime);
-				dbg_print(TERM_SKYBLUE, "[%02d:%02d:%02d]",
-					timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-				dbg_print(TERM_GREEN, " Packet TX start\n");
+				LogInfo("Packet TX start");
 
 				//stop RX, set PA_EN=1 and initialize TX
-				while (dev_stop_rx() != 0) usleep(40e3);
-				usleep(2e3);
-				gpio_set(config.pa_en, 1);
-				while (dev_start_tx() != 0) usleep(40e3);
-				usleep(10e3);
+				while (stopRx())
+					std::this_thread::sleep_for(std::chrono::milliseconds(40));
+				std::this_thread::sleep_for(std::chrono::milliseconds(2));
+				while (startTx())
+					std::this_thread::sleep_for(std::chrono::milliseconds(40));
+				std::this_thread::sleep_for(std::chrono::milliseconds(10));
 				
 				//flush the RRC baseband filter
 				filterSymbols(NULL, NULL, NULL, 0);
@@ -1346,127 +1258,79 @@ void CCC1200::run()
 				gen_preamble_i8(frame_symbols, &frame_buff_cnt, PREAM_LSF);
 				
 				//filter and send out to the device
-				filterSymbols(bsb_samples, frame_symbols, rrc_taps_5, 0);
-				memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
-				write(fd, (uint8_t*)bsb_chunk, sizeof(bsb_chunk));
+				filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+				writeDev(bsb_samples, sizeof(bsb_samples), "PM Preamble");
 				
 				//now the LSF
-				gen_frame_i8(frame_symbols, NULL, FRAME_LSF, (lsf_t*)&rx_buff[4], 0, 0);
+				gen_frame_i8(frame_symbols, NULL, FRAME_LSF, (lsf_t*)(pack->GetCDstAddress()), 0, 0);
 				
 				//filter and send out to the device
-				filterSymbols(bsb_samples, frame_symbols, rrc_taps_5, 0);
-				memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
-				write(fd, (uint8_t*)bsb_chunk, sizeof(bsb_chunk));
+				filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+				writeDev(bsb_samples, sizeof(bsb_samples), "PM LSF");
 				
 				//packet frames
-				uint16_t pld_len=rx_len-(4+240/8); //"M17P" plus 240-bit LSD
-				uint8_t frame=0;
+				uint16_t pld_len = pack->GetSize() - 34u; //"M17P" plus 240-bit LSD
+				uint8_t frame = 0;
 				uint8_t pld[26];
 				
-				while(pld_len>25)
+				while(pld_len > 25)
 				{
-					memcpy(pld, &rx_buff[4+240/8+frame*25], 25);
-					pld[25]=frame<<2;
+					memcpy(pld, pack->GetCPayload()+frame*25, 25);
+					pld[25] = frame<<2;
 					gen_frame_i8(frame_symbols, pld, FRAME_PKT, NULL, 0, 0);
-					filterSymbols(bsb_samples, frame_symbols, rrc_taps_5, 0);
-					memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
-					write(fd, (uint8_t*)bsb_chunk, sizeof(bsb_chunk));
-					pld_len-=25;
+					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+					writeDev(bsb_samples, sizeof(bsb_samples), "PM Frame");
+					pld_len -= 25;
 					frame++;
-					usleep(40*1000U);
+					std::this_thread::sleep_for(std::chrono::milliseconds(40));
 				}
 				memset(pld, 0, 26);
-				memcpy(pld, &rx_buff[4+240/8+frame*25], pld_len);
-				pld[25]=(1<<7)|(pld_len<<2); //EoT flag set, amount of remaining data in the 'frame number' field
+				memcpy(pld, pack->GetCPayload()+frame*25, pld_len);
+				pld[25] = (1<<7) | (pld_len<<2); //EoT flag set, amount of remaining data in the 'frame number' field
 				gen_frame_i8(frame_symbols, pld, FRAME_PKT, NULL, 0, 0);
-				filterSymbols(bsb_samples, frame_symbols, rrc_taps_5, 0);
-				memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
-				write(fd, (uint8_t*)bsb_chunk, sizeof(bsb_chunk));
-				usleep(40*1000U);
+				filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+				writeDev(bsb_samples, sizeof(bsb_samples), "PM Final Frame");
+				std::this_thread::sleep_for(std::chrono::milliseconds(40));
 
 				//now the final EOT marker
 				frame_buff_cnt=0;
 				gen_eot_i8(frame_symbols, &frame_buff_cnt);
 
 				//filter and send out to the device
-				filterSymbols(bsb_samples, frame_symbols, rrc_taps_5, 0);
-				memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
-				write(fd, (uint8_t*)bsb_chunk, sizeof(bsb_chunk));
+				filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+				writeDev(bsb_samples, sizeof(bsb_samples), "PM EOT");
 
-				time(&rawtime);
-				timeinfo=localtime(&rawtime);
-
-				dbg_print(TERM_SKYBLUE, "[%02d:%02d:%02d]",
-					timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-				dbg_print(TERM_GREEN, " PKT TX end\n");
-				usleep(3*40e3); //wait 120ms (3 M17 frames)
-				
-				//disable TX
-				gpio_set(config.pa_en, 0);
+				LogInfo("PKT TX end");
+				std::this_thread::sleep_for(std::chrono::milliseconds(120)); //wait 120ms (3 M17 frames)
 
 				//restart RX
-				while (dev_stop_tx() != 0) usleep(40e3);
-				while (dev_start_rx() != 0) usleep(40e3);
-				time(&rawtime);
-				timeinfo=localtime(&rawtime);
-				dbg_print(TERM_SKYBLUE, "[%02d:%02d:%02d]",
-					timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-				dbg_print(TERM_GREEN, " RX start\n");
+				while (stopTx())
+					std::this_thread::sleep_for(std::chrono::milliseconds(40));
+				while (startRx())
+					std::this_thread::sleep_for(std::chrono::microseconds(40));
+				LogInfo("RX start");
 
-				tx_state = TX_IDLE;
+				tx_state = ETxState::idle;
+				g_GateState.Set2IdleIf(EGateState::gatepacketin);
 			}
-
-			//clear the rx_buff
-			memset((uint8_t*)rx_buff, 0, rx_len);
 		}
 
 		//tx timeout
-		if(tx_state==TX_ACTIVE && (get_ms()-tx_timer)>240) //240ms timeout
+		if(tx_state == ETxState::active and (getMilliseconds()-tx_timer) > 240) //240ms timeout
 		{
-			time(&rawtime);
-			timeinfo=localtime(&rawtime);
-
-			dbg_print(TERM_SKYBLUE, "[%02d:%02d:%02d]",
-				timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-			dbg_print(TERM_GREEN, " TX timeout\n");
-			//usleep(10*40e3); //wait 400ms (10 M17 frames)
+			LogInfo("TX timeout");
 			
-			//disable TX
-			gpio_set(config.pa_en, 0);
-
 			//restart RX
-			while (dev_stop_tx() != 0) usleep(40e3);
-			while (dev_start_rx() != 0) usleep(40e3);
-			time(&rawtime);
-			timeinfo=localtime(&rawtime);
-			dbg_print(TERM_SKYBLUE, "[%02d:%02d:%02d]",
-				timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-			dbg_print(TERM_GREEN, " RX start\n");
+			while (stopTx())
+				std::this_thread::sleep_for(std::chrono::milliseconds(40));
+			while (startRx())
+				std::this_thread::sleep_for(std::chrono::milliseconds(40));
+			LogInfo("RX start");
 
-			tx_state=TX_IDLE;
-		}
-
-		//connection with the reflector borken
-		if(time(NULL)-last_refl_ping>30)
-		{
-			//for now, just cry about it and quit
-			dbg_print(TERM_RED, "Lost connection with the reflector\nExiting");
-
-			//cleanup gpios
-			gpio_cleanup();
-
-			//close log file if necessary
-			if(logfile!=NULL)
-			{
-				fclose(logfile);
-			}
-
-			exit(EXIT_FAILURE);
+			tx_state = ETxState::idle;
+			g_GateState.Set2IdleIf(EGateState::gatestreamin);
 		}
 	}
-	
-	//should never get here	
-	return 0;
 }
 
 

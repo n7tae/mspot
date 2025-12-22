@@ -49,7 +49,7 @@ public:
 	int GetInt(const std::string &section, const std::string &key) const;
 	bool GetBoolean(const std::string &section, const std::string &key) const;
 	bool IsString(const std::string &section, const std::string &key) const;
-	bool IsDestination(const std::string &dst) const;
+
 	const nlohmann::json &GetData() { return data; }
 
 private:

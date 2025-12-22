@@ -19,7 +19,21 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 */
 
-#include "GateState.h"
+#pragma once
 
-// the one and only Tx/Rx state
-CGateState g_GateState;
+#include <random>
+#include <chrono>
+#include <cstdint>
+
+class CRandom
+{
+public:
+	uint16_t Get()
+	{
+		return distribution(engine);
+	}
+private:
+	std::random_device rd;
+	std::minstd_rand engine { rd() };
+	std::uniform_int_distribution<uint16_t> distribution { 0x1u, 0xffffu };
+};

@@ -29,11 +29,11 @@ struct SJsonKeys
 {
 	struct Repeater
 	{
-		const std::string section, callsign, module, can, txframetype, isprivate, debug;
+		const std::string section, callsign, module, can, radioTypeIsV3, isprivate, debug;
 	}
 	repeater
 	{
-		"Repeater", "Callsign", "Module", "CAN", "TxFrameTYPEv3", "IsPrivate", "Debug"
+		"Repeater", "Callsign", "Module", "CAN", "RaidoTypeIsv3", "IsPrivate", "Debug"
 	};
 
 	struct LOG
