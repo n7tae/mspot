@@ -814,7 +814,7 @@ void CCC1200::run()
 
 			if (uart_rx_sync and rx_buff_cnt==963)
 			{
-				//dbg_print(TERM_YELLOW, "Baseband packet received\n");
+				LogDebug("Baseband packet received");
 				memcpy(raw_bsb_rx, rx_samp_buff+3, sizeof(raw_bsb_rx));
 				memset(rx_samp_buff, 0, sizeof(rx_samp_buff));
 				uart_rx_data_valid = true;
