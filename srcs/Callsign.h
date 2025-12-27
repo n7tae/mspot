@@ -47,5 +47,5 @@ public:
 	bool IsReflector(void) const;
 private:
 	uint64_t coded;
-	char cs[10];	// big enough to hold a 9-char callsign with a trailling NULL
+	char cs[10];	// big enough to hold a 9-char callsign with a trailling nullptr
 };

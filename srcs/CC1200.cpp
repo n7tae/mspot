@@ -704,7 +704,7 @@ bool CCC1200::Start()
 		return true;
 
 	//PING-PONG test
-	LogInfo("Sending %s a 'PING", cfg.uartDev.c_str());
+	LogInfo("Sending %s a 'PING'", cfg.uartDev.c_str());
 	if (testPING())
 		return true;
 
@@ -775,7 +775,7 @@ void CCC1200::run()
 		FD_ZERO(&rfds);
 		FD_SET(fd, &rfds);
 
-		select(fd+1, &rfds, NULL, NULL, NULL);
+		select(fd+1, &rfds, nullptr, nullptr, nullptr);
 
 		//are there any new baseband samples to process?
 		if (keep_running and not uartLock and FD_ISSET(fd, &rfds))
@@ -1139,7 +1139,7 @@ void CCC1200::run()
 					std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
 					//flush the RRC baseband filter
-					filterSymbols(nullptr, nullptr, nullptr, 0);
+					//filterSymbols(nullptr, nullptr, nullptr, 0);
 				
 					//generate frame symbols, filter them and send out to the device
 					//we need to prepare 3 frames to begin the transmission - preamble, LSF and stream frame 0
@@ -1152,7 +1152,7 @@ void CCC1200::run()
 					writeDev(bsb_samples, sizeof(bsb_samples), "SM LSF preamble");
 
 					//now the LSF
-					gen_frame_i8(frame_symbols, NULL, FRAME_LSF, (lsf_t *)(lsf.GetCData()), 0, 0);
+					gen_frame_i8(frame_symbols, nullptr, FRAME_LSF, (lsf_t *)(lsf.GetCData()), 0, 0);
 
 					//filter and send out to the device
 					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
@@ -1256,7 +1256,7 @@ void CCC1200::run()
 				std::this_thread::sleep_for(std::chrono::milliseconds(10));
 				
 				//flush the RRC baseband filter
-				filterSymbols(NULL, NULL, NULL, 0);
+				//filterSymbols(nullptr, nullptr, nullptr, 0);
 				
 				//generate frame symbols, filter them and send out to the device
 				//we need to prepare 3 frames to begin the transmission - preamble, LSF and stream frame 0
@@ -1269,7 +1269,7 @@ void CCC1200::run()
 				writeDev(bsb_samples, sizeof(bsb_samples), "PM Preamble");
 				
 				//now the LSF
-				gen_frame_i8(frame_symbols, NULL, FRAME_LSF, (lsf_t*)(pack->GetCDstAddress()), 0, 0);
+				gen_frame_i8(frame_symbols, nullptr, FRAME_LSF, (lsf_t*)(pack->GetCDstAddress()), 0, 0);
 				
 				//filter and send out to the device
 				filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
@@ -1284,7 +1284,7 @@ void CCC1200::run()
 				{
 					memcpy(pld, pack->GetCPayload()+frame*25, 25);
 					pld[25] = frame<<2;
-					gen_frame_i8(frame_symbols, pld, FRAME_PKT, NULL, 0, 0);
+					gen_frame_i8(frame_symbols, pld, FRAME_PKT, nullptr, 0, 0);
 					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
 					writeDev(bsb_samples, sizeof(bsb_samples), "PM Frame");
 					pld_len -= 25;
@@ -1294,7 +1294,7 @@ void CCC1200::run()
 				memset(pld, 0, 26);
 				memcpy(pld, pack->GetCPayload()+frame*25, pld_len);
 				pld[25] = (1<<7) | (pld_len<<2); //EoT flag set, amount of remaining data in the 'frame number' field
-				gen_frame_i8(frame_symbols, pld, FRAME_PKT, NULL, 0, 0);
+				gen_frame_i8(frame_symbols, pld, FRAME_PKT, nullptr, 0, 0);
 				filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
 				writeDev(bsb_samples, sizeof(bsb_samples), "PM Final Frame");
 				std::this_thread::sleep_for(std::chrono::milliseconds(40));

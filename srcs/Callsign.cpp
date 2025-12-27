@@ -79,7 +79,7 @@ void CCallsign::CSIn(const std::string &callsign)
 		{
 			if ( 0 == pos) // unless it's at the end
 			{
-				cs[i] = 0;	// this ensures trailing spaces will actually be NULL
+				cs[i] = 0;	// this ensures trailing spaces will actually be nullptr
 				continue;
 			}
 			else

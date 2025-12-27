@@ -66,7 +66,7 @@ public:
 		}
 	}
 
-	bool Initialize(const int family, const uint16_t port = 0U, const char *address = NULL)
+	bool Initialize(const int family, const uint16_t port = 0U, const char *address = nullptr)
 	{
 		Clear();
 		addr.ss_family = family;
