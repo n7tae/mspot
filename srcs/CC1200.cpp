@@ -248,7 +248,7 @@ void CCC1200::loadConfig()
 	extern CConfigure g_Cfg;
 	cfg.gpioDev  = g_Cfg.GetString(  g_Keys.modem.section,    g_Keys.modem.gpiochipDevice);
 	cfg.uartDev  = g_Cfg.GetString(  g_Keys.modem.section,    g_Keys.modem.uartDevice);
-	cfg.baudRate = g_Cfg.GetUnsigned(g_Keys.modem.section,    g_Keys.modem.uartSpeed);
+	cfg.baudRate = g_Cfg.GetUnsigned(g_Keys.modem.section,    g_Keys.modem.uartBaudRate);
 	cfg.rxFreq   = g_Cfg.GetUnsigned(g_Keys.modem.section,    g_Keys.modem.rxFreq);
 	cfg.txFreq   = g_Cfg.GetUnsigned(g_Keys.modem.section,    g_Keys.modem.txFreq);
 	cfg.afc      = g_Cfg.GetBoolean( g_Keys.modem.section,    g_Keys.modem.afc);

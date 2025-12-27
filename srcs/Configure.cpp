@@ -173,8 +173,8 @@ bool CConfigure::ReadData(const std::string &path)
 					data[g_Keys.modem.section][g_Keys.modem.gpiochipDevice] = value;
 				else if (0 == key.compare(g_Keys.modem.uartDevice))
 					data[g_Keys.modem.section][g_Keys.modem.uartDevice] = value;
-				else if (0 == key.compare(g_Keys.modem.uartSpeed))
-					data[g_Keys.modem.section][g_Keys.modem.uartSpeed] = getUnsigned(value, "Uart Speed", 38400u, 921600u, 460800u);
+				else if (0 == key.compare(g_Keys.modem.uartBaudRate))
+					data[g_Keys.modem.section][g_Keys.modem.uartBaudRate] = getUnsigned(value, "Uart Speed", 38400u, 921600u, 460800u);
 				else if (0 == key.compare(g_Keys.modem.boot0))
 					data[g_Keys.modem.section][g_Keys.modem.boot0] = getUnsigned(value, "BOOT0 Pin", 0, 54, 20);
 				else if (0 == key.compare(g_Keys.modem.nrst))
@@ -276,9 +276,9 @@ bool CConfigure::ReadData(const std::string &path)
 		const auto path = GetString(g_Keys.modem.section, g_Keys.modem.uartDevice);
 		checkPath(g_Keys.modem.section, g_Keys.modem.uartDevice, path, std::filesystem::file_type::character);
 	}
-	if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.uartSpeed, rval))
+	if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.uartBaudRate, rval))
 	{
-		const auto speed = GetUnsigned(g_Keys.modem.section, g_Keys.modem.uartSpeed);
+		const auto speed = GetUnsigned(g_Keys.modem.section, g_Keys.modem.uartBaudRate);
 		switch (speed)
 		{
 			case 38400u:

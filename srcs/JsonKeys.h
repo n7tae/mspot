@@ -33,7 +33,7 @@ struct SJsonKeys
 	}
 	repeater
 	{
-		"Repeater", "Callsign", "Module", "CAN", "RaidoTypeIsv3", "IsPrivate", "Debug"
+		"Repeater", "Callsign", "Module", "CAN", "RadioTypeIsV3", "IsPrivate", "Debug"
 	};
 
 	struct LOG
@@ -47,11 +47,11 @@ struct SJsonKeys
 
 	struct MODEM
 	{
-		const std::string section, gpiochipDevice, uartDevice, uartSpeed, boot0, nrst, rxFreq, txFreq, afc, freqCorr, txPower, debug;
+		const std::string section, gpiochipDevice, uartDevice, uartBaudRate, boot0, nrst, rxFreq, txFreq, afc, freqCorr, txPower, debug;
 	}
 	modem
 	{
-		"Modem", "GpioChipDevice", "UartDevice", "UartSpeed", "BOOT0", "nRST", "RXFrequency", "TXFrequency", "AFC", "FreqCorrection", "TXPower", "Debug"
+		"Modem", "GpioChipDevice", "UartDevice", "UartBaudRate", "BOOT0", "nRST", "RXFrequency", "TXFrequency", "AFC", "FreqCorrection", "TXPower", "Debug"
 	};
 
 	struct GATEWAY
