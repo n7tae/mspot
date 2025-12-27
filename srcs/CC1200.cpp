@@ -735,11 +735,11 @@ bool CCC1200::Start()
 
 void CCC1200::Stop()
 {
-	LogInfo("Shutting down the CC1200");
+	LogInfo("Shutting down the CC1200...");
 	keep_running = false;
-	runFuture.get();
-	if (fd >= 0)
-		close(fd);
+	if (runFuture.valid())
+		runFuture.get();
+	LogDebug("run() thread is closed...");
 	if (reqBoot0)
 	{
 		gpioSetValue(cfg.boot0, 0);
@@ -750,8 +750,12 @@ void CCC1200::Stop()
 		gpioSetValue(cfg.nrst, 0);
 		gpiod_line_request_release(reqNrst);
 	}
+	LogDebug("GPIO lines set to low...");
 	if (gpioChip)
 		gpiod_chip_close(gpioChip);
+	LogDebug("GPIO chip closed...");
+	if (fd >= 0)
+		close(fd);
 	LogInfo("All resources released");
 }
 
@@ -1188,7 +1192,7 @@ void CCC1200::run()
 					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
 					writeDev(bsb_samples, sizeof(bsb_samples), "SM Frame");
 				}
-				LogDebug("Stream packet: FN=0x%o=04x", pack->GetFrameNumber());
+				LogDebug("Stream packet: FN=0x%04x", pack->GetFrameNumber());
 				if(pack->IsLastPacket()) //last stream frame
 				{
 					//send the final EOT marker

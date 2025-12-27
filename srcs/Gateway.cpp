@@ -127,13 +127,16 @@ constexpr uint64_t CalcCSCode(const char *cs)
 
 void CGateway::Stop()
 {
+	LogInfo("stopping the Gateway...");
 	keep_running = false;
 	if (gateFuture.valid())
 		gateFuture.get();
 	if (hostFuture.valid())
 		hostFuture.get();
+	LogDebug("Gateway and Modem processing threads closed...");
 	ipv4.Close();
 	ipv6.Close();
+	LogInfo("All resourced released");
 }
 
 bool CGateway::Start()
