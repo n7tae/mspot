@@ -716,6 +716,13 @@ bool CCC1200::Start()
 	or  setAFC(cfg.afc))
 		return true;
 
+	runFuture = std::async(std::launch::async, &CCC1200::run, this);
+	if (not runFuture.valid())
+	{
+		LogError("Could not start CCC1200::run thread");
+		return true;
+	}
+
 	return false;
 }
 
