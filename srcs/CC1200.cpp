@@ -608,8 +608,15 @@ void CCC1200::filterSymbols(int8_t* __restrict out, const int8_t* __restrict in,
     #define TAPS_PER_PHASE 9
 
 	//history
-	static float sr[TAPS_PER_PHASE * 2] = {0};
+	static float sr[TAPS_PER_PHASE * 2] = { 0 };
 	static uint8_t w = 0;
+
+	if (in == nullptr)
+	{
+		memset(sr, 0, sizeof(sr));
+		w = 0;
+		return;
+	}
 
 	//precompute gain and sign once
     static const float gain = TX_SYMBOL_SCALING_COEFF*sqrtf(5.0f);
@@ -1139,7 +1146,7 @@ void CCC1200::run()
 					std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
 					//flush the RRC baseband filter
-					//filterSymbols(nullptr, nullptr, nullptr, 0);
+					filterSymbols(nullptr, nullptr, nullptr, 0);
 				
 					//generate frame symbols, filter them and send out to the device
 					//we need to prepare 3 frames to begin the transmission - preamble, LSF and stream frame 0
@@ -1181,7 +1188,7 @@ void CCC1200::run()
 					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
 					writeDev(bsb_samples, sizeof(bsb_samples), "SM Frame");
 				}
-
+				LogDebug("Stream packet: FN=0x%o=04x", pack->GetFrameNumber());
 				if(pack->IsLastPacket()) //last stream frame
 				{
 					//send the final EOT marker
@@ -1256,7 +1263,7 @@ void CCC1200::run()
 				std::this_thread::sleep_for(std::chrono::milliseconds(10));
 				
 				//flush the RRC baseband filter
-				//filterSymbols(nullptr, nullptr, nullptr, 0);
+				filterSymbols(nullptr, nullptr, nullptr, 0);
 				
 				//generate frame symbols, filter them and send out to the device
 				//we need to prepare 3 frames to begin the transmission - preamble, LSF and stream frame 0

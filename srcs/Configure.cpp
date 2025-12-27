@@ -380,21 +380,22 @@ float CConfigure::getFloat(const std::string &valuestr, const std::string &label
 
 unsigned CConfigure::getUnsigned(const std::string &valuestr, const std::string &label, unsigned min, unsigned max, unsigned def) const
 {
-	try
-	{
-		auto i = unsigned(std::stoul(valuestr, nullptr, 0));
-		if ( i < min || i > max )
-		{
-			std::cout << "WARNING: line #" << counter << ": " << label << " is out of range. Reset to " << def << std::endl;
-			i = def;
-		}
-		return (unsigned)i;
+	unsigned i;
+	try {
+		i = std::stoul(valuestr);
+	} catch (const std::invalid_argument &e) {
+		std::cerr << "Invalid unsigned value, '" << valuestr << "': " << e.what() << std::endl;
+		i = def;
+	} catch (const std::out_of_range &e) {
+		std::cerr << "unsigned value out of range, '" << valuestr << "': " << e.what() << std::endl;
+		i = def;
 	}
-	catch (std::exception &)
+	if ( i < min || i > max )
 	{
-		std::cerr << "WARNING: Line #" << counter << ": '" << valuestr << "' could not be converted to an integer value, it will be set to " << def << std::endl;
-		return def;
+		std::cout << "WARNING: line #" << counter << ": " << label << " is out of range. Reset to " << def << std::endl;
+		i = def;
 	}
+	return i;
 }
 
 int CConfigure::getInt(const std::string &valuestr, const std::string &label, int min, int max, int def) const
