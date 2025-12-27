@@ -856,7 +856,6 @@ void CCC1200::run()
 					symbols[i] = f_flt_buff[960+i*5];
 				float dist_str_b = eucl_norm(&symbols[8], str_sync_symbols, 8);
 				float dist_str = sqrtf(dist_str_a*dist_str_a+dist_str_b*dist_str_b);
-				LogDebug("dist_pkt=%.2f dst_str=%.2f", dist_pkt, dist_str);
 
 				if (dist_lsf <= 4.5f and rx_state == ERxState::idle) //LSF received at idle state
 				{
