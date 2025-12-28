@@ -1199,7 +1199,7 @@ void CCC1200::run()
 					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
 					writeDev(bsb_samples, sizeof(bsb_samples), "SM Frame");
 				}
-				LogDebug("Stream packet: FN=0x%04x", pack->GetFrameNumber());
+				//LogDebug("Stream packet: FN=0x%04x", pack->GetFrameNumber());
 				if(pack->IsLastPacket()) //last stream frame
 				{
 					//send the final EOT marker
