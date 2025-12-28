@@ -556,13 +556,14 @@ bool CCC1200::setTxPower(float power) //powr in dBm
 
 bool CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
 {
-    uint8_t cmd[4] { cid, 4, 0, onoff };
-    uint8_t resp[4] = { 0 };
+	uint8_t cmd[4] { cid, 4, 0, onoff };
+	uint8_t resp[4] = { 0 };
 
-    uartLock = true;          //prevent main loop from reading
-    tcflush(fd, TCIFLUSH);    //clear leftover bytes
+	uartLock = true;          //prevent main loop from reading
+	tcflush(fd, TCIFLUSH);    //clear leftover bytes
+	uart_rx_data_valid = uart_rx_sync = false;
 
-    writeDev(cmd, 4, what);
+	writeDev(cmd, 4, what);
 
 	if (readDev(resp, 4))
 	{
@@ -570,15 +571,15 @@ bool CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
 		return true;
 	}
 
-    uartLock = false;
+	uartLock = false;
 
 	if (cid != resp[0] or 4u != resp[1] or 0 != resp[2] or (ERR_OK != resp[3] and ERR_NOP != resp[3]))
 	{
-        LogDebug("Doing %s, cmd returned %02x %02x %02x %02x", what, resp[0], resp[1], resp[2], resp[3]);
+		LogDebug("Doing %s, cmd returned %02x %02x %02x %02x", what, resp[0], resp[1], resp[2], resp[3]);
 		return true;
-    }
+	}
 
-    return false;
+	return false;
 }
 
 bool CCC1200::startRx(void)
@@ -798,7 +799,12 @@ void CCC1200::run()
 		//are there any new baseband samples to process?
 		if (keep_running and not uartLock and nval > 0)
 		{
-			read(fd, &rx_bsb_sample, 1);
+			if (1 != read(fd, &rx_bsb_sample, 1))
+			{
+				LogError("ERROR: Could not read a single byte from %s, stopping modem run() loop!", cfg.uartDev.c_str());
+				keep_running = false;
+				uart_rx_data_valid = uart_rx_sync = false;
+			}
 
 			//wait for rx baseband data header
 			if (uart_rx_sync)
