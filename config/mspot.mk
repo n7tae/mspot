@@ -4,4 +4,4 @@
 BINDIR = /usr/local/bin
 
 # for software debugging support
-DEBUG = true
+DEBUG = false

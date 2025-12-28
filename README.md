@@ -1,19 +1,17 @@
 # *mspot*
 
-An M17-only hot-spot for MMDVM modems running firmware 1.6.1.
+An M17-only hot-spot for the M17 CC1200 Raspberry Pi hat.
 
 ## Description
 
-This open-source project will build an M17-only repeater or hot-spot for amateur radio. The design goals for this project include:
+This open-source project will build an M17-only hot-spot for amateur radio. The design goals for this project include:
 - **Easy to build**: Because the *mspot* repeater is a single application and is complete. It includes a novel M17 gateway that can connect to both M17 and URF reflectors.
 - **Easy to configure**: With a single, self contained application, there is just a single configuration file, and the project builds an additional program, *inicheck*, that will intelligently analyze your ini file and reports any problems it finds.
 - **Easy to use**: *mspot* includes many RF-base commands to manage its connection state and responds to commands with voice messages, making *mspot* ideal for a mobile, smart-phone tethered repeater. I am hoping it is also useful to sight-impaired hams.
 - **Minimum executable size**: *mspot* is tiny, especially when you compare it to the multi-mode alternatives.
 - **Excellent reliability**: You'll be the judge of that. Try it and find out.
 
-It should support most any MMDVM-type modem because a significant portion of the project is based on a stripped-down earlier version of G4KLX Jonathan Naylor's [MMDVMHost](https://github.com/g4klx/MMDVMHost). Unlike MMDVMHost, this project does not support any display device. It also does not support file locking, transparent port, or remote control.
-
-This project will build *mspot*, a single executable program that has a built-in M17 gateway that will connect to both M17 reflectors and URF reflectors. The gateway portion of *mspot* is unique. It doesn't use the ubiquitous *time-slice* method characterized by a `clock()` routine, but rather uses a kind of *pass the baton* control scheme.
+This version of *mspot* only works with the [M17 CC1200 Raspberry Pi hat](https://m17project.org/cc1200-rpi-shield/). It is planned to also support the [M17 SX1255 Raspberry Pi hat](https://m17project.org/sx1255-rpi-shield/) in the future. 
 
 ## Building *mspot*
 
@@ -41,7 +39,7 @@ Once you edit this file, you can then build *mspot*: `make`
 
 You may have noticed that two programs were created at the build stage: *mspot* the M17-only repeater/hot-spot, and *inicheck*, a program that will check you initialization file for errors. *inicheck* tries to be very thorough. In addition to making sure that all needed variable are define and have reasonable values, it checks that path names are pointing to existing files on your system, and that those files are the kinds of files they need to be. Do: `./inicheck mspot.ini`. If any errors are identified, *mspot* won't run.
 
-Each parameter in the example inifile is commented to help you understand what it does. Keep in mind that many of the parameters in the `[Modem]` section have no meaning once you set a `Protocol`. Using `inicheck` will at least tell you if your `UartPort` is pointing to a character device. If you are having trouble connecting to an older modem and your sure the `UartPort` is correct, try reducing the `UartBaudRate` to `230400` or `115200`.
+Each parameter in the example inifile is commented to help you understand what it does. Using `inicheck` will at least tell you if your `UartPort` is pointing to a character device.
 
 In the `Building` section, a few `.txt` files were copied. These files are for connection information. `M17_Hosts.txt` contains a list of all M17 and URF reflectors registered at [dvref.com](https://dvref.com/) and contains a time-stamp so you know exactly when it was created. You can build an up-to-the-minute accurate host text file with the *make-m17-host-file* program that is part of the [*ham-dht-tools*](https://github.com/n7tae/ham-dht-tools) repository. The second, `MyHosts.txt` is a place for you to add other reflectors that aren't registered at dvref.com.
 
@@ -51,7 +49,7 @@ The user that executes *mspot* needs to be in the `dialout` group! Do a `getent 
 
 ## Starting *mspot*
 
-To start *mspot*, go to its repo folder and type `./mspot mspot.ini`. Then `[Log] DisplayLevel` messages will be printed in the terminal window and if `[Log] FileLevel` is greater than zero, log messages will also be written to the folder and file specified in the ini file.
+To start *mspot*, go to its repo folder and type `./mspot mspot.ini`. Then `[Log] DisplayLevel` messages will be printed in the terminal window.
 
 Alternatively, you can have *mspot* automatically launched on system boot up. To get started, copy the service script: `cp config/mspot.service .` and then edit the copy by changing the values within the `<>` brackets. Then do a `sudo make install`. You can do `sudo make uninstall` to stop this. Please note that installing and uninstalling require root privileges, but *mspot* can run with user privileges as long as the user is a member of the `dialout` group. In this case, you will want to enable `[Repeater] IsDaemon` and then be sure to specify the correct login id for `[Repeater] User`. If it's not starting correctly, look for the cause in the ini-specified log file and/or the systemd log: `sudo journalctl -u mspot`. If *mspot* launched successfully manually but won't install, more than likely you have a problem with your `mspot.service` file.
 
