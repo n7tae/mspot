@@ -564,7 +564,7 @@ bool CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
 
     writeDev(cmd, 4, what);
 
-	if (readDev(resp, 3))
+	if (readDev(resp, 4))
 	{
 		uartLock = false;
 		return true;
@@ -574,7 +574,7 @@ bool CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
 
 	if (cid != resp[0] or 4u != resp[1] or 0 != resp[2] or (ERR_OK != resp[3] and ERR_NOP != resp[3]))
 	{
-        LogError("Error doing %s, cmd returned %02x %02x %02x %02x", what, resp[0], resp[1], resp[2], resp[3]);
+        LogDebug("Doing %s, cmd returned %02x %02x %02x %02x", what, resp[0], resp[1], resp[2], resp[3]);
 		return true;
     }
 
