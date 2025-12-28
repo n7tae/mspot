@@ -785,11 +785,18 @@ void CCC1200::run()
 		fd_set rfds;
 		FD_ZERO(&rfds);
 		FD_SET(fd, &rfds);
+		struct timeval tv;
+		tv.tv_sec = 0;
+		tv.tv_usec = 3000;
 
-		select(fd+1, &rfds, nullptr, nullptr, nullptr);
+		auto nval = select(fd+1, &rfds, nullptr, nullptr, &tv);
+		if (nval < 0) {
+			LogError("Modem select() error: %s", strerror(errno));
+			keep_running = false;
+		} 
 
 		//are there any new baseband samples to process?
-		if (keep_running and not uartLock and FD_ISSET(fd, &rfds))
+		if (keep_running and not uartLock and nval > 0)
 		{
 			read(fd, &rx_bsb_sample, 1);
 
