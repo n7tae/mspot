@@ -562,6 +562,7 @@ bool CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
 	uartLock = true;          //prevent main loop from reading
 	tcflush(fd, TCIFLUSH);    //clear leftover bytes
 	uart_rx_data_valid = uart_rx_sync = false;
+	memset(rx_samp_buff, 0, 3);
 
 	writeDev(cmd, 4, what);
 
@@ -781,6 +782,8 @@ void CCC1200::run()
 
 	keep_running = true;
 
+	uint64_t counter = 0;
+
 	while(keep_running)
 	{
 		fd_set rfds;
@@ -797,7 +800,7 @@ void CCC1200::run()
 		} 
 
 		//are there any new baseband samples to process?
-		if (keep_running and not uartLock and nval > 0)
+		if (keep_running and (not uartLock) and nval > 0)
 		{
 			if (1 != read(fd, &rx_bsb_sample, 1))
 			{
@@ -805,7 +808,7 @@ void CCC1200::run()
 				keep_running = false;
 				uart_rx_data_valid = uart_rx_sync = false;
 			}
-
+			counter++;
 			//wait for rx baseband data header
 			if (uart_rx_sync)
 			{
@@ -820,6 +823,7 @@ void CCC1200::run()
 
 				if (rx_samp_buff[0]==CMD_RX_DATA and rx_samp_buff[1]==0xC3 and rx_samp_buff[2]==0x03)
 				{
+					LogDebug("Found sync at %lld", counter);
 					uart_rx_sync = true;
 					rx_buff_cnt = 3;
 				}
@@ -837,278 +841,279 @@ void CCC1200::run()
 
 			if (rx_buff_cnt > 1024)
 				LogError("Input buffer overflow");
-		}
 
-		if (uart_rx_data_valid)
-		{
-			for (uint16_t i=0; i<960; i++)
+			if (uart_rx_data_valid)
 			{
-				//push buffer
-				for(uint8_t i=0; i<sizeof(flt_buff)-1; i++)
-					flt_buff[i] = flt_buff[i+1];
-				flt_buff[sizeof(flt_buff)-1] = raw_bsb_rx[i];
-
-				f_sample=0.0f;
-				for(uint8_t i=0; i<sizeof(flt_buff); i++)
-					f_sample+=rrc_taps_5[i]*(float)flt_buff[i];
-				f_sample*=RX_SYMBOL_SCALING_COEFF; //symbol map (works for CC1200 only)
-
-				for(uint16_t i=0; i<sizeof(f_flt_buff)/sizeof(float)-1; i++)
-					f_flt_buff[i]=f_flt_buff[i+1];
-				f_flt_buff[sizeof(f_flt_buff)/sizeof(float)-1]=f_sample;
-
-				//L2 norm check against syncword
-				float symbols[16];
-				for(uint8_t i=0; i<16; i++)
-					symbols[i] = f_flt_buff[i*5];
-
-				float dist_lsf = eucl_norm(&symbols[0], lsf_sync_ext, 16); //check against extended LSF syncword (8 symbols, alternating -3/+3)
-				float dist_pkt = eucl_norm(&symbols[0], pkt_sync_symbols, 8);
-				float dist_str_a = eucl_norm(&symbols[8], str_sync_symbols, 8);
-				for(uint8_t i=0; i<16; i++)
-					symbols[i] = f_flt_buff[960+i*5];
-				float dist_str_b = eucl_norm(&symbols[8], str_sync_symbols, 8);
-				float dist_str = sqrtf(dist_str_a*dist_str_a+dist_str_b*dist_str_b);
-
-				if (dist_lsf <= 4.5f and rx_state == ERxState::idle) //LSF received at idle state
+				for (uint16_t i=0; i<960; i++)
 				{
-					//find L2's minimum
-					uint8_t sample_offset=0;
-					for(uint8_t i=1; i<=2; i++)
+					//push buffer
+					for(uint8_t i=0; i<sizeof(flt_buff)-1; i++)
+						flt_buff[i] = flt_buff[i+1];
+					flt_buff[sizeof(flt_buff)-1] = raw_bsb_rx[i];
+
+					f_sample = 0.0f;
+					for(uint8_t i=0; i<sizeof(flt_buff); i++)
+						f_sample+=rrc_taps_5[i]*(float)flt_buff[i];
+					f_sample*=RX_SYMBOL_SCALING_COEFF; //symbol map (works for CC1200 only)
+
+					for(uint16_t i=0; i<sizeof(f_flt_buff)/sizeof(float)-1; i++)
+						f_flt_buff[i] = f_flt_buff[i+1];
+					f_flt_buff[sizeof(f_flt_buff)/sizeof(float)-1] = f_sample;
+
+					//L2 norm check against syncword
+					float symbols[16];
+					for(uint8_t i=0; i<16; i++)
+						symbols[i] = f_flt_buff[i*5];
+
+					float dist_lsf = eucl_norm(&symbols[0], lsf_sync_ext, 16); //check against extended LSF syncword (8 symbols, alternating -3/+3)
+					float dist_pkt = eucl_norm(&symbols[0], pkt_sync_symbols, 8);
+					float dist_str_a = eucl_norm(&symbols[8], str_sync_symbols, 8);
+					for(uint8_t i=0; i<16; i++)
+						symbols[i] = f_flt_buff[960+i*5];
+					float dist_str_b = eucl_norm(&symbols[8], str_sync_symbols, 8);
+					float dist_str = sqrtf(dist_str_a*dist_str_a+dist_str_b*dist_str_b);
+
+					if (dist_lsf <= 4.5f and rx_state == ERxState::idle) //LSF received at idle state
 					{
-						for(uint8_t j=0; j<16; j++)
-							symbols[j] = f_flt_buff[j*5+i];
-
-						float d = eucl_norm(symbols, lsf_sync_ext, 16);
-
-						if(d < dist_lsf)
+						//find L2's minimum
+						uint8_t sample_offset=0;
+						for(uint8_t i=1; i<=2; i++)
 						{
-							dist_lsf = d;
-							sample_offset = i;
+							for(uint8_t j=0; j<16; j++)
+								symbols[j] = f_flt_buff[j*5+i];
+
+							float d = eucl_norm(symbols, lsf_sync_ext, 16);
+
+							if(d < dist_lsf)
+							{
+								dist_lsf = d;
+								sample_offset = i;
+							}
+						}
+
+						float pld[SYM_PER_PLD];
+
+						for(uint16_t i=0; i<SYM_PER_PLD; i++)
+						{
+							pld[i] = f_flt_buff[16*5+i*5+sample_offset]; //add symbol timing correction
+						}
+
+						uint32_t e = decode_LSF((lsf_t *)lsf.GetData(), pld);
+						const auto ft = lsf.GetFrameType();
+						CFrameType type(ft);
+
+						if (lsf.CheckCRC()) // does this LSF have a correct CRC?
+						{
+							LogError("LSF received, but CRC is not valid");
+						} else {
+							got_lsf = true;
+							streamID = g_RNG.Get(); // this is a new stream, so make an ID
+							const auto can = type.GetCan();
+							const CCallsign dst(lsf.GetCDstAddress());
+							const CCallsign src(lsf.GetCSrcAddress());
+							if (EMetaDatType::none != type.GetMetaDataType())
+							{
+								// clear any META data if it's not already none
+								type.SetMetaDataType(EMetaDatType::none);
+								memset(lsf.GetMetaData(), 0, 14);
+								lsf.SetFrameType(type.GetOriginType());
+								lsf.CalcCRC();
+							}
+							rx_state = ERxState::sync;	//change RX state
+							sample_cnt = 0;		//reset rx timeout timer
+
+							last_fn = 0xffffu;
+
+							LogInfo("LSF OK | DST: %-9s | SRC: %-9s | TYPE: 0x%04x (CAN=%d) | MER: %-3.1f%%", dst.c_str(), src.c_str(), ft, can, float(e)/0xFFFFU/SYM_PER_PLD/2.0f*100.0f);
+
 						}
 					}
 
-					float pld[SYM_PER_PLD];
-
-					for(uint16_t i=0; i<SYM_PER_PLD; i++)
+					else if (dist_str <= 5.0f) //stream frame received
 					{
-						pld[i] = f_flt_buff[16*5+i*5+sample_offset]; //add symbol timing correction
-					}
-
-					uint32_t e = decode_LSF((lsf_t *)lsf.GetData(), pld);
-					const auto ft = lsf.GetFrameType();
-					CFrameType type(ft);
-
-					if (lsf.CheckCRC()) // does this LSF have a correct CRC?
-					{
-						LogError("LSF received, but CRC is not valid");
-					} else {
-						got_lsf = true;
-						streamID = g_RNG.Get(); // this is a new stream, so make an ID
-						const auto can = type.GetCan();
-						const CCallsign dst(lsf.GetCDstAddress());
-						const CCallsign src(lsf.GetCSrcAddress());
-						if (EMetaDatType::none != type.GetMetaDataType())
-						{
-							// clear any META data if it's not already none
-							type.SetMetaDataType(EMetaDatType::none);
-							memset(lsf.GetMetaData(), 0, 14);
-							lsf.SetFrameType(type.GetOriginType());
-							lsf.CalcCRC();
-						}
-						rx_state = ERxState::sync;	//change RX state
+						rx_state = ERxState::sync;
 						sample_cnt = 0;		//reset rx timeout timer
 
-						last_fn = 0xffffu;
-
-						LogInfo("LSF OK | DST: %-9s | SRC: %-9s | TYPE: 0x%04x (CAN=%d) | MER: %-3.1f%%", dst.c_str(), src.c_str(), ft, can, float(e)/0xFFFFU/SYM_PER_PLD/2.0f*100.0f);
-
-					}
-				}
-
-				else if (dist_str <= 5.0f) //stream frame received
-				{
-					rx_state = ERxState::sync;
-					sample_cnt = 0;		//reset rx timeout timer
-
-					//find L2's minimum
-					uint8_t sample_offset = 0;
-					for(uint8_t i=1; i<=2; i++)
-					{
-						for(uint8_t j=0; j<16; j++)
-							symbols[j] = f_flt_buff[j*5+i];
-						
-						float tmp_a = eucl_norm(&symbols[8], str_sync_symbols, 8);
-						for(uint8_t j=0; j<16; j++)
-							symbols[j] = f_flt_buff[960+j*5+i];
-						
-						float tmp_b = eucl_norm(&symbols[8], str_sync_symbols, 8);
-
-						float d = sqrtf(tmp_a*tmp_a+tmp_b*tmp_b);
-
-						if (d < dist_str)
+						//find L2's minimum
+						uint8_t sample_offset = 0;
+						for(uint8_t i=1; i<=2; i++)
 						{
-							dist_str = d;
-							sample_offset = i;
-						}
-					}
+							for(uint8_t j=0; j<16; j++)
+								symbols[j] = f_flt_buff[j*5+i];
+							
+							float tmp_a = eucl_norm(&symbols[8], str_sync_symbols, 8);
+							for(uint8_t j=0; j<16; j++)
+								symbols[j] = f_flt_buff[960+j*5+i];
+							
+							float tmp_b = eucl_norm(&symbols[8], str_sync_symbols, 8);
 
-					float pld[SYM_PER_PLD];
-					
-					for(uint16_t i=0; i<SYM_PER_PLD; i++)
-					{
-						pld[i] = f_flt_buff[16*5+i*5+sample_offset];
-					}
+							float d = sqrtf(tmp_a*tmp_a+tmp_b*tmp_b);
 
-					uint8_t lich[6];
-					uint8_t lich_cnt;
-					uint8_t frame_data[16];
-					uint32_t e = decode_str_frame(frame_data, lich, &fn, &lich_cnt, pld);
-					//set the last FN number to FN-1 if this is a late-join and the frame data is valid
-					if(first_frame and (fn%6)==lich_cnt)
-					{
-						last_fn = fn - 1;
-					}
-
-					if (got_lsf)
-					{
-						g_GateState.TryState(EGateState::modemin);
-						auto pack = std::make_unique<CPacket>();
-						pack->Initialize(EPacketType::stream);
-						pack->SetStreamId(streamID);
-						memcpy(pack->GetDstAddress(), lsf.GetCData(), 28);
-						pack->SetFrameNumber(fn);
-						memcpy(pack->GetPayload(), frame_data, 16);
-						pack->CalcCRC();
-						Modem2Gate.Push(pack);
-						LogDebug("RF Frame: FN:0x%04x | LICH_CNT:%u | MER: %-3.1f%%", fn, lich_cnt, float(e)/0xffffu/SYM_PER_PLD/2.0f*100.0f);
-					}
-					
-					
-					if (((last_fn+1) & 0xffffu) == fn) //new frame. TODO: maybe a timeout would be better
-					{
-						if (lich_parts != 0x3fu) //6 chunks = 0b111111
-						{
-							static SLSF lichlsf;
-							//reconstruct LSF chunk by chunk
-							memcpy(lichlsf.GetData()+(lich_cnt * 5u), lich, 5u); //40 bits
-							lich_parts |= (1 << lich_cnt);
-							if(lich_parts == 0x3fu) // collected all of them?
+							if (d < dist_str)
 							{
-								auto ft = lichlsf.GetFrameType();
-								CFrameType type(ft);
-								if(lichlsf.CheckCRC()) //CRC check
-								{
-									LogError("Lich LSF failed CRC check");
-								} else {
-									if (not got_lsf)
-									{
-										got_lsf = true;
-										streamID = g_RNG.Get(); // a NEW stream, make a new ID
-										auto can = type.GetCan();
-										const CCallsign dst(lichlsf.GetCDstAddress());
-										const CCallsign src(lichlsf.GetCSrcAddress());
-										if (EMetaDatType::none != type.GetMetaDataType())
-										{
-											type.SetMetaDataType(EMetaDatType::none);
-											memset(lichlsf.GetMetaData(), 0, 14);
-											lichlsf.SetFrameType(type.GetOriginType());
-											lichlsf.CalcCRC();
-										}
-										LogInfo("Lich LSF OK: DST: %-9s | SRC: %-9s | TYPE: 0x%04x (CAN=%u)", dst.c_str(), dst.c_str(), ft, can);
+								dist_str = d;
+								sample_offset = i;
+							}
+						}
 
-										LogDash("\"%s\" \"%s\" \"RF\" \"%d\" \"--\"", src.c_str(), dst.c_str(), can);
+						float pld[SYM_PER_PLD];
+						
+						for(uint16_t i=0; i<SYM_PER_PLD; i++)
+						{
+							pld[i] = f_flt_buff[16*5+i*5+sample_offset];
+						}
+
+						uint8_t lich[6];
+						uint8_t lich_cnt;
+						uint8_t frame_data[16];
+						uint32_t e = decode_str_frame(frame_data, lich, &fn, &lich_cnt, pld);
+						//set the last FN number to FN-1 if this is a late-join and the frame data is valid
+						if(first_frame and (fn%6)==lich_cnt)
+						{
+							last_fn = fn - 1;
+						}
+
+						if (got_lsf)
+						{
+							g_GateState.TryState(EGateState::modemin);
+							auto pack = std::make_unique<CPacket>();
+							pack->Initialize(EPacketType::stream);
+							pack->SetStreamId(streamID);
+							memcpy(pack->GetDstAddress(), lsf.GetCData(), 28);
+							pack->SetFrameNumber(fn);
+							memcpy(pack->GetPayload(), frame_data, 16);
+							pack->CalcCRC();
+							Modem2Gate.Push(pack);
+							LogDebug("RF Frame: FN:0x%04x | LICH_CNT:%u | MER: %-3.1f%%", fn, lich_cnt, float(e)/0xffffu/SYM_PER_PLD/2.0f*100.0f);
+						}
+						
+						
+						if (((last_fn+1) & 0xffffu) == fn) //new frame. TODO: maybe a timeout would be better
+						{
+							if (lich_parts != 0x3fu) //6 chunks = 0b111111
+							{
+								static SLSF lichlsf;
+								//reconstruct LSF chunk by chunk
+								memcpy(lichlsf.GetData()+(lich_cnt * 5u), lich, 5u); //40 bits
+								lich_parts |= (1 << lich_cnt);
+								if(lich_parts == 0x3fu) // collected all of them?
+								{
+									auto ft = lichlsf.GetFrameType();
+									CFrameType type(ft);
+									if(lichlsf.CheckCRC()) //CRC check
+									{
+										LogError("Lich LSF failed CRC check");
+									} else {
+										if (not got_lsf)
+										{
+											got_lsf = true;
+											streamID = g_RNG.Get(); // a NEW stream, make a new ID
+											auto can = type.GetCan();
+											const CCallsign dst(lichlsf.GetCDstAddress());
+											const CCallsign src(lichlsf.GetCSrcAddress());
+											if (EMetaDatType::none != type.GetMetaDataType())
+											{
+												type.SetMetaDataType(EMetaDatType::none);
+												memset(lichlsf.GetMetaData(), 0, 14);
+												lichlsf.SetFrameType(type.GetOriginType());
+												lichlsf.CalcCRC();
+											}
+											LogInfo("Lich LSF OK: DST: %-9s | SRC: %-9s | TYPE: 0x%04x (CAN=%u)", dst.c_str(), dst.c_str(), ft, can);
+
+											LogDash("\"%s\" \"%s\" \"RF\" \"%d\" \"--\"", src.c_str(), dst.c_str(), can);
+										}
+										// we now have a viable LSF!
+										memcpy(lsf.GetData(), lichlsf.GetCData(), 30);
 									}
-									// we now have a viable LSF!
-									memcpy(lsf.GetData(), lichlsf.GetCData(), 30);
 								}
 							}
+
+							last_fn = fn;
 						}
 
-						last_fn = fn;
+						first_frame = false;
 					}
 
-					first_frame = false;
-				}
-
-				//TODO: handle packet mode reception over RF
-				else if(dist_pkt <= 5.0f and rx_state == ERxState::sync)
-				{
-					//find L2's minimum
-					uint8_t sample_offset=0;
-					for(uint8_t i=1; i<=2; i++)
+					//TODO: handle packet mode reception over RF
+					else if(dist_pkt <= 5.0f and rx_state == ERxState::sync)
 					{
-						for(uint8_t j=0; j<8; j++)
-							symbols[j]=f_flt_buff[j*5+i];
+						//find L2's minimum
+						uint8_t sample_offset=0;
+						for(uint8_t i=1; i<=2; i++)
+						{
+							for(uint8_t j=0; j<8; j++)
+								symbols[j]=f_flt_buff[j*5+i];
+								
+							float d=eucl_norm(symbols, pkt_sync_symbols, 8);
 							
-						float d=eucl_norm(symbols, pkt_sync_symbols, 8);
-						
-						if(d<dist_pkt)
-						{
-							dist_pkt=d;
-							sample_offset=i;
-						}
-					}
-
-					float pld[SYM_PER_PLD];
-					uint8_t eof = 0, pkt_fn = 0;
-					
-					for(uint16_t i=0; i<SYM_PER_PLD; i++)
-					{
-						pld[i] = f_flt_buff[8*5+i*5+sample_offset];
-					}
-
-					/*uint32_t e = */decode_pkt_frame(ppayload, &eof, &pkt_fn, pld);
-					plsize += eof ? pkt_fn : 25;
-					ppayload += 25;
-					sample_cnt=0;		//reset rx timeout timer
-
-					if(eof)
-					{
-						if (plsize < 825u)
-							memset(payload+plsize, 0, 825u-plsize);
-						if (g_Crc.CheckCRC(payload, plsize))
-						{
-							LogWarning("RF PKT: Payload CRC failed");
-						} else {
-							if (got_lsf)
+							if(d<dist_pkt)
 							{
-								g_GateState.TryState(EGateState::modemin);
-								auto pkt = std::make_unique<CPacket>();
-								pkt->Initialize(EPacketType::packet, plsize+34);
-								memcpy(pkt->GetData()+4, lsf.GetCData(), 30);
-								memcpy(pkt->GetData()+35, payload, plsize);
-								Modem2Gate.Push(pkt);
-							} else {
-								LogWarning("Got a Packet Payload, but not the LSF!");
+								dist_pkt=d;
+								sample_offset=i;
 							}
-							if (0x5u == *payload and 0u == payload[plsize-3])
-								LogInfo("SMS Msg: %s", (char *)(payload+1));
+						}
+
+						float pld[SYM_PER_PLD];
+						uint8_t eof = 0, pkt_fn = 0;
+						
+						for(uint16_t i=0; i<SYM_PER_PLD; i++)
+						{
+							pld[i] = f_flt_buff[8*5+i*5+sample_offset];
+						}
+
+						/*uint32_t e = */decode_pkt_frame(ppayload, &eof, &pkt_fn, pld);
+						plsize += eof ? pkt_fn : 25;
+						ppayload += 25;
+						sample_cnt=0;		//reset rx timeout timer
+
+						if(eof)
+						{
+							if (plsize < 825u)
+								memset(payload+plsize, 0, 825u-plsize);
+							if (g_Crc.CheckCRC(payload, plsize))
+							{
+								LogWarning("RF PKT: Payload CRC failed");
+							} else {
+								if (got_lsf)
+								{
+									g_GateState.TryState(EGateState::modemin);
+									auto pkt = std::make_unique<CPacket>();
+									pkt->Initialize(EPacketType::packet, plsize+34);
+									memcpy(pkt->GetData()+4, lsf.GetCData(), 30);
+									memcpy(pkt->GetData()+35, payload, plsize);
+									Modem2Gate.Push(pkt);
+								} else {
+									LogWarning("Got a Packet Payload, but not the LSF!");
+								}
+								if (0x5u == *payload and 0u == payload[plsize-3])
+									LogInfo("SMS Msg: %s", (char *)(payload+1));
+							}
+						}
+					}
+					
+					//RX sync timeout
+					if(rx_state == ERxState::sync)
+					{
+						sample_cnt++;
+						if(sample_cnt == 960*2)
+						{
+							rx_state = ERxState::idle;
+							sample_cnt=0;
+							first_frame = true;
+							last_fn=0xFFFFU; //TODO: there's a small chance that this will cause problems (it's a valid frame number)
+							lich_parts=0;
+							ppayload = payload;
+							plsize = 0;
+							got_lsf = false;
 						}
 					}
 				}
-				
-				//RX sync timeout
-				if(rx_state == ERxState::sync)
-				{
-					sample_cnt++;
-					if(sample_cnt == 960*2)
-					{
-						rx_state = ERxState::idle;
-						sample_cnt=0;
-						first_frame = true;
-						last_fn=0xFFFFU; //TODO: there's a small chance that this will cause problems (it's a valid frame number)
-						lich_parts=0;
-						ppayload = payload;
-						plsize = 0;
-						got_lsf = false;
-					}
-				}
-			}
 
-			//all data has been used
-			uart_rx_data_valid = false;
+				//all data has been used
+				uart_rx_data_valid = false;
+			}
 		}
+
 
 		//receive a packet - blocking
 		auto pack = Gate2Modem.Pop();
