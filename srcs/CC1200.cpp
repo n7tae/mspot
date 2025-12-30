@@ -104,10 +104,8 @@ static int8_t flt_buff[8*5+1];						//length of this has to match RRC filter's l
 static float f_flt_buff[8*5+2*(8*5+4800/25*5)+2];	//8 preamble symbols, 8 for the syncword, and 960 for the payload.
 													//floor(sps/2)=2 extra samples for timing error correction
 
-static uint8_t rx_samp_buff[1024];
+static uint8_t rx_samp_buff[3] = { 0, 0, 0 };
 static int8_t raw_bsb_rx[960];
-static uint16_t rx_buff_cnt = 0;
-static bool uart_rx_sync = false;
 static bool uart_rx_data_valid = false;
 
 static ETxState tx_state = ETxState::idle;
@@ -775,7 +773,7 @@ void CCC1200::run()
 	LogInfo("Receiver Started");
 
 	//UART comms
-	int8_t rx_bsb_sample = 0;
+	uint8_t rx_bsb_sample = 0;
 
 	float f_sample;
 
@@ -799,7 +797,7 @@ void CCC1200::run()
 		//are there any new baseband samples to process?
 		if ((not uart_lock) and nval)
 		{
-			auto rval = read(fd, (uint8_t*)&rx_bsb_sample, 1);
+			auto rval = read(fd, &rx_bsb_sample, 1);
 			if (rval < 0) {
 				LogError("%s read() error: %s", cfg.uartDev.c_str(), strerror(errno));
 				break;
@@ -808,36 +806,17 @@ void CCC1200::run()
 				continue;
 			}
 
-			//wait for rx baseband data header
-			if (!uart_rx_sync)
-			{
-				rx_samp_buff[0] = rx_samp_buff[1];
-				rx_samp_buff[1] = rx_samp_buff[2];
-				rx_samp_buff[2] = rx_bsb_sample;
+			rx_samp_buff[0] = rx_samp_buff[1];
+			rx_samp_buff[1] = rx_samp_buff[2];
+			rx_samp_buff[2] = rx_bsb_sample;
 
-				if (rx_samp_buff[0]==CMD_RX_DATA and rx_samp_buff[1]==0xC3 and rx_samp_buff[2]==0x03)
-				{
-					uart_rx_sync = true;
-					rx_buff_cnt = 3;
-				}
-			}
-			else
+			if (rx_samp_buff[0]==CMD_RX_DATA and rx_samp_buff[1]==0xC3 and rx_samp_buff[2]==0x03)
 			{
-				rx_samp_buff[rx_buff_cnt++] = rx_bsb_sample;
-			}
-
-			if (uart_rx_sync && rx_buff_cnt==963)
-			{
-				//dbg_print(TERM_YELLOW, "Baseband packet received\n");
-				memcpy(raw_bsb_rx, &rx_samp_buff[3], sizeof(raw_bsb_rx));
-				memset(rx_samp_buff, 0, sizeof(rx_samp_buff));
+				if (readDev((uint8_t *)raw_bsb_rx, 960))
+					break;
 				uart_rx_data_valid = true;
-				uart_rx_sync = false;
-				rx_buff_cnt = 0;
+				memset(rx_samp_buff, 0, sizeof(rx_samp_buff));
 			}
-
-			if (rx_buff_cnt > 1024)
-				LogWarning("Input buffer overflow");
 		}
 
 		if (uart_rx_data_valid)
