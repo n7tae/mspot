@@ -980,6 +980,7 @@ void CCC1200::run()
 								memcpy(p->GetPayload(), frame_data, 16);
 								p->CalcCRC();
 								Modem2Gate.Push(p);
+								LogDebug("RF Frame: FN:0x%04x | LICH_CNT:%u | MER: %-3.1f%%", fn, lich_cnt, float(e)/0xffffu/SYM_PER_PLD/2.0f*100.0f);
 							}
 						}
 					}
@@ -1362,6 +1363,8 @@ void CCC1200::run()
 			tx_state = ETxState::idle;
 			g_GateState.Set2IdleIf(EGateState::gatestreamin);
 		}
+	}
+	LogInfo("Modem run() process end");
 }
 
 
