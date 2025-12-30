@@ -96,7 +96,7 @@ private:
 	std::future<void> runFuture;
 
 	// data
-	volatile bool uartLock; 
+	volatile bool uart_lock; 
 	std::string progName;
 	std::atomic<bool> keep_running;
 	struct gpiod_chip *gpioChip;
@@ -104,5 +104,6 @@ private:
 	int fd; // for the modem
 	unsigned sfCounter;
 	uint16_t streamID;
-	SLSF lsf;
+	SLSF lsf, lich_lsf;
+	CFrameType frameTYPE;
 };
