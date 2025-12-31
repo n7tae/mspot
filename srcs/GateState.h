@@ -30,7 +30,7 @@ public:
 	CGateState() : currentState(EGateState::idle) {}
 	~CGateState() {}
 
-	const char *GetState()
+	const char *GetStateName()
 	{
 		std::lock_guard<std::mutex> lg(mtx);
 		switch (currentState)
@@ -46,6 +46,12 @@ public:
 			default:
 			return "idle";
 		}
+	}
+
+	EGateState GetState()
+	{
+		std::lock_guard<std::mutex> lg(mtx);
+		return currentState;
 	}
 
 	void Set2IdleIf(EGateState state)

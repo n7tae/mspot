@@ -323,7 +323,7 @@ void CGateway::ProcessGateway()
 			}
 			// else
 			// {
-			// 	LogInfo("VoiceQueue not empty but state is %s", g_GateState.GetState());
+			// 	LogInfo("VoiceQueue not empty but state is %s", g_GateState.GetStateName());
 			// }
 		}
 
