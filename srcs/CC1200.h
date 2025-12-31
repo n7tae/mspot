@@ -68,7 +68,8 @@ public:
 	void Stop();
 
 private:
-	void run();
+	void rxProcess();
+	void txProcess();
 	speed_t getBaud(uint32_t baud);
 	uint32_t getMilliseconds(void);
 	bool setIinterface(uint32_t speed, int parity);
@@ -93,7 +94,8 @@ private:
 
 	// Class data
 	SConfig cfg;
-	std::future<void> runFuture;
+	std::future<void> rxFuture;
+	std::future<void> txFuture;
 
 	// data
 	volatile bool uart_lock; 

@@ -79,6 +79,6 @@ private:
 	uint16_t get16At(size_t pos) const;
 	void set16At(size_t pos, uint16_t val);
 
-	EPacketType ptype;
+	EPacketType ptype = EPacketType::none;
 	std::vector<uint8_t> data;
 };

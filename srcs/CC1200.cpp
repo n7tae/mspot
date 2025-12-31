@@ -53,9 +53,6 @@ extern IPFrameFIFO Gate2Modem;
 // 40.0e3 is F_TCXO in kHz
 // 64 is `CFM_TX_DATA_IN` register value for max. F_DEV
 
-//device stuff
-uint8_t cmd[8];
-
 enum err_t
 {
 	ERR_OK,					//all good
@@ -68,8 +65,6 @@ enum err_t
 	ERR_NOP,				//nothing to do
 	ERR_OTHER
 };
-
-static const char *err_str[9] { "Okay", "TRX PLL", "TRX SPI", "Range", "Command Malformed", "Busy", "Buffer Full", "NOP", "Other" };
 
 enum cmd_t
 {
@@ -100,32 +95,7 @@ enum cmd_t
 	CMD_GET_RSSI
 };
 
-static int8_t flt_buff[8*5+1];						//length of this has to match RRC filter's length
-static float f_flt_buff[8*5+2*(8*5+4800/25*5)+2];	//8 preamble symbols, 8 for the syncword, and 960 for the payload.
-													//floor(sps/2)=2 extra samples for timing error correction
-
-static uint8_t rx_samp_buff[963];
-static int8_t raw_bsb_rx[960];
-static uint16_t rx_buff_cnt;
-static bool uart_rx_sync;
-static bool uart_rx_data_valid = false;
-
-static ETxState tx_state = ETxState::idle;
-static ERxState rx_state = ERxState::idle;
-
-static int8_t lsf_sync_ext[16];				//extended LSF syncword
-static uint16_t sample_cnt = 0;				//sample counter (for RX sync timeout)
-static uint16_t fn, last_fn=0xffffu;		//current and last received FN (stream mode)
-static uint16_t sid;                        // stream ID
-static uint8_t payload[825];                // buffer for the packet payload
-static uint8_t *ppayload = payload;         // ptr to the payload
-static uint16_t plsize = 0;                 // # of bytes in the payload
-static bool first_frame = true;				//first decoded frame after SYNC?
-static uint8_t lich_parts = 0;				//LICH chunks received (bit flags)
-static bool got_lsf = false;				//got LSF? either from LSF or reconstructed from LICH
-
-//timer for timeouts
-static uint32_t tx_timer = 0;
+static const char *err_str[9] { "Okay", "TRX PLL", "TRX SPI", "Range", "Command Malformed", "Busy", "Buffer Full", "NOP", "Other" };
 
 uint32_t CCC1200::getMilliseconds(void)
 {
@@ -724,10 +694,17 @@ bool CCC1200::Start()
 	or  setAFC(cfg.afc))
 		return true;
 
-	runFuture = std::async(std::launch::async, &CCC1200::run, this);
-	if (not runFuture.valid())
+	keep_running = true;
+	rxFuture = std::async(std::launch::async, &CCC1200::rxProcess, this);
+	if (not rxFuture.valid())
 	{
-		LogError("Could not start CCC1200::run thread");
+		LogError("Could not start CCC1200::rxProcess thread");
+		return true;
+	}
+	txFuture = std::async(std::launch::async, &CCC1200::txProcess, this);
+	if (not txFuture.valid())
+	{
+		LogError("Could not start CCC1200::txProcess thread");
 		return true;
 	}
 
@@ -738,9 +715,19 @@ void CCC1200::Stop()
 {
 	LogInfo("Shutting down the CC1200...");
 	keep_running = false;
-	if (runFuture.valid())
-		runFuture.get();
-	LogDebug("run() thread is closed...");
+
+	// send any command to the modem so it will output something and break the select() block
+	uint8_t cmd[3] = { CMD_PING, 3, 0 };
+	writeDev(cmd, 3, "SHUTDOWN");
+	// send a packet to the modem to break the Pop() block
+	auto p = std::make_unique<CPacket>(); // an unintialized packet will be fine
+	Gate2Modem.Push(p);
+
+	if (rxFuture.valid())
+		rxFuture.get();
+	if (txFuture.valid())
+		txFuture.get();
+	LogDebug("tx/tx threads are closed...");
 	if (reqBoot0)
 	{
 		gpioSetValue(cfg.boot0, 0);
@@ -760,12 +747,28 @@ void CCC1200::Stop()
 	LogInfo("All resources released");
 }
 
-void CCC1200::run()
+void CCC1200::rxProcess()
 {
-	//extend the LSF syncword pattern with 8 symbols from the preamble
-	lsf_sync_ext[0]=3; lsf_sync_ext[1]=-3; lsf_sync_ext[2]=3; lsf_sync_ext[3]=-3;
-	lsf_sync_ext[4]=3; lsf_sync_ext[5]=-3; lsf_sync_ext[6]=3; lsf_sync_ext[7]=-3;
-	memcpy(&lsf_sync_ext[8], lsf_sync_symbols, 8);
+	ERxState rx_state = ERxState::idle;
+	int8_t flt_buff[8*5+1];						//length of this has to match RRC filter's length
+	float f_flt_buff[8*5+2*(8*5+4800/25*5)+2];	//8 preamble symbols, 8 for the syncword, and 960 for the payload.
+                                                //floor(sps/2)=2 extra samples for timing error correction
+	uint16_t sample_cnt = 0;					//sample counter (for RX sync timeout)
+	uint16_t fn, last_fn=0xffffu;				//current and last received FN (stream mode)
+	uint16_t sid;								// stream ID
+	uint8_t payload[825];						// buffer for the packet payload
+	uint8_t *ppayload = payload;				// ptr to the payload
+	uint16_t plsize = 0;             		    // # of bytes in the payload
+
+	bool first_frame = true;					//first decoded frame after SYNC?
+	uint8_t lich_parts = 0;						//LICH chunks received (bit flags)
+	bool got_lsf = false;						//got LSF? either from LSF or reconstructed from LICH
+	uint8_t rx_samp_buff[963];
+	int8_t raw_bsb_rx[960];
+	uint16_t rx_buff_cnt;
+	bool uart_rx_sync;
+	bool uart_rx_data_valid = false;
+	const int8_t lsf_sync_ext[16] { 3, -3, 3, -3, 3, -3, 3, -3, 3, -3, 3, -3, 3, -3, 3, -3 };
 
 	//start RX
 	while (stopTx())
@@ -778,8 +781,6 @@ void CCC1200::run()
 	uint8_t rx_bsb_sample = 0;
 
 	float f_sample;
-
-	keep_running = true;
 
 	while(keep_running)
 	{
@@ -1100,9 +1101,18 @@ void CCC1200::run()
 			//all data has been used
 			uart_rx_data_valid = false;
 		}
+	}
+}
 
+void CCC1200::txProcess()
+{
+	ETxState tx_state = ETxState::idle;
+	uint32_t tx_timer = 0;
+
+	while (keep_running)
+	{
 		//receive a packet
-		auto pack = Gate2Modem.Pop();
+		auto pack = Gate2Modem.PopWait();
 		if (pack)
 		{
 			if(EPacketType::stream == pack->GetType())
