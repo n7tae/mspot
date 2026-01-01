@@ -469,7 +469,7 @@ bool CCC1200::setAFC(bool en)
 	uint8_t cmd[4] = { cid, 4, 0, uint8_t(en ? 1 : 0) };
 	uint8_t resp[4] = { 0 };
 
-	uart_lock;            //prevent main loop from reading
+	uart_lock = true;            //prevent main loop from reading
     tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
     writeDev(cmd, 4, "setAFC");
