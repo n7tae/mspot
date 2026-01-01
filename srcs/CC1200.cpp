@@ -814,7 +814,6 @@ void CCC1200::rxProcess()
 
 			if (uart_rx_sync && rx_buff_cnt==963)
 			{
-				//LogDebug("Baseband packet received");
 				memcpy(raw_bsb_rx, &rx_samp_buff[3], sizeof(raw_bsb_rx));
 				memset(rx_samp_buff, 0, sizeof(rx_samp_buff));
 				uart_rx_data_valid = true;
@@ -1101,6 +1100,7 @@ void CCC1200::rxProcess()
 			uart_rx_data_valid = false;
 		}
 	}
+	LogInfo("modem rxProcess end");
 }
 
 void CCC1200::txProcess()
@@ -1363,7 +1363,7 @@ void CCC1200::txProcess()
 			g_GateState.Set2IdleIf(EGateState::gatepacketin);
 		}
 	}
-	LogInfo("Modem run() process end");
+	LogInfo("Modem txProcess() process end");
 }
 
 
