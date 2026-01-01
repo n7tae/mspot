@@ -779,8 +779,7 @@ void CCC1200::rxProcess()
 
 	//UART comms
 	uint8_t rx_bsb_sample = 0;
-
-	float f_sample;
+	memset(rx_samp_buff, 0, sizeof(rx_samp_buff));
 
 	while(keep_running)
 	{
@@ -836,7 +835,7 @@ void CCC1200::rxProcess()
 					flt_buff[i] = flt_buff[i+1];
 				flt_buff[sizeof(flt_buff)-1] = raw_bsb_rx[i];
 
-				f_sample=0.0f;
+				float f_sample=0.0f;
 				for(uint8_t i=0; i<sizeof(flt_buff); i++)
 					f_sample+=rrc_taps_5[i]*(float)flt_buff[i];
 				f_sample*=RX_SYMBOL_SCALING_COEFF; //symbol map (works for CC1200 only)
