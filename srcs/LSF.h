@@ -55,7 +55,7 @@ public:
 	void SetFrameType(uint16_t ft) { data[12] = ft >> 8; data[13] = ft & 0xffu; }
 
 	// returns true if the crc is bad
-	bool CheckCRC() { return g_Crc.CheckCRC(data, 30u); }
+	bool CheckCRC() const { return g_Crc.CheckCRC(data, 30u); }
 	// calcualte and set the crc
 	void CalcCRC() { g_Crc.SetCRC(data, 30u); }
 

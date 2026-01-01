@@ -765,8 +765,8 @@ void CCC1200::rxProcess()
 	bool got_lsf = false;						//got LSF? either from LSF or reconstructed from LICH
 	uint8_t rx_samp_buff[963];
 	int8_t raw_bsb_rx[960];
-	uint16_t rx_buff_cnt;
-	bool uart_rx_sync;
+	uint16_t rx_buff_cnt = 0;
+	bool uart_rx_sync = false;
 	bool uart_rx_data_valid = false;
 	const int8_t lsf_sync_ext[16] { 3, -3, 3, -3, 3, -3, 3, -3, 3, -3, 3, -3, 3, -3, 3, -3 };
 
@@ -823,7 +823,7 @@ void CCC1200::rxProcess()
 				rx_buff_cnt = 0;
 			}
 
-			if (rx_buff_cnt > 1024)
+			if (rx_buff_cnt > 963)
 				LogWarning("Input buffer overflow");
 		}
 
