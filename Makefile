@@ -16,7 +16,7 @@ else
 CPPFLAGS  = -g -std=c++17 -Wall -Wextra -Werror -Isrcs
 endif
 
-LIBS    = -pthread -lgpiod
+LIBS    = -pthread -lm -lgpiod
 
 SRCS = $(wildcard srcs/*.cpp)
 OBJS = $(SRCS:.cpp=.o)

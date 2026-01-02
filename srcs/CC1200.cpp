@@ -768,7 +768,7 @@ void CCC1200::rxProcess()
 	uint16_t rx_buff_cnt = 0;
 	bool uart_rx_sync = false;
 	bool uart_rx_data_valid = false;
-	const int8_t lsf_sync_ext[16] { 3, -3, 3, -3, 3, -3, 3, -3, 3, -3, 3, -3, 3, -3, 3, -3 };
+	const int8_t lsf_sync_ext[16] { +3, -3, +3, -3, +3, -3, +3, -3, +3, +3, +3, +3, -3, -3, +3, -3 };
 
 	//start RX
 	while (stopTx())
@@ -848,7 +848,7 @@ void CCC1200::rxProcess()
 				for(uint8_t i=0; i<16; i++)
 					symbols[i]=f_flt_buff[i*5];
 
-				float dist_lsf=eucl_norm(&symbols[0], lsf_sync_ext, 16); //check against extended LSF syncword (8 symbols, alternating -3/+3)
+				float dist_lsf=eucl_norm(&symbols[0], lsf_sync_ext, 16); //check against extended LSF syncword
 				float dist_pkt=eucl_norm(&symbols[0], pkt_sync_symbols, 8);
 				float dist_str_a=eucl_norm(&symbols[8], str_sync_symbols, 8);
 				for(uint8_t i=0; i<16; i++)
