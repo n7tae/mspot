@@ -37,6 +37,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "HostMap.h"
 #include "Packet.h"
 #include "Stream.h"
+#include "Base.h"
 
 enum class ELinkState { unlinked, linking, linked };
 enum class EInternetType { ipv4only, ipv6only, both };
@@ -58,7 +59,7 @@ using SMessageTask = struct message_tag
 	std::atomic<bool> isDone;
 };
 
-class CGateway
+class CGateway : public CBase
 {
 public:
 	bool Start();
@@ -97,7 +98,6 @@ private:
 	bool setDestination(const std::string &cs);
 	// returns true on error
 	bool setDestination(const   CCallsign &cs);
-	void Dump(const char *title, const void *pointer, int length);
 	void addMessage(const std::string &message);
 	void makeCSData(const CCallsign &cs, const std::string &ofileName);
 	unsigned PlayVoiceFiles(std::string message);

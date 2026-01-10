@@ -39,7 +39,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 CVersion   g_Version(1, 0, 0);
 CConfigure g_Cfg;
 CCRC       g_Crc;
-CGateway   g_Gate;
+CGateway   g_Gateway;
 
 static int  caught_signal = 0;
 
@@ -88,12 +88,12 @@ int main(int argc, char** argv)
 
 	LogInfo("This software is for use on amateur radio networks only,");
 	LogInfo("Its use on commercial networks is strictly prohibited.");
-	LogInfo("Copyright(C) 2024,2025 by Thomas A. Early, N7TAE");
+	LogInfo("Copyright(C) 2026 by Thomas A. Early, N7TAE");
 
 	LogInfo("%s-%s is starting", pp.filename().c_str(), g_Version.c_str());
 	LogInfo("Built %s %s", __TIME__, __DATE__);
 
-	g_Gate.SetName(pp.filename());
+	g_Gateway.SetName(pp.filename());
 	CCC1200 modem;
 	
 	do
@@ -102,7 +102,7 @@ int main(int argc, char** argv)
 
 		if (modem.Start())
 			return EXIT_FAILURE;
-		if (g_Gate.Start())
+		if (g_Gateway.Start())
 		{
 			modem.Stop();
 			return EXIT_FAILURE;
@@ -110,7 +110,7 @@ int main(int argc, char** argv)
 		
 		pause();	// wait for a signal
 
-		g_Gate.Stop();
+		g_Gateway.Stop();
 		modem.Stop();
 
 		switch (caught_signal)

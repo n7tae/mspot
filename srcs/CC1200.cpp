@@ -1,71 +1,63 @@
 /*
+	mspot - an M17 hot-spot using an  M17 CC1200 Raspberry Pi Hat
+				Copyright (C) 2026 Thomas A. Early
 
-         mspot - an M17-only HotSpot using an RPi CC1200 hat
-            Copyright (C) 2025 Thomas A. Early N7TAE
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
-(at your option) any later version.
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along
-with this program; if not, write to the Free Software Foundation, Inc.,
-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-
+	You should have received a copy of the GNU General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <thread>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <cerrno>
+#include <atomic>
+#include <math.h>
+#include <stdarg.h>
 
-#include <unistd.h>
-#include <fcntl.h>
+#include <netinet/ip_icmp.h>
+#include <netinet/udp.h>
+#include <netinet/tcp.h>
+#include <netinet/ip.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <arpa/inet.h>
+
+#include <fcntl.h> 
+#include <sys/ioctl.h>
+#include <time.h>
+#include <signal.h>
+//libm17
+#include <m17.h>
 
 #include "SafePacketQueue.h"
+#include "RingBuffer.h"
+#include "Configure.h"
 #include "GateState.h"
-#include "Callsign.h"
 #include "Gateway.h"
 #include "CC1200.h"
 #include "Random.h"
-#include "LSF.h"
-#include "Log.h"
+#include "CRC.h"
 
-extern CGateway    g_Gate;
-extern CRandom     g_RNG;
-extern CCRC        g_Crc;
-extern CGateState  g_GateState;
+extern CGateState g_GateState;
+extern CConfigure g_Cfg;
+extern CGateway   g_Gateway;
+extern CRandom    g_RNG;
+extern CCRC       g_Crc;
+
 extern IPFrameFIFO Modem2Gate;
 extern IPFrameFIFO Gate2Modem;
 
-#define RX_SYMBOL_SCALING_COEFF	(1.0f/(0.8f/(40.0e3f/2097152*0xAD)*130.0f))	
-// CC1200 User's Guide, p. 24
-// 0xAD is `DEVIATION_M`, 2097152=2^21
-// +1.0 is the symbol for +0.8kHz
-// 40.0e3 is F_TCXO in kHz
-// 129 is `CFM_RX_DATA_OUT` register value at max. F_DEV (130 is 1 off but offers a better symbol map)
-// datasheet might have this wrong (it says 64)
-#define TX_SYMBOL_SCALING_COEFF	(0.8f/((40.0e3f/2097152)*0xAD)*64.0f)
-// 0xAD is `DEVIATION_M`, 2097152=2^21
-// +0.8kHz is the deviation for symbol +1
-// 40.0e3 is F_TCXO in kHz
-// 64 is `CFM_TX_DATA_IN` register value for max. F_DEV
-
-enum err_t
-{
-	ERR_OK,					//all good
-	ERR_TRX_PLL,			//TRX PLL lock error
-	ERR_TRX_SPI,			//TRX SPI comms error
-	ERR_RANGE,				//value out of range
-	ERR_CMD_MALFORM,		//malformed command
-	ERR_BUSY,				//busy!
-	ERR_BUFF_FULL,			//buffer full
-	ERR_NOP,				//nothing to do
-	ERR_OTHER
-};
-
+//CC1200 commands
 enum cmd_t
 {
 	CMD_PING,
@@ -95,9 +87,45 @@ enum cmd_t
 	CMD_GET_RSSI
 };
 
-static const char *err_str[9] { "Okay", "TRX PLL", "TRX SPI", "Range", "Command Malformed", "Busy", "Buffer Full", "NOP", "Other" };
+#include "term.h" //colored terminal font
 
-uint32_t CCC1200::getMilliseconds(void)
+#define RX_SYMBOL_SCALING_COEFF	(1.0f/(0.8f/(40.0e3f/2097152*0xAD)*130.0f))
+// CC1200 User's Guide, p. 24
+// 0xAD is `DEVIATION_M`, 2097152=2^21
+// +1.0 is the symbol for +0.8kHz
+// 40.0e3 is F_TCXO in kHz
+// 129 is `CFM_RX_DATA_OUT` register value at max. F_DEV (130 is 1 off but offers a better symbol map)
+// datasheet might have this wrong (it says 64)
+
+#define TX_SYMBOL_SCALING_COEFF	(0.8f/((40.0e3f/2097152)*0xAD)*64.0f)
+// 0xAD is `DEVIATION_M`, 2097152=2^21
+// +0.8kHz is the deviation for symbol +1
+// 40.0e3 is F_TCXO in kHz
+// 64 is `CFM_TX_DATA_IN` register value for max. F_DEV
+
+enum class ERxState { idle, sync };
+
+enum class ETxState { idle, active };
+
+enum err_t
+{
+	ERR_OK,					//all good
+	ERR_TRX_PLL,			//TRX PLL lock error
+	ERR_TRX_SPI,			//TRX SPI comms error
+	ERR_RANGE,				//value out of range
+	ERR_CMD_MALFORM,		//malformed command
+	ERR_BUSY,				//busy!
+	ERR_BUFF_FULL,			//buffer full
+	ERR_NOP,				//nothing to do
+	ERR_OTHER
+};
+
+std::atomic<bool> keep_running = true;
+time_t last_refl_ping;
+
+//debug printf
+
+uint32_t CCC1200::getMS(void)
 {
 	struct timespec spec;
 
@@ -105,7 +133,7 @@ uint32_t CCC1200::getMilliseconds(void)
 
 	time_t s = spec.tv_sec;
 	uint32_t ms = roundf(spec.tv_nsec/1.0e6); //convert nanoseconds to milliseconds
-	if(ms>999)
+	if (ms>999)
 	{
 		s++;
 		ms=0;
@@ -114,10 +142,12 @@ uint32_t CCC1200::getMilliseconds(void)
 	return s*1000 + ms;
 }
 
-speed_t CCC1200::getBaud(uint32_t baud)
+speed_t CCC1200::getBaud(unsigned baud)
 {
 	switch(baud)
 	{
+		default:
+			return B0;
 		case 9600:
 			return B9600;
 		case 19200:
@@ -154,33 +184,26 @@ speed_t CCC1200::getBaud(uint32_t baud)
 			return B3500000;
 		case 4000000:
 			return B4000000;
-		default: 
-			return B0;
 	}
 }
 
-bool CCC1200::setIinterface(uint32_t speed, int parity)
+bool CCC1200::setAttributes(unsigned speed, int parity)
 {
 	struct termios tty;
-	auto rval = tcgetattr(fd, &tty);
-	if (rval < 0)
+	if (tcgetattr(fd, &tty))
 	{
-		LogError("tcgetattr() error: ", strerror(errno));
+		printMsg(nullptr, TC_RED, "tcgetattr() error: %s\n", strerror(errno));
 		return true;
- 	} else if (rval > 0) {
-		LogError("tcgetattr() returned unexpected value: %d", rval);
-		return true;
-	}
+ 	}
 
-	auto brate = getBaud(speed);
-	if (brate == B0)
+	auto baud = getBaud(speed);
+	if (B0 == baud)
 	{
-		LogError("Could not set baud rate to %u", speed);
-		return 0;
+		printMsg(nullptr, TC_YELLOW, "%u is not a valid baud rate, trying 460800 ", speed);
+		baud = B460800;
 	}
-
-	cfsetospeed(&tty, brate);
-	cfsetispeed(&tty, brate);
+	cfsetospeed(&tty, baud);
+	cfsetispeed(&tty, baud);
 
 	tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;	//8-bit chars
 	//disable IGNBRK for mismatched speed tests; otherwise receive break
@@ -201,75 +224,71 @@ bool CCC1200::setIinterface(uint32_t speed, int parity)
 	tty.c_cflag &= ~CSTOPB;
 	tty.c_cflag &= ~CRTSCTS;
 
-	rval = tcsetattr(fd, TCSANOW, &tty);
-	if (rval < 0)
-	{
-		LogError("tcsetattr() error: ", strerror(errno));
-		return true;
- 	} else if (rval > 0) {
-		LogError("tcsetattr() returned unexpected value: %d", rval);
-		return true;
+	if (tcsetattr(fd, TCSANOW, &tty))
+	{		
+		printMsg(nullptr, TC_RED, " tcsetattr() error: %s\n", strerror(errno));
+		return true; 
 	}
 	
 	return false;
 }
 
-void CCC1200::loadConfig()
+bool CCC1200::loadConfig()
 {
-	extern CConfigure g_Cfg;
-	cfg.gpioDev  = g_Cfg.GetString(  g_Keys.modem.section,    g_Keys.modem.gpiochipDevice);
-	cfg.uartDev  = g_Cfg.GetString(  g_Keys.modem.section,    g_Keys.modem.uartDevice);
+	//load defaults
 	cfg.baudRate = g_Cfg.GetUnsigned(g_Keys.modem.section,    g_Keys.modem.uartBaudRate);
 	cfg.rxFreq   = g_Cfg.GetUnsigned(g_Keys.modem.section,    g_Keys.modem.rxFreq);
 	cfg.txFreq   = g_Cfg.GetUnsigned(g_Keys.modem.section,    g_Keys.modem.txFreq);
-	cfg.afc      = g_Cfg.GetBoolean( g_Keys.modem.section,    g_Keys.modem.afc);
-	cfg.freqCorr = g_Cfg.GetInt(     g_Keys.modem.section,    g_Keys.modem.freqCorr);
-	cfg.power    = g_Cfg.GetFloat(   g_Keys.modem.section,    g_Keys.modem.txPower);
-	cfg.boot0    = g_Cfg.GetUnsigned(g_Keys.modem.section,    g_Keys.modem.boot0);
 	cfg.nrst     = g_Cfg.GetUnsigned(g_Keys.modem.section,    g_Keys.modem.nrst);
+	cfg.boot0    = g_Cfg.GetUnsigned(g_Keys.modem.section,    g_Keys.modem.boot0);
 	cfg.can      = g_Cfg.GetUnsigned(g_Keys.repeater.section, g_Keys.repeater.can);
-	cfg.debug    = g_Cfg.GetBoolean( g_Keys.repeater.section, g_Keys.repeater.debug);
-	cfg.isV3     = g_Cfg.GetBoolean( g_Keys.repeater.section, g_Keys.repeater.radioTypeIsV3);
-	// the callsign has to be assembled from two items
+	cfg.uartDev  = g_Cfg.GetString  (g_Keys.modem.section,    g_Keys.modem.uartDevice);
+	cfg.gpioDev  = g_Cfg.GetString  (g_Keys.modem.section,    g_Keys.modem.gpiochipDevice);
+	cfg.freqCorr = g_Cfg.GetInt     (g_Keys.modem.section,    g_Keys.modem.freqCorr);
+	cfg.power    = g_Cfg.GetFloat   (g_Keys.modem.section,    g_Keys.modem.txPower);
+	cfg.afc      = g_Cfg.GetBoolean (g_Keys.modem.section,    g_Keys.modem.afc);
+	cfg.isV3     = g_Cfg.GetBoolean (g_Keys.repeater.section, g_Keys.repeater.radioTypeIsV3);
+	cfg.debug    = g_Cfg.GetBoolean (g_Keys.modem.section,    g_Keys.modem.debug);
 	cfg.callSign.CSIn(g_Cfg.GetString(g_Keys.repeater.section, g_Keys.repeater.callsign));
 	cfg.callSign.SetModule(g_Cfg.GetString(g_Keys.repeater.section, g_Keys.repeater.module).at(0));
+	return false;
 }
 
-struct gpiod_line_request *CCC1200::gpioLineRequest(unsigned int offset, int value, const std::string &consumer)
+struct gpiod_line_request *CCC1200::gpioLineRequest(unsigned offset, int value, const char *consumer)
 {
 	struct gpiod_request_config *req_cfg = nullptr;
 	struct gpiod_line_request *request = nullptr;
 	struct gpiod_line_settings *settings;
-	struct gpiod_line_config *line_cfg;
+	struct gpiod_line_config *line_cfg = nullptr;
 
-	if (nullptr == gpioChip) 
+	if (nullptr == gpio_chip) 
 		return nullptr;
 
 	settings = gpiod_line_settings_new();
 	if (nullptr == settings)
 	{
-		LogError("Could not create settings for gpio line #%u", offset);
+		printMsg(nullptr, TC_RED, "Could not create settings for gpio line #%u\n", offset);
 	} else {
 		if (gpiod_line_settings_set_direction(settings, GPIOD_LINE_DIRECTION_OUTPUT) or gpiod_line_settings_set_output_value(settings, value ? GPIOD_LINE_VALUE_ACTIVE : GPIOD_LINE_VALUE_INACTIVE))
 		{
-			LogError("Could not adjust settings for gpio line #%u", offset);
+			printMsg(nullptr, TC_RED, "Could not adjust settings for gpio line #%u\n", offset);
 		} else {
 			line_cfg = gpiod_line_config_new();
 			if (nullptr == line_cfg)
 			{
-				LogError("Could not create new config for gpio line #%u", offset);
+				printMsg(nullptr, TC_RED, "Could not create new config for gpio line #%u\n", offset);
 			} else {
 				if (gpiod_line_config_add_line_settings(line_cfg, &offset, 1, settings))
 				{
-					LogError("could not add settings to config of gpio line #%u", offset);
+					printMsg(nullptr, TC_RED, "could not add settings to config of gpio line #%u\n", offset);
 				} else {
 					req_cfg = gpiod_request_config_new();
 					if (req_cfg)
 					{
-						gpiod_request_config_set_consumer(req_cfg, (consumer.empty()) ? "MSPOT" : consumer.c_str());
-						request = gpiod_chip_request_lines(gpioChip, req_cfg, line_cfg);
+						gpiod_request_config_set_consumer(req_cfg, (not consumer) ? "SPOT" : consumer);
+						request = gpiod_chip_request_lines(gpio_chip, req_cfg, line_cfg);
 						if (nullptr == request)
-							LogError("Could not open offset %u on configured gpio device", offset);
+							printMsg(nullptr, TC_RED, "Could not open offset %u on configured gpio device\n", offset);
 					}
 				}
 			}
@@ -291,33 +310,69 @@ bool CCC1200::gpioSetValue(unsigned offset, int value)
 {
 	gpiod_line_request *lr = nullptr;
 	if (cfg.boot0 == offset)
-		lr = reqBoot0;
+		lr = boot0_line;
 	else if (cfg.nrst == offset)
-		lr = reqNrst;
+		lr = nrst_line;
 	else {
-		LogError("gpioSetValue error: offset %u not confiugred", offset);
+		printMsg(nullptr, TC_RED, "gpioSetValue error: offset %u not confiugred\n", offset);
 		return true;
 	}
 
 	if (gpiod_line_request_set_value(lr, offset, value ? GPIOD_LINE_VALUE_ACTIVE : GPIOD_LINE_VALUE_INACTIVE))
 	{
-		LogError("Could not set gpio line #%u to %d", offset, value);
+		printMsg(nullptr, TC_RED, "Could not set gpio line #%u to %d\n", offset, value);
 		return true;
 	}
 	return false;
 }
 
-bool CCC1200::readDev(uint8_t *buf, int size)
+bool CCC1200::gpioInit(const std::string &consumer)
 {
+	gpio_chip = gpiod_chip_open(cfg.gpioDev.c_str());
+	if (nullptr == gpio_chip) {
+		printMsg(TC_RED, "Could not open %s\n", cfg.gpioDev.c_str());
+		return true;
+	}
+	boot0_line = gpioLineRequest(cfg.boot0, 0, consumer.c_str());
+	if (nullptr == boot0_line)
+		return true;
+	nrst_line = gpioLineRequest(cfg.nrst, 0, consumer.c_str());
+	if (nullptr == nrst_line)
+		return true;
+	return false;
+}
+
+// Release GPIO resources
+void CCC1200::gpioCleanup()
+{
+	printMsg(TC_CYAN, TC_DEFAULT, "GPIO reset: ");
+	if (boot0_line)
+	{
+		gpioSetValue(cfg.boot0, 0);
+		gpiod_line_request_release(boot0_line);
+	}
+	if (nrst_line)
+	{
+		gpioSetValue(cfg.nrst, 0);
+		gpiod_line_request_release(nrst_line);
+	}
+	if (gpio_chip)
+		gpiod_chip_close(gpio_chip);
+	printMsg(nullptr, TC_GREEN, "GPIO lines set to low and resources released\n");
+}
+
+bool CCC1200::readDev(void *vbuf, int size)
+{
+	uint8_t *buf = static_cast<uint8_t *>(vbuf);
 	int rd = 0;
 	while (rd < size)
 	{
 		int r = read(fd, buf + rd, size - rd);
 		if (r < 0) {
-			LogError("read() returned error: ", strerror(errno));
+			printMsg(TC_CYAN, TC_RED, "read() %s returned error: %s", cfg.uartDev.c_str(), strerror(errno));
 			return true;
 		} else if (r == 0) {
-			LogError("read() returned zero");
+			printMsg(TC_CYAN, TC_RED, "read() %s returned zero bytes\n", cfg.uartDev.c_str());
 			return true;
 		}
 		rd += r;
@@ -329,26 +384,26 @@ void CCC1200::writeDev(void *buf, int size, const char *where)
 {
 	ssize_t n = write(fd, buf, size);
 	if (n < 0) {
-		LogError("In %s, write() error: %s", where, strerror(errno));
+		printMsg(TC_CYAN, TC_YELLOW, "In %s, write() error: %s\n", where, strerror(errno));
 	} else if (n != size) {
-		LogError("write() only wrote %d of %d in %s", n, size, where);
+		printMsg(TC_CYAN, TC_YELLOW, "write() only wrote %d of %d in %s\n", n, size, where);
 	}
 	return;
 }
 
 //device config funcs
-bool CCC1200::testPING(void)
+bool CCC1200::pingDev()
 {
 	uint8_t cid = CMD_PING;
 	uint8_t cmd[3] = { cid, 3, 0 };
 	uint8_t resp[7] = { 0 };
 
-	uart_lock = true;          //prevent main loop from reading
-    tcflush(fd, TCIFLUSH);    //clear leftover bytes
+	uart_lock = true;      // prevent main loop from reading
+    tcflush(fd, TCIFLUSH); // clear leftover bytes
 
-    writeDev(cmd, 3, "testPING");
+    writeDev(cmd, 3, "pingDev");
 
-	if (readDev(resp, 7))
+    if (readDev(resp, sizeof(resp)))
 	{
 		uart_lock = false;
 		return true;
@@ -356,32 +411,32 @@ bool CCC1200::testPING(void)
 
     uart_lock = false;
 
-	const uint8_t goodResp[] { cid, 7, 0, 0, 0, 0, 0 };
-    if (memcmp(resp, goodResp, 7))
+	const uint8_t good[7] { cid, 7, 0, 0, 0, 0, 0 };
+    if (0 == memcmp(resp, good, 7))
 	{
-		uint32_t dev_err;
-		memcpy(&dev_err, resp + 3, 4);
-		LogError("PONG error code: 0x%04X", dev_err);
-		return true;
+		printMsg(nullptr, TC_GREEN, "PONG OK\n"); //OK
+        return false;
     }
 
-	LogInfo("PONG OK"); //OK
-    return false;
+	uint32_t dev_err;
+	memcpy((uint8_t*)&dev_err, &resp[3], sizeof(uint32_t));
+    printMsg(nullptr, TC_RED, "%02x %02x %02x PONG error code: 0x%04X\n", resp[0], resp[1], resp[2], dev_err);
+    return true;
 }
 
 bool CCC1200::setRxFreq(uint32_t freq)
 {
 	uint8_t cid = CMD_SET_RX_FREQ;
-	uint8_t cmd[7] = { cid, 7, 0 };
-	memcpy(cmd+3, &freq, 4);
-	uint8_t resp[4] = {0};
+	uint8_t cmd[3+4] = {cid, 7, 0};
+	memcpy(&cmd[3], (uint8_t*)&freq, sizeof(freq));
+	uint8_t resp[4] = { 0 };
 
 	uart_lock = true;            //prevent main loop from reading
     tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
-    writeDev(cmd, 7, "setRXFreq");
+    writeDev(cmd, 7, "setRxFreq");
 
-	if (readDev(resp, 4))
+    if (readDev(resp, sizeof(resp)))
 	{
 		uart_lock = false;
 		return true;
@@ -389,53 +444,54 @@ bool CCC1200::setRxFreq(uint32_t freq)
 
     uart_lock = false;
 
-	const uint8_t goodresp[] { cid, 4, 0, 0 };
-
-    if (memcmp(resp, goodresp, 4))
+	printMsg(TC_CYAN, TC_DEFAULT, "RX frequency: ");
+	const uint8_t good[4] = { cid, 4, 0, ERR_OK };
+    if (0 == memcmp(resp, good, 4))
 	{
-		LogError("Error setting Rx frequency: %s", err_str[resp[3]]);
-		return true;
+		printMsg(nullptr, TC_GREEN, "%lu Hz\n", freq); //OK
+        return false;
     }
 
-	LogInfo("Rx frequency: %u", freq);
-	return false;
+    printMsg(nullptr, TC_RED, "Error %d setting RX frequency: %u Hz\n", resp[3], freq); //error
+    return true;
 }
 
 bool CCC1200::setTxFreq(uint32_t freq)
 {
 	uint8_t cid = CMD_SET_TX_FREQ;
-	uint8_t cmd[7] = { cid, 7, 0 };
-	memcpy(cmd+3, &freq, 4);
+	uint8_t cmd[3+4] = {cid, 7, 0};
+	memcpy(&cmd[3], (uint8_t*)&freq, sizeof(freq));
 	uint8_t resp[4] = { 0 };
 
-	uart_lock = true;            //prevent main loop from reading
+	uart_lock = true;      // prevent main loop from reading
     tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
-	writeDev(cmd, 7, "setTxFreq");
-	if (readDev(resp, 4))
+    writeDev(cmd, 7, "setTxFreq");
+
+    if (readDev(resp, sizeof(resp)))
 	{
 		uart_lock = false;
 		return true;
 	}
 
-	uart_lock = false;
+    uart_lock = false;
 
-	const uint8_t goodresp[] { cid, 4, 0, 0 };
-
-    if (memcmp(resp, goodresp, 4))
+	printMsg(TC_CYAN, TC_DEFAULT, "TX frequency: ");
+	const uint8_t good[4] { cid, 4, 0, ERR_OK };
+    if (0 == memcmp(resp, good, 4))
 	{
-		LogError("Error setting Tx frequency: %s", err_str[resp[3]]);
-		return true;
-	}
-	
-	LogInfo("Tx frequency: %u", freq);
-	return false;
+		printMsg(nullptr, TC_GREEN, "%lu Hz\n", freq); //OK
+        return false;
+    }
+
+    printMsg(nullptr, TC_RED, "Error %d setting TX frequency: %u Hz\n", resp[3], freq); //error
+    return true;
 }
 
 bool CCC1200::setFreqCorr(int16_t corr)
 {
 	uint8_t cid = CMD_SET_FREQ_CORR;
-	uint8_t cmd[5] = { cid, 5, 0, uint8_t(corr & 0xff), uint8_t((corr>>8) & 0xff) };
+	uint8_t cmd[5] = {cid, 5, 0, uint8_t(corr&0xffu), uint8_t((corr>>8)&0xffu)};
 	uint8_t resp[4] = { 0 };
 
 	uart_lock = true;            //prevent main loop from reading
@@ -443,38 +499,38 @@ bool CCC1200::setFreqCorr(int16_t corr)
 
     writeDev(cmd, 5, "setFreqCorr");
 
-    if (readDev(resp, 4))
+	if (readDev(resp, sizeof(resp)))
 	{
 		uart_lock = false;
 		return true;
 	}
 
-    uart_lock = false;
+	uart_lock = false;
 
-	const uint8_t goodResp[] { cid, 4, 0, 0 };
-
-    if (memcmp(resp, goodResp, 4))
+	printMsg(TC_CYAN, TC_DEFAULT, "Frequency correction: ");
+	const uint8_t good[4] { cid, 4, 0, ERR_OK };
+    if (0 == memcmp(resp, good, 4))
 	{
-		LogError("Error setting frequency offset: %s", err_str[resp[3]]);
-		return true;
+		printMsg(nullptr, TC_GREEN, "%d\n", corr); //OK
+        return false;
     }
 
-	LogInfo("Frequency correction: %d", corr);
-    return false;
+    printMsg(nullptr, TC_RED, "Error %d setting frequency correction: %d\n", resp[3], corr); //error
+    return true;
 }
 
-bool CCC1200::setAFC(bool en)
+bool CCC1200::setAfc(bool en)
 {
 	uint8_t cid = CMD_SET_AFC;
-	uint8_t cmd[4] = { cid, 4, 0, uint8_t(en ? 1 : 0) };
+	uint8_t cmd[3+1] = { cid, 4, 0, uint8_t(en ? 0 : 1) };
 	uint8_t resp[4] = { 0 };
 
 	uart_lock = true;            //prevent main loop from reading
     tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
-    writeDev(cmd, 4, "setAFC");
+    writeDev(cmd, 4, "setAfc");
 
-	if (readDev(resp, 4))
+    if (readDev(resp, sizeof(resp)))
 	{
 		uart_lock = false;
 		return true;
@@ -482,30 +538,30 @@ bool CCC1200::setAFC(bool en)
 
     uart_lock = false;
 
-	const uint8_t goodResp[] { cid, 4, 0, 0 };
-
-    if (memcmp(resp, goodResp, 4))
+	printMsg(TC_CYAN, TC_DEFAULT, "AFC: ");
+	const uint8_t good[4] { cid, 4, 0, ERR_OK };
+    if (0 == memcmp(resp, good, 4))
 	{
-		LogError("Error setting AFC: %s", err_str[resp[3]]);
-		return true;
+		printMsg(nullptr, TC_GREEN, "%s\n", en==0?"disabled":"enabled"); //OK
+        return false;
     }
 
-    LogInfo("AFC is%s enabled", en?"":" NOT");
-	return false;
+    printMsg(nullptr, TC_RED, "Error setting AFC\n"); //error
+    return true;
 }
 
 bool CCC1200::setTxPower(float power) //powr in dBm
 {
 	uint8_t cid = CMD_SET_TX_POWER;
-	uint8_t cmd[4] = {cid, 4, 0, uint8_t(roundf(power*4.0f)) };
+	uint8_t cmd[4] = { cid, 4, 0, uint8_t(roundf(power*4.0f)) };
 	uint8_t resp[4] = { 0 };
 
-	uart_lock = true;		//prevent main loop from reading
-    tcflush(fd, TCIFLUSH);	//clear leftover bytes
+	uart_lock = true;            //prevent main loop from reading
+    tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
     writeDev(cmd, 4, "setTxPower");
 
-	if (readDev(resp, 4))
+    if (readDev(resp, sizeof(resp)))
 	{
 		uart_lock = false;
 		return true;
@@ -513,16 +569,16 @@ bool CCC1200::setTxPower(float power) //powr in dBm
 
     uart_lock = false;
 
-	const uint8_t goodResp[] { cid, 4, 0, 0 };
-
-    if (memcmp(resp, goodResp, 4))
+	printMsg(TC_CYAN, TC_DEFAULT, "TX power: ");
+	uint8_t good[4] { cid, 4, 0, ERR_OK };
+    if (0 == memcmp(resp, good, 4))
 	{
-		LogError("Error setting Tx Power: %s", err_str[resp[3]]);
-		return true;
+		printMsg(nullptr, TC_GREEN, "%2.2f dBm\n", power); //OK
+        return false;
     }
 
-	LogInfo("Tx Power: %.2f dBm", power);
-	return false;
+    printMsg(nullptr, TC_RED, "Error %d setting TX power: %2.2f dBm\n", resp[3], power); //error
+    return true;
 }
 
 bool CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
@@ -535,7 +591,7 @@ bool CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
 
 	writeDev(cmd, 4, what);
 
-	if (readDev(resp, 4))
+	if (readDev(resp, sizeof(resp)))
 	{
 		uart_lock = false;
 		return true;
@@ -543,9 +599,10 @@ bool CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
 
 	uart_lock = false;
 
-	if (cid != resp[0] or 4u != resp[1] or 0 != resp[2] or (ERR_OK != resp[3] and ERR_NOP != resp[3]))
+	const uint8_t good[3] { cid, 4, 0 };
+	if (memcmp(resp, good, 3) or (ERR_OK != resp[3] and ERR_NOP != resp[3]))
 	{
-		LogDebug("Doing %s, cmd returned %02x %02x %02x %02x", what, resp[0], resp[1], resp[2], resp[3]);
+		printMsg(TC_CYAN, TC_RED, "Doing %s, cmd returned %02x %02x %02x %02x\n", what, resp[0], resp[1], resp[2], resp[3]);
 		return true;
 	}
 
@@ -582,6 +639,7 @@ void CCC1200::filterSymbols(int8_t* __restrict out, const int8_t* __restrict in,
 	static float sr[TAPS_PER_PHASE * 2] = { 0 };
 	static uint8_t w = 0;
 
+	//flush filter state
 	if (in == nullptr)
 	{
 		memset(sr, 0, sizeof(sr));
@@ -638,529 +696,130 @@ void CCC1200::filterSymbols(int8_t* __restrict out, const int8_t* __restrict in,
 
 bool CCC1200::Start()
 {
-	LogInfo("Starting the CC1200");
-	fd = -1;
-	loadConfig();
-	srand(time(nullptr));
+	printMsg(TC_CYAN, TC_GREEN, "Starting up mspot\n");
+
 	//------------------------------------gpio init------------------------------------
-	LogInfo("GPIO Device reset");
-	gpioChip = gpiod_chip_open(cfg.gpioDev.c_str());
-	if (gpioChip) {
-		LogMessage("%s opened", cfg.gpioDev.c_str());
-	} else {
-		LogError("Could not open %s", cfg.gpioDev.c_str());
+	printMsg(TC_CYAN, TC_DEFAULT, "GPIO init: ");
+	if (gpioInit("mspot"))
 		return true;
-	}
-	// create the two control lines!
-	reqBoot0 = gpioLineRequest(cfg.boot0, 0, g_Gate.GetName());
-	reqNrst  = gpioLineRequest(cfg.nrst,  0, g_Gate.GetName());
-	if (reqBoot0 and reqNrst)
-	{
-		if (gpioSetValue(cfg.boot0, 0) or gpioSetValue(cfg.nrst, 0))
-		{
-			return true;
-		} else {
-			std::this_thread::sleep_for(std::chrono::milliseconds(50));
-			if (gpioSetValue(cfg.nrst, 1))
-				return true;
-			else
-				// wait for device bootup
-				std::this_thread::sleep_for(std::chrono::seconds(1));
-		}
-	} else
+	if (gpioSetValue(cfg.nrst, 0)) //both pins should be at logic low already, but better be safe than sorry
 		return true;
+	usleep(250000U); //250ms
+	if (gpioSetValue(cfg.nrst, 1))
+		return true;
+	usleep(1000000U); //1s for device boot-up
+	printMsg(nullptr, TC_GREEN, " OK\n");
 
 	//-----------------------------------device part-----------------------------------
-	fd = open(cfg.uartDev.c_str(), O_RDWR | O_NOCTTY | O_SYNC);
-	if(fd < 0)
+	printMsg(TC_CYAN, TC_DEFAULT, "UART init: %s at %d baud: ", (char*)cfg.uartDev.c_str(), cfg.baudRate);
+	fd = open((char*)cfg.uartDev.c_str(), O_RDWR | O_NOCTTY | O_SYNC);
+	if (fd < 0)
 	{
-		LogError("Could not open %s: %s", cfg.uartDev.c_str(), strerror(errno));
+		printMsg(nullptr, TC_RED, "open(%s) error: %s\n", cfg.uartDev.c_str(), strerror(errno));
 		return true;
-	}
-	
-	if (setIinterface(cfg.baudRate, 0))
+	} else if (setAttributes(cfg.baudRate, 0))
 		return true;
+	printMsg(nullptr, TC_GREEN, " OK\n");
 
 	//PING-PONG test
-	LogInfo("Sending %s a 'PING'", cfg.uartDev.c_str());
-	if (testPING())
+	printMsg(TC_CYAN, TC_DEFAULT, "Radio board's reply to PING... ");
+	if (pingDev())
 		return true;
 
 	//config the device
-	if (setRxFreq(cfg.rxFreq)
-	or  setTxFreq(cfg.txFreq)
-	or  setFreqCorr(cfg.freqCorr)
-	or  setTxPower(cfg.power)
-	or  setAFC(cfg.afc))
-		return true;
-
-	keep_running = true;
-	rxFuture = std::async(std::launch::async, &CCC1200::rxProcess, this);
-	if (not rxFuture.valid())
+	if (setRxFreq(cfg.rxFreq) or
+		setTxFreq(cfg.txFreq) or
+		setFreqCorr(cfg.freqCorr) or
+		setTxPower(cfg.power) or
+		setAfc(cfg.afc))
 	{
-		LogError("Could not start CCC1200::rxProcess thread");
 		return true;
 	}
+
 	txFuture = std::async(std::launch::async, &CCC1200::txProcess, this);
 	if (not txFuture.valid())
 	{
-		LogError("Could not start CCC1200::txProcess thread");
+		printMsg(TC_CYAN, TC_RED, "Could not start Tx thread\n");
+		keep_running = false;
+		return true;
+	}
+	rxFuture = std::async(std::launch::async, &CCC1200::rxProcess, this);
+	if (not rxFuture.valid())
+	{
+		printMsg(TC_CYAN, TC_RED, "Could not start RX thread\n");
+		keep_running = false;
 		return true;
 	}
 
+	//start RX
+	while (stopTx())
+		usleep(40e3);
+	while (startRx())
+		usleep(40e3);
+	printMsg(TC_CYAN, TC_GREEN, "Device start - RX\n");
 	return false;
 }
 
 void CCC1200::Stop()
 {
-	LogInfo("Shutting down the CC1200...");
 	keep_running = false;
-
-	// send any command to the modem so it will output something and break the select() block
-	uint8_t cmd[3] = { CMD_PING, 3, 0 };
-	writeDev(cmd, 3, "SHUTDOWN");
-	// send a packet to the modem to break the Pop() block
-	auto p = std::make_unique<CPacket>(); // an unintialized packet will be fine
-	Gate2Modem.Push(p);
-
 	if (rxFuture.valid())
 		rxFuture.get();
 	if (txFuture.valid())
 		txFuture.get();
-	LogDebug("tx/tx threads are closed...");
-	if (reqBoot0)
-	{
-		gpioSetValue(cfg.boot0, 0);
-		gpiod_line_request_release(reqBoot0);
-	}
-	if (reqNrst)
-	{
-		gpioSetValue(cfg.nrst, 0);
-		gpiod_line_request_release(reqNrst);
-	}
-	LogDebug("GPIO lines set to low...");
-	if (gpioChip)
-		gpiod_chip_close(gpioChip);
-	LogDebug("GPIO chip closed...");
-	if (fd >= 0)
-		close(fd);
-	LogInfo("All resources released");
-}
-
-void CCC1200::rxProcess()
-{
-	ERxState rx_state = ERxState::idle;
-	int8_t flt_buff[8*5+1];						//length of this has to match RRC filter's length
-	float f_flt_buff[8*5+2*(8*5+4800/25*5)+2];	//8 preamble symbols, 8 for the syncword, and 960 for the payload.
-                                                //floor(sps/2)=2 extra samples for timing error correction
-	uint16_t sample_cnt = 0;					//sample counter (for RX sync timeout)
-	uint16_t fn, last_fn=0xffffu;				//current and last received FN (stream mode)
-	uint16_t sid;								// stream ID
-	uint8_t payload[825];						// buffer for the packet payload
-	uint8_t *ppayload = payload;				// ptr to the payload
-	uint16_t plsize = 0;             		    // # of bytes in the payload
-
-	bool first_frame = true;					//first decoded frame after SYNC?
-	uint8_t lich_parts = 0;						//LICH chunks received (bit flags)
-	bool got_lsf = false;						//got LSF? either from LSF or reconstructed from LICH
-	uint8_t rx_samp_buff[963];
-	int8_t raw_bsb_rx[960];
-	uint16_t rx_buff_cnt = 0;
-	bool uart_rx_sync = false;
-	bool uart_rx_data_valid = false;
-	const int8_t lsf_sync_ext[16] { +3, -3, +3, -3, +3, -3, +3, -3, +3, +3, +3, +3, -3, -3, +3, -3 };
-
-	//start RX
-	while (stopTx())
-		std::this_thread::sleep_for(std::chrono::milliseconds(40));
-	while (startRx())
-		std::this_thread::sleep_for(std::chrono::milliseconds(40));
-	LogInfo("Receiver Started");
-
-	//UART comms
-	uint8_t rx_bsb_sample = 0;
-	memset(rx_samp_buff, 0, sizeof(rx_samp_buff));
-
-	while(keep_running)
-	{
-		fd_set rfds;
-		FD_ZERO(&rfds);
-		FD_SET(fd, &rfds);
-
-		select(fd+1, &rfds, NULL, NULL, NULL);
-
-		//are there any new baseband samples to process?
-		if (!uart_lock && FD_ISSET(fd, &rfds))
-		{
-			read(fd, &rx_bsb_sample, 1);
-
-			//wait for rx baseband data header
-			if (!uart_rx_sync)
-			{
-				rx_samp_buff[0] = rx_samp_buff[1];
-				rx_samp_buff[1] = rx_samp_buff[2];
-				rx_samp_buff[2] = rx_bsb_sample;
-
-				if (rx_samp_buff[0]==CMD_RX_DATA && rx_samp_buff[1]==0xC3 && rx_samp_buff[2]==0x03)
-				{
-					uart_rx_sync = true;
-					rx_buff_cnt = 3;
-				}
-			}
-			else
-			{
-				rx_samp_buff[rx_buff_cnt++] = rx_bsb_sample;
-			}
-
-			if (uart_rx_sync && rx_buff_cnt==963)
-			{
-				memcpy(raw_bsb_rx, &rx_samp_buff[3], sizeof(raw_bsb_rx));
-				memset(rx_samp_buff, 0, sizeof(rx_samp_buff));
-				uart_rx_data_valid = true;
-				uart_rx_sync = false;
-				rx_buff_cnt = 0;
-			}
-
-			if (rx_buff_cnt > 963)
-				LogWarning("Input buffer overflow");
-		}
-
-		if (uart_rx_data_valid)
-		{
-			for (uint16_t i=0; i<960; i++)
-			{
-				//push buffer TODO: please optimize this. eyes hurt
-				for(uint8_t i=0; i<sizeof(flt_buff)-1; i++)
-					flt_buff[i] = flt_buff[i+1];
-				flt_buff[sizeof(flt_buff)-1] = raw_bsb_rx[i];
-
-				float f_sample=0.0f;
-				for(uint8_t i=0; i<sizeof(flt_buff); i++)
-					f_sample+=rrc_taps_5[i]*(float)flt_buff[i];
-				f_sample*=RX_SYMBOL_SCALING_COEFF; //symbol map (works for CC1200 only)
-
-				for(uint16_t i=0; i<sizeof(f_flt_buff)/sizeof(float)-1; i++)
-					f_flt_buff[i]=f_flt_buff[i+1];
-				f_flt_buff[sizeof(f_flt_buff)/sizeof(float)-1]=f_sample;
-
-				//L2 norm check against syncword
-				float symbols[16];
-				for(uint8_t i=0; i<16; i++)
-					symbols[i]=f_flt_buff[i*5];
-
-				float dist_lsf=eucl_norm(&symbols[0], lsf_sync_ext, 16); //check against extended LSF syncword
-				float dist_pkt=eucl_norm(&symbols[0], pkt_sync_symbols, 8);
-				float dist_str_a=eucl_norm(&symbols[8], str_sync_symbols, 8);
-				for(uint8_t i=0; i<16; i++)
-					symbols[i]=f_flt_buff[960+i*5];
-				float dist_str_b=eucl_norm(&symbols[8], str_sync_symbols, 8);
-				float dist_str=sqrtf(dist_str_a*dist_str_a+dist_str_b*dist_str_b);
-
-				//fwrite(&dist_str, 4, 1, fp);
-
-				//LSF received at idle state
-				if(dist_lsf <= 4.5f and rx_state == ERxState::idle)
-				{
-					//find L2's minimum
-					uint8_t sample_offset=0;
-					for(uint8_t i=1; i<=2; i++)
-					{
-						for(uint8_t j=0; j<16; j++)
-							symbols[j]=f_flt_buff[j*5+i];
-
-						float d=eucl_norm(symbols, lsf_sync_ext, 16);
-
-						if(d<dist_lsf)
-						{
-							dist_lsf=d;
-							sample_offset=i;
-						}
-					}
-
-					float pld[SYM_PER_PLD];
-
-					for(uint16_t i=0; i<SYM_PER_PLD; i++)
-					{
-						pld[i]=f_flt_buff[16*5+i*5+sample_offset]; //add symbol timing correction
-					}
-
-					uint32_t e = decode_LSF((lsf_t *)lsf.GetData(), pld);
-
-					const CCallsign dst(lsf.GetCDstAddress());
-					const CCallsign src(lsf.GetCSrcAddress());
-					frameTYPE.SetFrameType(lsf.GetFrameType());
-
-					if(lsf.CheckCRC()) {
-						LogWarning("RF LSF failed CRC check");
-					} else {
-						got_lsf = true;
-						rx_state = ERxState::sync;	//change RX state
-						sample_cnt=0;		//reset rx timeout timer
-
-						last_fn=0xFFFFU;
-
-						LogInfo("RF LSF DST: %s SRC: %s TYPE: 0x%04x CAN=%u MER: %-3.1f%%", dst.c_str(), src.c_str(), frameTYPE.GetOriginType(), unsigned(frameTYPE.GetCan()), (float)e/0xFFFFU/SYM_PER_PLD/2.0f*100.0f);
-
-						if(EPayloadType::packet != frameTYPE.GetPayloadType()) //if stream
-						{
-							sid = g_RNG.Get();
-
-							LogDash("\"%s\" \"%s\" \"RF\" \"%u\" \"%3.1f%%\"", src.c_str(), dst.c_str(), unsigned(frameTYPE.GetCan()), (float)e/0xFFFFU/SYM_PER_PLD/2.0f*100.0f);
-						}
-						g_GateState.TryState(EGateState::modemin);
-					}
-				}
-
-				//stream frame received
-				else if(dist_str <= 5.0f)
-				{
-					rx_state = ERxState::sync;
-					sample_cnt=0;		//reset rx timeout timer
-
-					//find L2's minimum
-					uint8_t sample_offset=0;
-					for(uint8_t i=1; i<=2; i++)
-					{
-						for(uint8_t j=0; j<16; j++)
-							symbols[j]=f_flt_buff[j*5+i];
-						
-						float tmp_a=eucl_norm(&symbols[8], str_sync_symbols, 8);
-						for(uint8_t j=0; j<16; j++)
-							symbols[j]=f_flt_buff[960+j*5+i];
-						
-						float tmp_b=eucl_norm(&symbols[8], str_sync_symbols, 8);
-
-						float d=sqrtf(tmp_a*tmp_a+tmp_b*tmp_b);
-
-						if(d<dist_str)
-						{
-							dist_str=d;
-							sample_offset=i;
-						}
-					}
-
-					float pld[SYM_PER_PLD];
-					
-					for(uint16_t i=0; i<SYM_PER_PLD; i++)
-					{
-						pld[i]=f_flt_buff[16*5+i*5+sample_offset];
-					}
-
-					uint8_t lich[6];
-					uint8_t lich_cnt;
-					uint8_t frame_data[16];
-					uint32_t e = decode_str_frame(frame_data, lich, &fn, &lich_cnt, pld);
-					if (got_lsf)
-					{
-						frameTYPE.SetFrameType(lsf.GetFrameType());
-						if (EPayloadType::packet != frameTYPE.GetPayloadType())
-						{
-							if (g_GateState.TryState(EGateState::modemin))
-							{
-								auto p = std::make_unique<CPacket>();
-								p->Initialize(EPacketType::stream);
-								p->SetStreamId(sid);
-								memcpy(p->GetDstAddress(), lsf.GetCData(), 28);
-								p->SetFrameNumber(fn);
-								memcpy(p->GetPayload(), frame_data, 16);
-								p->CalcCRC();
-								Modem2Gate.Push(p);
-								LogDebug("RF Frame: FN:0x%04x | LICH_CNT:%u | MER: %-3.1f%%", fn, lich_cnt, float(e)/0xffffu/SYM_PER_PLD/2.0f*100.0f);
-							}
-						}
-					}
-					
-					//set the last FN number to FN-1 if this is a late-join and the frame data is valid
-					if(first_frame && (fn%6)==lich_cnt)
-					{
-						last_fn=fn-1;
-					}
-					
-					if(((last_fn+1)&0xFFFFU)==fn) //new frame. TODO: maybe a timeout would be better
-					{
-						if(lich_parts!=0x3FU) //6 chunks = 0b111111
-						{
-							//reconstruct LSF chunk by chunk
-							memcpy(lich_lsf.GetData()+(5*lich_cnt), lich, 5); //40 bits
-							lich_parts |= (1<<lich_cnt);
-							if(lich_parts==0x3FU)
-							{
-								// we have a complete LICH LSF
-								lich_parts = 0; // clear this so it can rebuild again
-								if(lich_lsf.CheckCRC()) {
-									LogWarning("Lich LSF CRC check failed");
-								} else {
-									// the LICH LSF has a correct CRC
-									frameTYPE.SetFrameType(lich_lsf.GetFrameType());
-									if (EPayloadType::packet == frameTYPE.GetPayloadType()) {
-										LogWarning("Lich LSF says it's a PM LSF");
-									} else {
-										// everything is good, copy the lich LSF to lsf
-										memcpy(lsf.GetData(), lich_lsf.GetCData(), 30);
-										if (got_lsf) {
-											LogDebug("LICH LSF TYPE: 0x%04x", frameTYPE.GetOriginType());
-										} else {
-											got_lsf = true;
-											sid = g_RNG.Get();
-											const CCallsign dst(lsf.GetCDstAddress());
-											const CCallsign src(lsf.GetCSrcAddress());
-											LogInfo("Lich LSF DST: %s SRC: %s TYPE: 0x%04x CAN: %u", dst.c_str(), src.c_str(), frameTYPE.GetOriginType(), unsigned(frameTYPE.GetCan()));
-											LogDash("\"%s\" \"%s\" \"RF\" \"%u\" \"--\"\n", src.c_str(), dst.c_str(), unsigned(frameTYPE.GetCan()));
-										}
-									}
-								}
-							}
-						}
-						last_fn=fn;
-					}
-					first_frame = false;
-				}
-
-				//TODO: handle packet mode reception over RF
-				else if(dist_pkt <= 5.0f and rx_state == ERxState::sync)
-				{
-					//find L2's minimum
-					uint8_t sample_offset=0;
-					for(uint8_t i=1; i<=2; i++)
-					{
-						for(uint8_t j=0; j<8; j++)
-							symbols[j]=f_flt_buff[j*5+i];
-							
-						float d=eucl_norm(symbols, pkt_sync_symbols, 8);
-						
-						if(d<dist_pkt)
-						{
-							dist_pkt=d;
-							sample_offset=i;
-						}
-					}
-
-					float pld[SYM_PER_PLD];
-					uint8_t eof = 0, pkt_fn = 0;
-					
-					for(uint16_t i=0; i<SYM_PER_PLD; i++)
-					{
-						pld[i]=f_flt_buff[8*5+i*5+sample_offset];
-					}
-
-					//debug data dump
-					//fwrite((uint8_t*)&f_flt_buff[sample_offset], SYM_PER_FRA*5*sizeof(float), 1, fp);
-
-					/*uint32_t e = */decode_pkt_frame(ppayload, &eof, &pkt_fn, pld);
-					plsize += eof ? pkt_fn : 25;
-					ppayload += 25;
-					sample_cnt = 0;
-
-					if(eof)
-					{
-						if (plsize < 825u)
-							memset(payload+plsize, 0, 825u-plsize);
-						if (g_Crc.CheckCRC(payload, plsize))
-						{
-							LogWarning("RF PKT: Payload CRC failed");
-						} else {
-							if (got_lsf)
-							{
-								if (g_GateState.TryState(EGateState::modemin)) {
-									auto pkt = std::make_unique<CPacket>();
-									pkt->Initialize(EPacketType::packet, plsize+34);
-									memcpy(pkt->GetData()+4, lsf.GetCData(), 30);
-									memcpy(pkt->GetData()+34, payload, plsize);
-									Modem2Gate.Push(pkt);
-								} else {
-									LogWarning("Could not lock the gateway, PM data not sent");
-								}
-							} else {
-								LogWarning("Got a Packet Payload, but not the LSF!");
-							}
-							if (0x5u == *payload and 0u == payload[plsize-3])
-								LogInfo("RF SMS Msg: %s", (char *)(payload+1));
-						}
-					}
-				}
-				
-				//RX sync timeout
-				if(rx_state == ERxState::sync)
-				{
-					if(++sample_cnt==960*2)
-					{
-						rx_state = ERxState::idle;
-						sample_cnt=0;
-						first_frame = true;
-						last_fn=0xFFFFU; //TODO: there's a small chance that this will cause problems (it's a valid frame number)
-						ppayload = payload;
-						lich_parts=0;
-						plsize = 0;
-						got_lsf = false;
-					}
-				}
-			}
-
-			//all data has been used
-			uart_rx_data_valid = false;
-		}
-	}
-	LogInfo("modem rxProcess end");
+	gpioCleanup();
+	printMsg(TC_CYAN, TC_GREEN, "All resources closed\n");
 }
 
 void CCC1200::txProcess()
 {
-	ETxState tx_state = ETxState::idle;
 	uint32_t tx_timer = 0;
-
+	ETxState tx_state = ETxState::idle;
+	SLSF lsf;
+	CFrameType lsfType;
+	uint16_t frame_count;
+	
 	while (keep_running)
 	{
-		//receive a packet
-		auto pack = Gate2Modem.PopWait();
+		auto pack = Gate2Modem.PopWaitFor(40);
+
 		if (pack)
 		{
-			if(EPacketType::stream == pack->GetType())
+			if (EPacketType::stream == pack->GetType())
 			{
-				tx_timer = getMilliseconds();
+				tx_timer = getMS();
 
-				int8_t frame_symbols[SYM_PER_FRA];					//raw frame symbols
-				int8_t bsb_samples[963] = { CMD_TX_DATA, -61, 3 };	//baseband samples wrapped in a frame
+				int8_t frame_symbols[SYM_PER_FRA];					// raw frame symbols
+				int8_t bsb_samples[963] = {CMD_TX_DATA, -61, 3};	// baseband samples wrapped in a frame
 
-				if(tx_state == ETxState::idle) //first received frame
+				if (tx_state == ETxState::idle and (not pack->IsLastPacket())) // first received frame
 				{
 					tx_state = ETxState::active;
 
-					//TODO: this needs to happen every time a new transmission appears
-					//dev_stop_rx();
-					//dbg_print(0, "RX stop\n");
-					std::this_thread::sleep_for(std::chrono::milliseconds(10));
+					usleep(10e3);
 
-					//set TYPE field
-					CFrameType type(pack->GetFrameType());
-					type.SetMetaDataType(EMetaDatType::ecd);
-					pack->SetFrameType(type.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
+					frame_count = 0; // we'll renumber each frame starting from zero
+					// now we'll make the LSF
+					memcpy(lsf.GetData(), pack->GetCDstAddress(), 12); // copy the dst & src
+					lsfType.SetFrameType(lsf.GetFrameType());          // get the TYPE
+					lsfType.SetMetaDataType(EMetaDatType::ecd);        // set the META to extended c/s data
+					// the next line will set the frame TYPE according to the configured user's radio
+					lsf.SetFrameType(lsfType.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
+					auto meta = lsf.GetMetaData();             // save the address to the meta array
+					g_Gateway.GetLink().CodeOut(meta);            // put the linked reflect into the 1st position
+					memcpy(meta+6, pack->GetCSrcAddress(), 6); // and the src c/s in the 2nd position
+					memset(meta+12, 0, 2);                     // zero the last 2 bytes
+					lsf.CalcCRC();                             // this LSF is done!
 
-					//generate META field
-					cfg.callSign.CodeOut(pack->GetMetaData());
-					g_Gate.GetLink().CodeOut(pack->GetMetaData()+6);
-					memset(pack->GetMetaData()+12, 0, 2);
-
-					memcpy(lsf.GetData(), pack->GetCDstAddress(), 28);
-					lsf.CalcCRC();
-
-					//append CRC
-					pack->CalcCRC();
-					const CCallsign dst(pack->GetCDstAddress());
-					const CCallsign src(pack->GetCSrcAddress());
-
-					//log to file
-					LogDash("\"%s\" \"%s\" \"Internet\" \"--\" \"--\"", src.c_str(), dst.c_str());
-
-					LogInfo("Stream TX start");
+					printMsg(TC_CYAN, TC_GREEN, " Stream TX start\n");
 
 					//stop RX, set PA_EN=1 and initialize TX
 					while (stopRx())
-						std::this_thread::sleep_for(std::chrono::milliseconds(40));
-					std::this_thread::sleep_for(std::chrono::milliseconds(20));
-
+						usleep(40e3);
+					usleep(2e3);
 					while (startTx())
-						std::this_thread::sleep_for(std::chrono::milliseconds(40));
-					std::this_thread::sleep_for(std::chrono::milliseconds(10));
+						usleep(40e3);
+					usleep(10e3);
 
 					//flush the RRC baseband filter
 					filterSymbols(nullptr, nullptr, nullptr, 0);
@@ -1173,7 +832,7 @@ void CCC1200::txProcess()
 
 					//filter and send out to the device
 					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
-					writeDev(bsb_samples, sizeof(bsb_samples), "SM LSF preamble");
+					writeDev(bsb_samples, sizeof(bsb_samples), "SM Pream");
 
 					//now the LSF
 					gen_frame_i8(frame_symbols, nullptr, FRAME_LSF, (lsf_t *)(lsf.GetCData()), 0, 0);
@@ -1183,30 +842,35 @@ void CCC1200::txProcess()
 					writeDev(bsb_samples, sizeof(bsb_samples), "SM LSF");
 
 					//finally, the first frame
-					gen_frame_i8(frame_symbols, pack->GetCPayload(), FRAME_STR, (lsf_t *)(lsf.GetCData()), (pack->GetFrameNumber()&0x7fffu)%6, pack->GetFrameNumber());
+					gen_frame_i8(frame_symbols, pack->GetCPayload(), FRAME_STR, (const lsf_t *)(lsf.GetCData()), 0, 0);
 
 					//filter and send out to the device
 					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
-					writeDev(bsb_samples, sizeof(bsb_samples), "SM First Frame");
+					writeDev(bsb_samples, sizeof(bsb_samples), "SM first Frame");
 				}
 				else
 				{
-					auto fn = pack->GetFrameNumber();
-					uint8_t lich_cnt = (fn & 0x7fffu) % 6;
-					if (0 == lich_cnt)
+					if (0 == ++frame_count % 6u)
 					{
+						// make a LSF from the LSD in this packet
 						memcpy(lsf.GetData(), pack->GetCDstAddress(), 28);
+						lsfType.SetFrameType(pack->GetFrameType());
+						pack->SetFrameType(lsfType.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
 						lsf.CalcCRC();
 					}
+					uint8_t lich_count = frame_count % 6u;
+					if (pack->IsLastPacket())
+						frame_count |= 0x8000u;
+
 					//only one frame is needed
-					gen_frame_i8(frame_symbols, pack->GetCPayload(), FRAME_STR, (lsf_t *)(lsf.GetCData()), lich_cnt, fn);
+					gen_frame_i8(frame_symbols, pack->GetCPayload(), FRAME_STR, (lsf_t *)(lsf.GetCData()), lich_count, frame_count);
 
 					//filter and send out to the device
 					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
 					writeDev(bsb_samples, sizeof(bsb_samples), "SM Frame");
 				}
-				//LogDebug("Stream packet: FN=0x%04x", pack->GetFrameNumber());
-				if(pack->IsLastPacket()) //last stream frame
+
+				if (frame_count >> 15) //last stream frame
 				{
 					//send the final EOT marker
 					uint32_t frame_buff_cnt=0;
@@ -1216,68 +880,77 @@ void CCC1200::txProcess()
 					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
 					writeDev(bsb_samples, sizeof(bsb_samples), "SM EOT");
 
-					LogInfo("Stream TX end");
-					//wait 320ms (8 M17 frames) - let the transmitter consume all the buffered samples
-					std::this_thread::sleep_for(std::chrono::milliseconds(320));
+					printMsg(TC_CYAN, TC_GREEN, " Stream TX end\n");
+					usleep(8*40e3); //wait 320ms (8 M17 frames) - let the transmitter consume all the buffered samples
+					g_GateState.Set2IdleIf(EGateState::modemin);
 
 					//restart RX
 					while (stopTx())
-						std::this_thread::sleep_for(std::chrono::milliseconds(40));
+						usleep(40e3);
 					while (startRx())
-						std::this_thread::sleep_for(std::chrono::milliseconds(40));
-					LogInfo("RX start");
+						usleep(40e3);
+					printMsg(TC_CYAN, TC_GREEN, " RX start\n");
 
-					tx_state = ETxState::idle;
-					g_GateState.Set2IdleIf(EGateState::gatestreamin);
+					tx_state=ETxState::idle;
 				}
 			}
 
 			//M17 packet data - "Packet Mode IP Packet"
-			else if(EPacketType::packet == pack->GetType())
+			else if (EPacketType::packet == pack->GetType())
 			{
-				LogInfo("M17 Inet PM received");
+				printMsg(TC_CYAN, TC_GREEN, " M17 Inet packet received\n");
 
 				const CCallsign dst(pack->GetCDstAddress());
 				const CCallsign src(pack->GetCSrcAddress());
-				CFrameType type(pack->GetFrameType());
-				
-				LogInfo(" ├ DST: %s", dst.c_str());
-				LogInfo(" ├ SRC: %s", src.c_str());
-				LogInfo(" ├ CAN: %u", type.GetCan());
-				if(*pack->GetCPayload() != 0x5u) //assuming 1-byte type specifier
+				CFrameType TYPE(pack->GetFrameType());
+				if ((cfg.isV3 ? EVersionType::v3 : EVersionType::legacy) != TYPE.GetVersion())
 				{
-					LogInfo(" ├ TYPE: %u", *pack->GetCPayload());
-					LogInfo(" └ SIZE: %u", pack->GetSize()-34u);
+					pack->SetFrameType(TYPE.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
+					pack->CalcCRC();
+				}
+				const auto can = TYPE.GetCan();
+				const unsigned type = *(pack->GetCPayload());
+				
+				printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
+				printMsg(nullptr, TC_YELLOW, "DST: ");
+				printMsg(nullptr, TC_DEFAULT, "%s\n", dst.c_str());
+				printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
+				printMsg(nullptr, TC_YELLOW, "SRC: ");
+				printMsg(nullptr, TC_DEFAULT, "%s\n", src.c_str());
+				printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
+				printMsg(nullptr, TC_YELLOW, "CAN: ");
+				printMsg(nullptr, TC_DEFAULT, "%u\n", unsigned(can));
+				if (type != 5u or *(pack->GetCPayload()+pack->GetSize()-3)) //assuming 1-byte type specifier
+				{
+					printMsg(TC_CYAN, TC_DEFAULT, " └ ");
+					printMsg(nullptr, TC_YELLOW, "TYPE: ");
+					printMsg(nullptr, TC_DEFAULT, "%u\n", unsigned(pack->GetCPayload()[0]));
 				}
 				else
 				{
-					auto pnull = pack->GetPayload()+pack->GetSize()-3u;
-					LogInfo(" ├ TYPE: SMS");
-					if (*pnull) //this should be a null byte
-					{
-						LogWarning(" ├ SMS msg not properly terminated!");
-						pnull = 0;
-						pack->CalcCRC();
-					}
-					LogInfo(" └ MSG: %s", (char *)pack->GetCPayload());
+					printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
+					printMsg(nullptr, TC_YELLOW, "TYPE: ");
+					printMsg(nullptr, TC_DEFAULT, "SMS\n");
+					printMsg(TC_CYAN, TC_DEFAULT, " └ ");
+					printMsg(nullptr, TC_YELLOW, "MSG: ");
+					printMsg(nullptr, TC_DEFAULT, "%s\n", (char *)(pack->GetPayload()+1));
 				}
 
 				//TODO: handle TX here
 				int8_t frame_symbols[SYM_PER_FRA];						//raw frame symbols
-				int8_t bsb_samples[963] = {CMD_TX_DATA, -61, 3 };		//baseband samples wrapped in a frame
-
-				//log to file
-				LogDash("\"%s\" \"%s\" \"Internet\" \"--\" \"--\"", src.c_str(), dst.c_str());
+				int8_t bsb_samples[SYM_PER_FRA*5];						//filtered baseband samples = symbols*sps
+				uint8_t bsb_chunk[963] = {CMD_TX_DATA, 0xC3, 0x03};		//baseband samples wrapped in a frame
 				
-				LogInfo("Packet TX start");
+				printMsg(TC_CYAN, TC_GREEN, " Packet TX start\n");
 
 				//stop RX, set PA_EN=1 and initialize TX
 				while (stopRx())
-					std::this_thread::sleep_for(std::chrono::milliseconds(40));
-				std::this_thread::sleep_for(std::chrono::milliseconds(2));
+					usleep(40e3);
+				usleep(2e3);
+
 				while (startTx())
-					std::this_thread::sleep_for(std::chrono::milliseconds(40));
-				std::this_thread::sleep_for(std::chrono::milliseconds(10));
+					usleep(40e3);
+				usleep(10e3);
 				
 				//flush the RRC baseband filter
 				filterSymbols(nullptr, nullptr, nullptr, 0);
@@ -1285,85 +958,471 @@ void CCC1200::txProcess()
 				//generate frame symbols, filter them and send out to the device
 				//we need to prepare 3 frames to begin the transmission - preamble, LSF and stream frame 0
 				//let's start with the preamble
-				uint32_t frame_buff_cnt=0;
+				uint32_t frame_buff_cnt = 0;
 				gen_preamble_i8(frame_symbols, &frame_buff_cnt, PREAM_LSF);
 				
 				//filter and send out to the device
-				filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
-				writeDev(bsb_samples, sizeof(bsb_samples), "PM Preamble");
+				filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
+				memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
+				writeDev(bsb_samples, sizeof(bsb_samples), "PM LSF Pream");
 				
 				//now the LSF
 				gen_frame_i8(frame_symbols, nullptr, FRAME_LSF, (lsf_t*)(pack->GetCDstAddress()), 0, 0);
 				
 				//filter and send out to the device
-				filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+				filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
+				memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
 				writeDev(bsb_samples, sizeof(bsb_samples), "PM LSF");
 				
 				//packet frames
-				uint16_t pld_len = pack->GetSize() - 34u; //"M17P" plus 240-bit LSD
+				uint16_t pld_len = pack->GetSize() - 34u;
 				uint8_t frame = 0;
 				uint8_t pld[26];
 				
 				while(pld_len > 25)
 				{
-					memcpy(pld, pack->GetCPayload()+frame*25, 25);
+					memcpy(pld, pack->GetCPayload()+(frame*25), 25);
 					pld[25] = frame<<2;
 					gen_frame_i8(frame_symbols, pld, FRAME_PKT, nullptr, 0, 0);
-					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+					filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
+					memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
 					writeDev(bsb_samples, sizeof(bsb_samples), "PM Frame");
 					pld_len -= 25;
 					frame++;
-					std::this_thread::sleep_for(std::chrono::milliseconds(40));
+					usleep(40*1000U);
 				}
 				memset(pld, 0, 26);
-				memcpy(pld, pack->GetCPayload()+frame*25, pld_len);
-				pld[25] = (1<<7) | (pld_len<<2); //EoT flag set, amount of remaining data in the 'frame number' field
+				memcpy(pld, pack->GetCPayload()+(frame*25), pld_len);
+				pld[25] = (1<<7)  | (pld_len<<2); //EoT flag set, amount of remaining data in the 'frame number' field
 				gen_frame_i8(frame_symbols, pld, FRAME_PKT, nullptr, 0, 0);
-				filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
-				writeDev(bsb_samples, sizeof(bsb_samples), "PM Final Frame");
-				std::this_thread::sleep_for(std::chrono::milliseconds(40));
+				filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
+				memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
+				writeDev(bsb_samples, sizeof(bsb_samples), "PM Frame");
+				usleep(40*1000U);
 
 				//now the final EOT marker
 				frame_buff_cnt=0;
 				gen_eot_i8(frame_symbols, &frame_buff_cnt);
 
 				//filter and send out to the device
-				filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+				filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
+				memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
 				writeDev(bsb_samples, sizeof(bsb_samples), "PM EOT");
+				g_GateState.Set2IdleIf(EGateState::modemin);
 
-				LogInfo("PKT TX end");
-				std::this_thread::sleep_for(std::chrono::milliseconds(120)); //wait 120ms (3 M17 frames)
+				printMsg(TC_CYAN, TC_GREEN, " PKT TX end\n");
+				usleep(3*40e3); //wait 120ms (3 M17 frames)
 
 				//restart RX
 				while (stopTx())
-					std::this_thread::sleep_for(std::chrono::milliseconds(40));
+					usleep(40e3);
 				while (startRx())
-					std::this_thread::sleep_for(std::chrono::microseconds(40));
-				LogInfo("RX start");
+					usleep(40e3);
+				printMsg(TC_CYAN, TC_GREEN, " RX start\n");
 
 				tx_state = ETxState::idle;
-				g_GateState.Set2IdleIf(EGateState::gatepacketin);
 			}
 		}
 
 		//tx timeout
-		if(tx_state == ETxState::active and (getMilliseconds()-tx_timer) > 240) //240ms timeout
+		if (tx_state==ETxState::active && (getMS()-tx_timer)>240) //240ms timeout
 		{
-			LogInfo("TX timeout");
-			
+			g_GateState.Set2IdleIf(EGateState::modemin);
+			printMsg(TC_CYAN, TC_GREEN, " TX timeout\n");
+			//usleep(10*40e3); //wait 400ms (10 M17 frames)
+
 			//restart RX
 			while (stopTx())
-				std::this_thread::sleep_for(std::chrono::milliseconds(40));
+				usleep(40e3);
 			while (startRx())
-				std::this_thread::sleep_for(std::chrono::milliseconds(40));
-			LogInfo("RX start");
+				usleep(40e3);
+			printMsg(TC_CYAN, TC_GREEN, " RX start\n");
 
-			tx_state = ETxState::idle;
-			g_GateState.Set2IdleIf(EGateState::gatestreamin);
-			g_GateState.Set2IdleIf(EGateState::gatepacketin);
+			tx_state=ETxState::idle;
 		}
 	}
-	LogInfo("Modem txProcess() process end");
+	printMsg(TC_CYAN, TC_GREEN, "Tx loop terminated\n");
 }
 
+void CCC1200::rxProcess()
+{
+	//UART comms
+	bool uart_rx_data_valid = false;
+	bool got_lsf = false;
+	int8_t rx_bsb_sample = 0;
+	int8_t raw_bsb_rx[960];
+	uint8_t lsf_b[30];
+	uint16_t fn;
+	uint16_t sid;
+	uint16_t sample_cnt = 0;
+	RingBuffer<uint8_t, 3> rx_header;
+	RingBuffer<int8_t, 41> flt_buff;
+	RingBuffer<float, 2042> f_flt_buff;
+	// why 2042? 8*5+2*(8*5+4800/25*5)+2 = 2042
+	// 8 preamble symbols, 8 for the syncword, and 960 for the payload.
+	// floor(sps/2)=2 extra samples for timing error correction
+	const int8_t lsf_sync_ext[16] { +3, -3, +3, -3, +3, -3, +3, -3, +3, +3, +3, +3, -3, -3, +3, -3 };
+	const int8_t eot_symbols[8]   { +3, +3, +3, +3, +3, +3, -3, +3 };
+	const float escale = 4.14647334e-6f; // 100%/0xffff/SYM_PER_PLD/2
 
+	SLSF lsf;
+	CFrameType TYPE;
+
+	ERxState rx_state = ERxState::idle;
+
+	// for stream mode
+	uint8_t lich_parts = 0;
+
+	// for packet mode
+	uint8_t pkt_pld[825];
+	uint8_t *ppkt = pkt_pld;
+	unsigned pkt_count = 0;
+
+	//file for debug data dumping
+	//FILE *fp=fopen("test_dump.bin", "wb");
+
+	last_refl_ping = time(nullptr);
+
+	fd_set rfds;
+
+	while(keep_running)
+	{
+		FD_ZERO(&rfds);
+		FD_SET(fd, &rfds);
+		struct timeval tv;
+		tv.tv_sec = 0;
+		tv.tv_usec = 40000;
+
+		auto sval = select(fd+1, &rfds, nullptr, nullptr, &tv);
+		if (sval < 0)
+		{
+			if (EINTR != errno)
+				printMsg(TC_RED, "select() error: %s\n", strerror(errno));
+			keep_running = false;
+			break;
+		}
+
+		//are there any new baseband samples to process?
+		if (!uart_lock && FD_ISSET(fd, &rfds))
+		{
+			if (readDev(&rx_bsb_sample, 1))
+			{
+				keep_running = false;
+				break;
+			}
+
+			rx_header.Push(rx_bsb_sample);
+
+			if (rx_header[0]==CMD_RX_DATA and rx_header[1]==0xC3 and rx_header[2]==0x03)
+			{
+				readDev(raw_bsb_rx, 960);
+				uart_rx_data_valid = true;
+			}
+		}
+
+		if (uart_rx_data_valid)
+		{
+			// we can clear this right away
+			uart_rx_data_valid = false;
+			for (uint16_t ii=0; ii<960; ii++)
+			{
+				//push the next sample into the buffer
+				flt_buff.Push(raw_bsb_rx[ii]);
+
+				// filter the buffer to get the new sample
+				float f_sample = 0.0f;
+				for (uint8_t i=0; i<flt_buff.Size(); i++)
+					f_sample += rrc_taps_5[i] * float(flt_buff[i]);
+
+				// push the sample on into the float buffer
+				f_flt_buff.Push(f_sample*RX_SYMBOL_SCALING_COEFF);
+
+				//L2 norm check against syncword
+				float symbols[16];
+				for (uint8_t i=0; i<16; i++)
+					symbols[i]=f_flt_buff[i*5];
+				float sed_lsf = sed(symbols, lsf_sync_ext,    16);
+				float sed_sma = sed(symbols, str_sync_symbols, 8);
+				float sed_pma = sed(symbols, pkt_sync_symbols, 8);
+				for (uint8_t i=0; i<16; i++)
+					symbols[i]=f_flt_buff[960+i*5];
+				float sed_eot = sed(symbols, eot_symbols,      8);
+				float sed_smb = sed(symbols, str_sync_symbols, 8);
+				float sed_str = sed_sma + ((sed_smb < sed_eot) ? sed_smb : sed_eot);
+				float sed_pmb = sed(symbols, pkt_sync_symbols, 8);
+				float sed_pkt = sed_pma + ((sed_pmb < sed_eot) ? sed_pmb : sed_eot);
+				// if (sed_lsf < lmin) {
+				// 	lmin = sed_lsf;
+				// 	printMsg(TC_CYAN, TC_GREEN, "lmin=%6.2f smin=%6.2f pmin=%6.2f\n", lmin, smin, pmin);
+				// }
+				// if (sed_str < smin) {
+				// 	smin = sed_str;
+				// 	printMsg(TC_CYAN, TC_GREEN, "lmin=%6.2f smin=%6.2f pmin=%6.2f\n", lmin, smin, pmin);
+				// }
+				// if (sed_pkt < pmin) {
+				// 	pmin = sed_pkt;
+				// 	printMsg(TC_CYAN, TC_GREEN, "lmin=%6.2f smin=%6.2f pmin=%6.2f\n", lmin, smin, pmin);
+				// }
+
+				//printMsg(TC_YELLOW, "%.3u %6.2f %6.2f %6.2f\n", ii, sed_lsf, sed_pkt, sed_str);
+
+				//LSF received at idle state
+				if (sed_lsf<=22.25f && rx_state==ERxState::idle)
+				{
+					//find minimum
+					uint8_t sample_offset = 0;
+					for (uint8_t i=1; i<=2; i++)
+					{
+						for (uint8_t j=0; j<16; j++)
+							symbols[j] = f_flt_buff[j*5+i];
+
+						float d = sed(symbols, lsf_sync_ext, 16);
+
+						if (d < sed_lsf)
+						{
+							sed_lsf = d;
+							sample_offset = i;
+						}
+					}
+
+					float pld[SYM_PER_PLD];
+
+					for (uint16_t i=0; i<SYM_PER_PLD; i++)
+					{
+						pld[i]=f_flt_buff[16*5+i*5+sample_offset]; //add symbol timing correction
+					}
+
+					uint32_t e = decode_LSF((lsf_t*)(lsf.GetData()), pld);
+
+
+					printMsg(TC_CYAN, TC_MAGENTA, "RF LSF: ");
+
+					if (lsf.CheckCRC()) //if CRC valid
+					{
+						printMsg(nullptr, TC_RED, "CRC ERR\n");
+					}
+					else
+					{
+						(void)g_GateState.TryState(EGateState::modemin);
+						got_lsf = true;
+						rx_state = ERxState::sync; // the LSF
+						sample_cnt = 0; // the LSF
+
+						const CCallsign dst(lsf.GetCDstAddress());
+						const CCallsign src(lsf.GetCSrcAddress());
+						TYPE.SetFrameType(lsf.GetFrameType());
+
+						printMsg(nullptr, TC_GREEN, "DST: %s SRC: %s TYPE: %04X (CAN=%d) DIST^2: %4.2f MER: %-3.1f%%\n", dst.c_str(), src.c_str(), TYPE.GetOriginType(), TYPE.GetCan(), sed_lsf, float(e)*escale);
+
+						if (EPayloadType::packet != TYPE.GetPayloadType()) //if stream
+						{
+							// init values for stream mode
+							fn = 0;
+							sid = g_RNG.Get();
+						}
+					}
+				}
+
+				//stream frame received
+				else if (sed_str <= 25.0f)
+				{
+					//find L2's minimum
+					uint8_t sample_offset=0;
+					for (uint8_t i=1; i<=2; i++)
+					{
+						for (uint8_t j=0; j<16; j++)
+							symbols[j]=f_flt_buff[j*5+i];
+						
+						float tmp_a = sed(symbols, str_sync_symbols, 8);
+						// check the next frame, look for another data frame or EOT frame
+						for (uint8_t j=0; j<16; j++)
+							symbols[j] = f_flt_buff[960+j*5+i];
+						float tmp_b = sed(symbols, str_sync_symbols, 8);
+						float tmp_e = sed(symbols, eot_symbols,      8);
+						float d = tmp_a + ((tmp_b < tmp_e) ? tmp_b : tmp_e);
+
+						if (d < sed_str)
+						{
+							sed_str = d;
+							sample_offset = i;
+						}
+					}
+
+					float pld[SYM_PER_PLD];
+					
+					for (uint16_t i=0; i<SYM_PER_PLD; i++)
+					{
+						pld[i]=f_flt_buff[40+i*5+sample_offset];
+					}
+
+					uint8_t lich[6];
+					uint8_t lich_cnt;
+					uint8_t frame_data[16];
+					uint32_t e = decode_str_frame(frame_data, lich, &fn, &lich_cnt, pld);
+					if (0 == lich_cnt)
+						lich_parts = 0;
+					
+					if (got_lsf)
+					{
+						auto p = std::make_unique<CPacket>();
+						p->Initialize(EPacketType::stream);
+						p->SetStreamId(sid);
+						memcpy(p->GetDstAddress(), lsf.GetCData(), 28);
+						p->SetFrameNumber(fn);
+						memcpy(p->GetPayload(), frame_data, 16);
+						// the gateway will calculate the crc after deciding what version TYPE is needed
+						if (g_GateState.TryState(EGateState::modemin))
+							Modem2Gate.Push(p);
+
+						if (cfg.debug)
+						{
+							printMsg(TC_CYAN, TC_YELLOW, "RF FRM: ");
+							printMsg(nullptr, TC_GREEN, "FN:%04X LICH_CNT:%d DIST^2:%5.2f MER:%4.1f%%\n", fn, lich_cnt, sed_str, float(e)*escale);
+						}
+						sample_cnt = 0; // packet frame
+					}
+					if ((lich_parts != 0x3fu) and (0 == (fn >> 15))) {
+						//reconstruct LSF chunk by chunk
+						memcpy(lsf_b+(5u*lich_cnt), lich, 5); //40 bits
+						lich_parts |= (1<<lich_cnt);
+						if (0x3fu == lich_parts) //collected all of them?
+						{
+							if (g_Crc.CheckCRC(lsf_b, 30)) {
+								printMsg(TC_CYAN, TC_MAGENTA, "LICH LSF: ");
+								printMsg(nullptr, TC_RED, "CRC ERR\n");
+							} else {
+								memcpy(lsf.GetData(), lsf_b, 30);
+								if (not got_lsf)
+								{
+									(bool)g_GateState.TryState(EGateState::modemin);
+									rx_state = ERxState::sync; // the LICH
+									sample_cnt = 0; // LICH LSF
+									got_lsf = true;
+									sid = g_RNG.Get();
+									const CCallsign dst(lsf.GetCDstAddress());
+									const CCallsign src(lsf.GetCSrcAddress());
+									TYPE.SetFrameType(lsf.GetFrameType());
+									if (cfg.debug)
+									{
+										printMsg(TC_CYAN, TC_MAGENTA, "LICH LSF: ");
+										printMsg(nullptr, TC_GREEN, "DST: %s SRC: %s TYPE: 0x%04X (CAN=%d)\n", dst.c_str(), src.c_str(), TYPE.GetOriginType(), TYPE.GetCan());
+									}
+								}
+							}
+							lich_parts = 0;
+						}
+					} else if (fn >> 15) {
+						// this is the last packet
+						rx_state = ERxState::idle; // last stream frame
+						got_lsf = false;
+						lich_parts = 0;
+					}
+				}
+
+				//TODO: handle packet mode reception over RF
+				else if (sed_pkt <= 25.0f && rx_state == ERxState::sync)
+				{
+					//find L2's minimum
+					uint8_t sample_offset = 0;
+					for (uint8_t i=1; i<=2; i++)
+					{
+						for (uint8_t j=0; j<8; j++)
+							symbols[j]=f_flt_buff[j*5+i];
+							
+						float tmp_a = sed(symbols, pkt_sync_symbols, 8);
+						for (uint8_t j=0; j<16; j++)
+							symbols[j] = f_flt_buff[960+j*5+i];
+						float tmp_b = sed(symbols, pkt_sync_symbols, 8);
+						float tmp_c = sed(symbols, eot_symbols, 8);
+						float d = tmp_a + ((tmp_c > tmp_b) ? tmp_b : tmp_c);
+
+						if (d < sed_pkt)
+						{
+							sed_pkt = d;
+							sample_offset = i;
+						}
+					}
+
+					float pld[SYM_PER_PLD];
+					uint8_t pkt_frame_data[25] = { 0 };
+					
+					for (uint16_t i=0; i<SYM_PER_PLD; i++)
+					{
+						pld[i]=f_flt_buff[8*5+i*5+sample_offset];
+					}
+
+					uint8_t eof, pkt_fn;
+					uint32_t e = decode_pkt_frame(pkt_frame_data, &eof, &pkt_fn, pld);
+					sample_cnt = 0; // packet frame
+					if (cfg.debug)
+					{
+						printMsg(TC_CYAN, TC_MAGENTA, "RF PKT FM: ");
+						printMsg(nullptr, TC_GREEN, "EOF: %s PKT_FN: %u MER: %-3.1f%%\n", (eof ? "true " : "false"), unsigned(pkt_fn), float(e)*escale);
+					}
+					memcpy(ppkt, pkt_frame_data, eof ? pkt_fn : 25);
+					if (eof) {
+						unsigned pld_size = 25u * pkt_count + pkt_fn;
+						if (g_Crc.CheckCRC(pkt_pld, pld_size)) {
+							Dump("Packet payload failed CRC check", pkt_pld, pld_size);
+						} else {
+							auto p = std::make_unique<CPacket>();
+							p->Initialize(EPacketType::packet, pld_size+34);
+							memcpy(p->GetData()+4, lsf.GetCData(), 30);
+							memcpy(p->GetPayload(), pkt_pld, pld_size);
+							// send it to the gateway
+							if (g_GateState.TryState(EGateState::modemin))
+								Modem2Gate.Push(p);
+							// reset
+							rx_state = ERxState::idle; // last packet frame
+							got_lsf = false;
+							pkt_count = 0;
+							ppkt = pkt_pld;
+						}
+					} else {
+						ppkt += 25;
+						pkt_count++;
+					}
+				}
+				
+				//RX sync timeout
+				if (rx_state==ERxState::sync)
+				{
+					sample_cnt++;
+					if (960*2 <= sample_cnt) // 80 ms without detecting anything in the sync'ed state
+					{
+						printMsg(TC_CYAN, TC_RED, "RF Timeout\n");
+						rx_state = ERxState::idle; // timeout
+						got_lsf = false;
+						sample_cnt = 0;
+						// stream mode reset
+						lich_parts = 0;
+						// packet mode reset
+						pkt_count = 0;
+						ppkt = pkt_pld;
+					}
+				}
+			}
+		}
+	}
+	printMsg(TC_CYAN, TC_GREEN, "Rx loop terminated\n");
+}
+
+/**
+ * @brief Calculate squared Euclidean distance between two n-dimensional vectors.
+ * It is the sum of squared differences.
+ *
+ * @param v1 Vector 1 - floats.
+ * @param v2 Vector 2 - signed ints.
+ * @param n Vectors' size.
+ * @return float Squared distance between two points.
+ */
+float CCC1200::sed(const float *v1, const int8_t *v2, const unsigned n) const
+{
+	float r = 0.0f;
+	for (unsigned i=0; i<n; i++)
+	{
+		auto x = v1[i] - float(v2[i]);
+		r += x * x;
+	}
+	return r;
+}

@@ -50,25 +50,37 @@ CCRC::CCRC()
 	}
 }
 
+/**
+ * @brief Calcuates the CRC and sets it at the end of the array.
+ *
+ * @param data The input array.
+ * @param size The CRC will be calcuated from size-2 bytes.
+ * @return returns true if the CRC is incorrect
+ */
 void CCRC::SetCRC(uint8_t *data, unsigned size)
 {
 	assert(size > 1u);
-	auto crc = calcCRC(data, size);
+	auto crc = calcCRC(data, size-2);
 	data[size-2] = crc/0x100u;
 	data[size-1] = crc%0x100u;
 }
 
-// returns true if the CRC is NOT valid
+/**
+ * @brief Checks the already calcuated and in place CRC.
+ *
+ * @param data The input array, including the CRC at the end.
+ * @param size This should include the big endian 16-bit CRC at the end of data.
+ * @return false if the CRC is correct, true if it is NOT correct
+ */
 bool CCRC::CheckCRC(const uint8_t *data, unsigned size) const
 {
-	return 0u != calcCRC(data, size + 2);
+	return 0u != calcCRC(data, size);
 }
 
-// calculates the 16-bt CRC for the first size-2 bytes
 uint16_t CCRC::calcCRC(const uint8_t *data, unsigned size) const
 {
 	uint16_t crc = CRC_START_16;
-	for (size_t i=0; i<size-2; i++)
+	for (size_t i=0; i<size; i++)
 	{
 		crc = (crc << 8) ^ crc_tab16[ ((crc >> 8) ^ uint16_t(data[i])) & 0x00FF ];
 	}

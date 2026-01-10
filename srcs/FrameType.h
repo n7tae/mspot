@@ -40,6 +40,7 @@ public:
 	EEncryptType GetEncryptType()  const { return m_encrypt;  }
 	EMetaDatType GetMetaDataType() const { return m_metatype; }
 	bool GetIsSigned() const { return m_isSigned; }
+	EVersionType GetVersion() const { return m_version; }
 	uint8_t GetCan() const { return m_can; }
 	void SetPayloadType(EPayloadType t)  { m_payload = t;  (EVersionType::v3==m_version) ? buildV3() : buildLegacy(); }
 	void SetEncryptType(EEncryptType t)  { m_encrypt = t;  (EVersionType::v3==m_version) ? buildV3() : buildLegacy(); }
