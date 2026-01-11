@@ -696,6 +696,10 @@ bool CCC1200::Start()
 {
 	printMsg(TC_CYAN, TC_GREEN, "Starting up mspot\n");
 
+	// get config'ed params
+	if (loadConfig())
+		return true;
+
 	//------------------------------------gpio init------------------------------------
 	printMsg(TC_CYAN, TC_DEFAULT, "GPIO init: ");
 	if (gpioInit("mspot"))
