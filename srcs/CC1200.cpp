@@ -87,8 +87,6 @@ enum cmd_t
 	CMD_GET_RSSI
 };
 
-#include "term.h" //colored terminal font
-
 #define RX_SYMBOL_SCALING_COEFF	(1.0f/(0.8f/(40.0e3f/2097152*0xAD)*130.0f))
 // CC1200 User's Guide, p. 24
 // 0xAD is `DEVIATION_M`, 2097152=2^21
