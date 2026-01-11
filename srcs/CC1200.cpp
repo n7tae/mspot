@@ -328,7 +328,7 @@ bool CCC1200::gpioInit(const std::string &consumer)
 {
 	gpio_chip = gpiod_chip_open(cfg.gpioDev.c_str());
 	if (nullptr == gpio_chip) {
-		printMsg(TC_RED, "Could not open %s\n", cfg.gpioDev.c_str());
+		printMsg(nullptr, TC_RED, "Could not open %s\n", cfg.gpioDev.c_str());
 		return true;
 	}
 	boot0_line = gpioLineRequest(cfg.boot0, 0, consumer.c_str());
