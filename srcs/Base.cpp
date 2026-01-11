@@ -75,7 +75,8 @@ void CBase::Dump(const char *title, const void *pointer, unsigned length)
 {
 	const unsigned char *data = (const unsigned char *)pointer;
 
-	std::cout << title << std::endl;
+	if (nullptr != title)
+		std::cout << title << std::endl;
 
 	unsigned int offset = 0U;
 

@@ -1278,8 +1278,8 @@ void CCC1200::rxProcess()
 
 						if (cfg.debug)
 						{
-							printMsg(TC_CYAN, TC_YELLOW, "RF FRM: ");
-							printMsg(nullptr, TC_GREEN, "FN:%04X LICH_CNT:%d DIST^2:%5.2f MER:%4.1f%%\n", fn, lich_cnt, sed_str, float(e)*escale);
+							printMsg(TC_CYAN, TC_YELLOW, "RF Stream Frame: ");
+							printMsg(nullptr, TC_GREEN, "FN:%04X LICH_CNT:%d DIST^2:%5.2f MER:%4.1f%% ii=%u\n", fn, lich_cnt, sed_str, float(e)*escale, ii);
 						}
 						sample_cnt = 0; // packet frame
 					}
@@ -1290,8 +1290,12 @@ void CCC1200::rxProcess()
 						if (0x3fu == lich_parts) //collected all of them?
 						{
 							if (g_Crc.CheckCRC(lsf_b, 30)) {
-								printMsg(TC_CYAN, TC_MAGENTA, "LICH LSF: ");
-								printMsg(nullptr, TC_RED, "CRC ERR\n");
+								if (cfg.debug)
+								{
+									printMsg(TC_CYAN, TC_MAGENTA, "RF LICH LSF: ");
+									printMsg(nullptr, TC_RED, "CRC Error\n");
+									Dump(nullptr, lsf_b, 30);
+								}
 							} else {
 								memcpy(lsf.GetData(), lsf_b, 30);
 								if (not got_lsf)
@@ -1358,14 +1362,15 @@ void CCC1200::rxProcess()
 					sample_cnt = 0; // packet frame
 					if (cfg.debug)
 					{
-						printMsg(TC_CYAN, TC_MAGENTA, "RF PKT FM: ");
+						printMsg(TC_CYAN, TC_MAGENTA, "RF Packet Frame: ");
 						printMsg(nullptr, TC_GREEN, "EOF: %s PKT_FN: %u MER: %-3.1f%%\n", (eof ? "true " : "false"), unsigned(pkt_fn), float(e)*escale);
 					}
 					memcpy(ppkt, pkt_frame_data, eof ? pkt_fn : 25);
 					if (eof) {
 						unsigned pld_size = 25u * pkt_count + pkt_fn;
 						if (g_Crc.CheckCRC(pkt_pld, pld_size)) {
-							Dump("Packet payload failed CRC check", pkt_pld, pld_size);
+							printMsg(nullptr, TC_RED, "Packet payload failed CRC check\n");
+							Dump(nullptr, pkt_pld, pld_size);
 						} else {
 							auto p = std::make_unique<CPacket>();
 							p->Initialize(EPacketType::packet, pld_size+34);
