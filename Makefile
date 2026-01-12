@@ -11,9 +11,9 @@
 include mspot.mk
 
 ifeq ($(DEBUG), true)
-CPPFLAGS = -g -ggdb -std=c++17 -Wall -Wextra -Werror -Isrcs
+CPPFLAGS = -ggdb -std=c++17 -Wall -Wextra -Werror -Isrcs
 else
-CPPFLAGS  = -g -std=c++17 -Wall -Wextra -Werror -Isrcs
+CPPFLAGS  = -std=c++17 -Wall -Wextra -Werror -Isrcs
 endif
 
 LIBS    = -pthread -lm -lgpiod
