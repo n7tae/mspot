@@ -1216,7 +1216,7 @@ void CCC1200::rxProcess()
 						const CCallsign src(lsf.GetCSrcAddress());
 						TYPE.SetFrameType(lsf.GetFrameType());
 
-						printMsg(nullptr, TC_GREEN, "DST: %s SRC: %s TYPE: %04X (CAN=%d) DIST^2: %4.2f MER: %-3.1f%%\n", dst.c_str(), src.c_str(), TYPE.GetOriginType(), TYPE.GetCan(), sed_lsf, float(e)*escale);
+						printMsg(nullptr, TC_GREEN, "DST: %s SRC: %s TYPE: %04X (CAN=%d) ED^2: %5.2f MER: %4.1f%% ii: %d\n", dst.c_str(), src.c_str(), TYPE.GetOriginType(), TYPE.GetCan(), sed_lsf, float(e)*escale, ii);
 
 						if (EPayloadType::packet != TYPE.GetPayloadType()) //if stream
 						{
@@ -1283,7 +1283,7 @@ void CCC1200::rxProcess()
 							if (cfg.debug)
 							{
 								printMsg(TC_CYAN, TC_YELLOW, "RF Stream Frame: ");
-								printMsg(nullptr, TC_GREEN, "FN:%04X LICH_CNT:%d DIST^2:%5.2f MER:%4.1f%% ii=%u\n", fn, lich_cnt, sed_str, float(e)*escale, ii);
+								printMsg(nullptr, TC_GREEN, "FN:%04X LICH_CNT:%d ED^2:%5.2f MER:%4.1f%% ii=%u\n", fn, lich_cnt, sed_str, float(e)*escale, ii);
 							}
 							sample_cnt = 0; // packet frame
 						}
@@ -1379,7 +1379,7 @@ void CCC1200::rxProcess()
 						if (cfg.debug)
 						{
 							printMsg(TC_CYAN, TC_MAGENTA, "RF Packet Frame: ");
-							printMsg(nullptr, TC_GREEN, "EOF: %s PKT_FN: %u MER: %-3.1f%%\n", (eof ? "true " : "false"), unsigned(pkt_fn), float(e)*escale);
+							printMsg(nullptr, TC_GREEN, "EOF: %s PKT_FN: %u D^2: %5.2f MER: %4.1f%% ii:%d\n", (eof ? "true " : "false"), unsigned(pkt_fn), sed_pkt, float(e)*escale, ii);
 						}
 
 						memcpy(ppkt, pkt_frame_data, eof ? pkt_fn : 25);
