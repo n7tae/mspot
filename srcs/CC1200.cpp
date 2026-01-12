@@ -1055,6 +1055,7 @@ void CCC1200::rxProcess()
 	int8_t raw_bsb_rx[960];
 	uint8_t lsf_b[30];
 	uint16_t fn;
+	int last_fn = -1;
 	uint16_t sid;
 	uint16_t sample_cnt = 0;
 	RingBuffer<uint8_t, 3> rx_header;
@@ -1079,6 +1080,7 @@ void CCC1200::rxProcess()
 	uint8_t pkt_pld[825];
 	uint8_t *ppkt = pkt_pld;
 	unsigned pkt_count = 0;
+	uint8_t last_pkt_fn = 0xffu;
 
 	//file for debug data dumping
 	//FILE *fp=fopen("test_dump.bin", "wb");
@@ -1264,64 +1266,74 @@ void CCC1200::rxProcess()
 					if (0 == lich_cnt)
 						lich_parts = 0;
 					
-					if (got_lsf)
+					if (last_fn != fn)
 					{
-						auto p = std::make_unique<CPacket>();
-						p->Initialize(EPacketType::stream);
-						p->SetStreamId(sid);
-						memcpy(p->GetDstAddress(), lsf.GetCData(), 28);
-						p->SetFrameNumber(fn);
-						memcpy(p->GetPayload(), frame_data, 16);
-						// the gateway will calculate the crc after deciding what version TYPE is needed
-						if (g_GateState.TryState(EGateState::modemin))
-							Modem2Gate.Push(p);
+						if (got_lsf) // send this data frame to the gateway
+						{
+							auto p = std::make_unique<CPacket>();
+							p->Initialize(EPacketType::stream);
+							p->SetStreamId(sid);
+							memcpy(p->GetDstAddress(), lsf.GetCData(), 28);
+							p->SetFrameNumber(fn);
+							memcpy(p->GetPayload(), frame_data, 16);
+							// the gateway will calculate the crc after deciding what version TYPE is needed
+							if (g_GateState.TryState(EGateState::modemin))
+								Modem2Gate.Push(p);
 
-						if (cfg.debug)
-						{
-							printMsg(TC_CYAN, TC_YELLOW, "RF Stream Frame: ");
-							printMsg(nullptr, TC_GREEN, "FN:%04X LICH_CNT:%d DIST^2:%5.2f MER:%4.1f%% ii=%u\n", fn, lich_cnt, sed_str, float(e)*escale, ii);
+							if (cfg.debug)
+							{
+								printMsg(TC_CYAN, TC_YELLOW, "RF Stream Frame: ");
+								printMsg(nullptr, TC_GREEN, "FN:%04X LICH_CNT:%d DIST^2:%5.2f MER:%4.1f%% ii=%u\n", fn, lich_cnt, sed_str, float(e)*escale, ii);
+							}
+							sample_cnt = 0; // packet frame
 						}
-						sample_cnt = 0; // packet frame
-					}
-					if ((lich_parts != 0x3fu) and (0 == (fn >> 15))) {
-						//reconstruct LSF chunk by chunk
-						memcpy(lsf_b+(5u*lich_cnt), lich, 5); //40 bits
-						lich_parts |= (1<<lich_cnt);
-						if (0x3fu == lich_parts) //collected all of them?
+
+						if (lich_parts != 0x3fu) // if the lich data is not complete
 						{
-							if (g_Crc.CheckCRC(lsf_b, 30)) {
-								if (cfg.debug)
-								{
-									printMsg(TC_CYAN, TC_MAGENTA, "RF LICH LSF: ");
-									printMsg(nullptr, TC_RED, "CRC Error\n");
-									Dump(nullptr, lsf_b, 30);
-								}
-							} else {
-								memcpy(lsf.GetData(), lsf_b, 30);
-								if (not got_lsf)
-								{
-									(bool)g_GateState.TryState(EGateState::modemin);
-									rx_state = ERxState::sync; // the LICH
-									sample_cnt = 0; // LICH LSF
-									got_lsf = true;
-									sid = g_RNG.Get();
-									const CCallsign dst(lsf.GetCDstAddress());
-									const CCallsign src(lsf.GetCSrcAddress());
-									TYPE.SetFrameType(lsf.GetFrameType());
+							//reconstruct LSF chunk by chunk
+							memcpy(lsf_b+(5u*lich_cnt), lich, 5); //40 bits
+							lich_parts |= (1<<lich_cnt);
+							if (0x3fu == lich_parts) //collected all of them?
+							{
+								if (g_Crc.CheckCRC(lsf_b, 30)) {
 									if (cfg.debug)
 									{
-										printMsg(TC_CYAN, TC_MAGENTA, "LICH LSF: ");
-										printMsg(nullptr, TC_GREEN, "DST: %s SRC: %s TYPE: 0x%04X (CAN=%d)\n", dst.c_str(), src.c_str(), TYPE.GetOriginType(), TYPE.GetCan());
+										printMsg(TC_CYAN, TC_MAGENTA, "RF LICH LSF: ");
+										printMsg(nullptr, TC_RED, "CRC Error\n");
+										Dump(nullptr, lsf_b, 30);
+									}
+								} else {
+									memcpy(lsf.GetData(), lsf_b, 30);
+									if (not got_lsf)
+									{
+										(bool)g_GateState.TryState(EGateState::modemin);
+										rx_state = ERxState::sync; // the LICH
+										sample_cnt = 0; // LICH LSF
+										got_lsf = true;
+										sid = g_RNG.Get();
+										const CCallsign dst(lsf.GetCDstAddress());
+										const CCallsign src(lsf.GetCSrcAddress());
+										TYPE.SetFrameType(lsf.GetFrameType());
+										if (cfg.debug)
+										{
+											printMsg(TC_CYAN, TC_MAGENTA, "LICH LSF: ");
+											printMsg(nullptr, TC_GREEN, "DST: %s SRC: %s TYPE: 0x%04X (CAN=%d)\n", dst.c_str(), src.c_str(), TYPE.GetOriginType(), TYPE.GetCan());
+										}
 									}
 								}
+								lich_parts = 0;
 							}
-							lich_parts = 0;
+							last_fn = fn;
 						}
-					} else if (fn >> 15) {
+					}
+
+					if (fn >> 15) // is this the last frame?
+					{
 						// this is the last packet
 						rx_state = ERxState::idle; // last stream frame
 						got_lsf = false;
 						lich_parts = 0;
+						last_fn = -1;
 					}
 				}
 
@@ -1360,34 +1372,42 @@ void CCC1200::rxProcess()
 					uint8_t eof, pkt_fn;
 					uint32_t e = decode_pkt_frame(pkt_frame_data, &eof, &pkt_fn, pld);
 					sample_cnt = 0; // packet frame
-					if (cfg.debug)
+
+					if (last_pkt_fn != pkt_fn)
 					{
-						printMsg(TC_CYAN, TC_MAGENTA, "RF Packet Frame: ");
-						printMsg(nullptr, TC_GREEN, "EOF: %s PKT_FN: %u MER: %-3.1f%%\n", (eof ? "true " : "false"), unsigned(pkt_fn), float(e)*escale);
-					}
-					memcpy(ppkt, pkt_frame_data, eof ? pkt_fn : 25);
-					if (eof) {
-						unsigned pld_size = 25u * pkt_count + pkt_fn;
-						if (g_Crc.CheckCRC(pkt_pld, pld_size)) {
-							printMsg(nullptr, TC_RED, "Packet payload failed CRC check\n");
-							Dump(nullptr, pkt_pld, pld_size);
-						} else {
-							auto p = std::make_unique<CPacket>();
-							p->Initialize(EPacketType::packet, pld_size+34);
-							memcpy(p->GetData()+4, lsf.GetCData(), 30);
-							memcpy(p->GetPayload(), pkt_pld, pld_size);
-							// send it to the gateway
-							if (g_GateState.TryState(EGateState::modemin))
-								Modem2Gate.Push(p);
-							// reset
-							rx_state = ERxState::idle; // last packet frame
-							got_lsf = false;
-							pkt_count = 0;
-							ppkt = pkt_pld;
+						last_pkt_fn = pkt_fn;
+						if (cfg.debug)
+						{
+							printMsg(TC_CYAN, TC_MAGENTA, "RF Packet Frame: ");
+							printMsg(nullptr, TC_GREEN, "EOF: %s PKT_FN: %u MER: %-3.1f%%\n", (eof ? "true " : "false"), unsigned(pkt_fn), float(e)*escale);
 						}
-					} else {
-						ppkt += 25;
-						pkt_count++;
+
+						memcpy(ppkt, pkt_frame_data, eof ? pkt_fn : 25);
+
+						if (eof) {
+							unsigned pld_size = 25u * pkt_count + pkt_fn;
+							if (g_Crc.CheckCRC(pkt_pld, pld_size)) {
+								printMsg(nullptr, TC_RED, "Packet payload failed CRC check\n");
+								Dump(nullptr, pkt_pld, pld_size);
+							} else {
+								auto p = std::make_unique<CPacket>();
+								p->Initialize(EPacketType::packet, pld_size+34);
+								memcpy(p->GetData()+4, lsf.GetCData(), 30);
+								memcpy(p->GetPayload(), pkt_pld, pld_size);
+								// send it to the gateway
+								if (g_GateState.TryState(EGateState::modemin))
+									Modem2Gate.Push(p);
+								// reset
+								rx_state = ERxState::idle; // last packet frame
+								got_lsf = false;
+								pkt_count = 0;
+								ppkt = pkt_pld;
+								last_pkt_fn = 0xffu;
+							}
+						} else {
+							ppkt += 25;
+							pkt_count++;
+						}
 					}
 				}
 				
@@ -1403,9 +1423,11 @@ void CCC1200::rxProcess()
 						sample_cnt = 0;
 						// stream mode reset
 						lich_parts = 0;
+						last_fn = -1;
 						// packet mode reset
 						pkt_count = 0;
 						ppkt = pkt_pld;
+						last_pkt_fn = 0xffu;
 					}
 				}
 			}
