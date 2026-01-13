@@ -1027,7 +1027,7 @@ void CCC1200::txProcess()
 		}
 
 		//tx timeout
-		if (tx_state==ETxState::active && (getMS()-tx_timer)>240) //240ms timeout
+		if (tx_state==ETxState::active and (getMS()-tx_timer)>240) //240ms timeout
 		{
 			g_GateState.Set2IdleIf(EGateState::modemin);
 			printMsg(TC_CYAN, TC_GREEN, " TX timeout\n");
@@ -1107,7 +1107,7 @@ void CCC1200::rxProcess()
 		}
 
 		//are there any new baseband samples to process?
-		if (!uart_lock && FD_ISSET(fd, &rfds))
+		if ((not uart_lock) and FD_ISSET(fd, &rfds))
 		{
 			if (readDev(&rx_bsb_sample, 1))
 			{
@@ -1171,7 +1171,7 @@ void CCC1200::rxProcess()
 				//printMsg(TC_YELLOW, "%.3u %6.2f %6.2f %6.2f\n", ii, sed_lsf, sed_pkt, sed_str);
 
 				//LSF received at idle state
-				if (sed_lsf<=22.25f && rx_state==ERxState::idle)
+				if ((sed_lsf <= 22.25f) and (rx_state == ERxState::idle))
 				{
 					//find minimum
 					uint8_t sample_offset = 0;
@@ -1322,7 +1322,7 @@ void CCC1200::rxProcess()
 										if (cfg.debug)
 										{
 											printMsg(TC_CYAN, TC_MAGENTA, "LICH LSF: ");
-											printMsg(nullptr, TC_GREEN, "DST: %s SRC: %s TYPE: 0x%04X (CAN=%d)\n", dst.c_str(), src.c_str(), TYPE.GetOriginType(), TYPE.GetCan());
+											printMsg(nullptr, TC_GREEN, "DST: %s SRC: %s TYPE: 0x%04X (CAN=%d)\n", dst.c_str(), src.c_str(), lsf.GetFrameType(), TYPE.GetCan());
 										}
 									}
 								}
@@ -1344,7 +1344,7 @@ void CCC1200::rxProcess()
 				}
 
 				//TODO: handle packet mode reception over RF
-				else if (sed_pkt <= 25.0f && rx_state == ERxState::sync)
+				else if ((sed_pkt <= 25.0f) and (rx_state == ERxState::sync) and (EPayloadType::packet == TYPE.GetPayloadType()))
 				{
 					//find L2's minimum
 					uint8_t sample_offset = 0;

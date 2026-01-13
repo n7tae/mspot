@@ -282,7 +282,7 @@ void CGateway::ProcessGateway()
 		}
 
 		// close the current audio message task
-		if (msgTask && msgTask->isDone)
+		if (msgTask and msgTask->isDone)
 		{
 			if (msgTask->futTask.valid())
 			{
@@ -677,7 +677,7 @@ void CGateway::sendPacket2Dest(std::unique_ptr<CPacket> pack)
 			return;
 		}
 		// don't open a stream if this packet has the same SID as the last stream
-		if (framesid == modemStream.GetPreviousID() && modemStream.GetLastTime() < 1.0)
+		if (framesid == modemStream.GetPreviousID() and modemStream.GetLastTime() < 1.0)
 		{
 			pack.reset();
 			g_GateState.Idle();
