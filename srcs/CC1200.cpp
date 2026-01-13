@@ -789,8 +789,6 @@ void CCC1200::txProcess()
 		{
 			if (EPacketType::stream == pack->GetType())
 			{
-				tx_timer = getMS();
-
 				int8_t frame_symbols[SYM_PER_FRA];					// raw frame symbols
 				int8_t bsb_samples[963] = {CMD_TX_DATA, -61, 3};	// baseband samples wrapped in a frame
 
@@ -872,7 +870,7 @@ void CCC1200::txProcess()
 					writeDev(bsb_samples, sizeof(bsb_samples), "SM Frame");
 				}
 
-				if (frame_count >> 15) //last stream frame
+				if (pack->IsLastPacket()) //last stream frame
 				{
 					//send the final EOT marker
 					uint32_t frame_buff_cnt=0;
@@ -884,7 +882,6 @@ void CCC1200::txProcess()
 
 					printMsg(TC_CYAN, TC_GREEN, " Stream TX end\n");
 					usleep(8*40e3); //wait 320ms (8 M17 frames) - let the transmitter consume all the buffered samples
-					g_GateState.Set2IdleIf(EGateState::modemin);
 
 					//restart RX
 					while (stopTx())
@@ -892,9 +889,11 @@ void CCC1200::txProcess()
 					while (startRx())
 						usleep(40e3);
 					printMsg(TC_CYAN, TC_GREEN, " RX start\n");
+					g_GateState.Set2IdleIf(EGateState::gatestreamin);
 
-					tx_state=ETxState::idle;
+					tx_state = ETxState::idle;
 				}
+				tx_timer = getMS();
 			}
 
 			//M17 packet data - "Packet Mode IP Packet"
@@ -1010,7 +1009,6 @@ void CCC1200::txProcess()
 				filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
 				memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
 				writeDev(bsb_samples, sizeof(bsb_samples), "PM EOT");
-				g_GateState.Set2IdleIf(EGateState::modemin);
 
 				printMsg(TC_CYAN, TC_GREEN, " PKT TX end\n");
 				usleep(3*40e3); //wait 120ms (3 M17 frames)
@@ -1021,16 +1019,19 @@ void CCC1200::txProcess()
 				while (startRx())
 					usleep(40e3);
 				printMsg(TC_CYAN, TC_GREEN, " RX start\n");
+				
+				g_GateState.Set2IdleIf(EGateState::gatepacketin);
+				tx_timer = getMS();
 
 				tx_state = ETxState::idle;
 			}
 		}
 
 		//tx timeout
-		if (tx_state==ETxState::active and (getMS()-tx_timer)>240) //240ms timeout
+		if ((tx_state == ETxState::active) and ((getMS()-tx_timer) > 240)) //240ms timeout
 		{
-			g_GateState.Set2IdleIf(EGateState::modemin);
-			printMsg(TC_CYAN, TC_GREEN, " TX timeout\n");
+			g_GateState.Set2IdleIf(EGateState::gatestreamin);
+			printMsg(TC_CYAN, TC_RED, " TX timeout\n");
 			//usleep(10*40e3); //wait 400ms (10 M17 frames)
 
 			//restart RX
