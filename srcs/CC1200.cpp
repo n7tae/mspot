@@ -1019,7 +1019,7 @@ void CCC1200::txProcess()
 				while (startRx())
 					usleep(40e3);
 				printMsg(TC_CYAN, TC_GREEN, " RX start\n");
-				
+
 				g_GateState.Set2IdleIf(EGateState::gatepacketin);
 				tx_timer = getMS();
 
@@ -1345,7 +1345,7 @@ void CCC1200::rxProcess()
 				}
 
 				//TODO: handle packet mode reception over RF
-				else if ((sed_pkt <= 25.0f) and (rx_state == ERxState::sync) and (EPayloadType::packet == TYPE.GetPayloadType()))
+				else if ((sed_pkt <= 25.0f) and (rx_state == ERxState::sync))
 				{
 					//find L2's minimum
 					uint8_t sample_offset = 0;
