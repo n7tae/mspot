@@ -1211,7 +1211,7 @@ void CCC1200::rxProcess()
 						(void)g_GateState.TryState(EGateState::modemin);
 						got_lsf = true;
 						TYPE.SetFrameType(lsf.GetFrameType());
-						rx_state = (EPayloadType::packet == TYPE.GetPayloadType()) ? ERxState::ptk : ERxState::str; // the LSF
+						rx_state = ((EPayloadType::packet == TYPE.GetPayloadType()) ? ERxState::ptk : ERxState::str); // the LSF
 						sample_cnt = 0; // the LSF
 
 						const CCallsign dst(lsf.GetCDstAddress());
@@ -1314,7 +1314,7 @@ void CCC1200::rxProcess()
 									{
 										TYPE.SetFrameType(lsf.GetFrameType());
 										(bool)g_GateState.TryState(EGateState::modemin);
-										rx_state = (EPayloadType::packet == TYPE.GetPayloadType()) ? ERxState::ptk : ERxState::str; // the LICH
+										rx_state = ((EPayloadType::packet == TYPE.GetPayloadType()) ? ERxState::ptk : ERxState::str); // the LICH
 										sample_cnt = 0; // LICH LSF
 										got_lsf = true;
 										sid = g_RNG.Get();
@@ -1389,7 +1389,7 @@ void CCC1200::rxProcess()
 					{
 						if (g_Crc.CheckCRC(pkt_pld, plsize))
 						{
-							printMsg(TC_CYAN, TC_RED, "RF PKT: Payload CRC failed");
+							printMsg(TC_CYAN, TC_RED, "RF PKT: Payload CRC failed\n");
 							Dump(nullptr, pkt_pld, plsize);
 						} else {
 							if (got_lsf)
