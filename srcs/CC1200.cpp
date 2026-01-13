@@ -1230,6 +1230,7 @@ void CCC1200::rxProcess()
 				//stream frame received
 				else if (sed_str <= 25.0f)
 				{
+					sample_cnt = 0; // packet frame
 					//find L2's minimum
 					uint8_t sample_offset=0;
 					for (uint8_t i=1; i<=2; i++)
@@ -1290,7 +1291,6 @@ void CCC1200::rxProcess()
 								printMsg(TC_CYAN, TC_YELLOW, "RF Stream Frame: ");
 								printMsg(nullptr, TC_GREEN, "FN:%04X LICH_CNT:%d ED^2:%5.2f MER:%4.1f%% ii=%u\n", fn, lich_cnt, sed_str, float(e)*escale, ii);
 							}
-							sample_cnt = 0; // packet frame
 						}
 
 						if (lich_parts != 0x3fu) // if the lich data is not complete
