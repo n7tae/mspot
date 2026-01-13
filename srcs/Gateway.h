@@ -79,7 +79,7 @@ private:
 	CStream gateStream, modemStream;
 	std::mutex stateLock;
 	CSockAddress from17k;
-	std::future<void> gateFuture, hostFuture;
+	std::future<void> gateFuture, modemFuture;
 	CHostMap destMap;
 	std::queue<std::string> voiceQueue;
 	std::unique_ptr<SMessageTask> msgTask;

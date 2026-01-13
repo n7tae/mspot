@@ -128,8 +128,8 @@ void CGateway::Stop()
 	keep_running = false;
 	if (gateFuture.valid())
 		gateFuture.get();
-	if (hostFuture.valid())
-		hostFuture.get();
+	if (modemFuture.valid())
+		modemFuture.get();
 	LogDebug("Gateway and Modem processing threads closed...");
 	ipv4.Close();
 	ipv6.Close();
@@ -218,8 +218,8 @@ bool CGateway::Start()
 		return true;
 	}
 
-	hostFuture = std::async(std::launch::async, &CGateway::ProcessModem, this);
-	if (not hostFuture.valid())
+	modemFuture = std::async(std::launch::async, &CGateway::ProcessModem, this);
+	if (not modemFuture.valid())
 	{
 		LogError("Could not start the ProcessModem() thread");
 		keep_running = false;

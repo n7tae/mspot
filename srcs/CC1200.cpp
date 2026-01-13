@@ -1272,7 +1272,7 @@ void CCC1200::rxProcess()
 						first_frame = false;
 					}
 					
-					if ((last_fn+1)%0x7fffu == frame_count)
+					if (((last_fn+1) & 0x7fffu) == frame_count)
 					{
 						if (got_lsf) // send this data frame to the gateway
 						{
@@ -1282,7 +1282,7 @@ void CCC1200::rxProcess()
 							memcpy(p->GetDstAddress(), lsf.GetCData(), 28);
 							p->SetFrameNumber(fn);
 							memcpy(p->GetPayload(), frame_data, 16);
-							// the gateway will calculate the crc after deciding what version TYPE is needed
+							p->CalcCRC();
 							if (g_GateState.TryState(EGateState::modemin))
 								Modem2Gate.Push(p);
 
@@ -1328,8 +1328,8 @@ void CCC1200::rxProcess()
 								}
 								lich_parts = 0;
 							}
-							last_fn = fn;
 						}
+						last_fn = fn;
 					}
 
 					if (fn >> 15) // is this the last frame?
