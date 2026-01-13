@@ -101,7 +101,7 @@ enum cmd_t
 // 40.0e3 is F_TCXO in kHz
 // 64 is `CFM_TX_DATA_IN` register value for max. F_DEV
 
-enum class ERxState { idle, sync };
+enum class ERxState { idle, str, ptk };
 
 enum class ETxState { idle, active };
 
@@ -1210,12 +1210,12 @@ void CCC1200::rxProcess()
 					{
 						(void)g_GateState.TryState(EGateState::modemin);
 						got_lsf = true;
-						rx_state = ERxState::sync; // the LSF
+						TYPE.SetFrameType(lsf.GetFrameType());
+						rx_state = (EPayloadType::packet == TYPE.GetPayloadType()) ? ERxState::ptk : ERxState::str; // the LSF
 						sample_cnt = 0; // the LSF
 
 						const CCallsign dst(lsf.GetCDstAddress());
 						const CCallsign src(lsf.GetCSrcAddress());
-						TYPE.SetFrameType(lsf.GetFrameType());
 
 						printMsg(nullptr, TC_GREEN, "DST: %s SRC: %s TYPE: %04X (CAN=%d) ED^2: %5.2f MER: %4.1f%% ii: %d\n", dst.c_str(), src.c_str(), TYPE.GetOriginType(), TYPE.GetCan(), sed_lsf, float(e)*escale, ii);
 
@@ -1312,8 +1312,9 @@ void CCC1200::rxProcess()
 									memcpy(lsf.GetData(), lsf_b, 30);
 									if (not got_lsf)
 									{
+										TYPE.SetFrameType(lsf.GetFrameType());
 										(bool)g_GateState.TryState(EGateState::modemin);
-										rx_state = ERxState::sync; // the LICH
+										rx_state = (EPayloadType::packet == TYPE.GetPayloadType()) ? ERxState::ptk : ERxState::str; // the LICH
 										sample_cnt = 0; // LICH LSF
 										got_lsf = true;
 										sid = g_RNG.Get();
@@ -1345,7 +1346,7 @@ void CCC1200::rxProcess()
 				}
 
 				//TODO: handle packet mode reception over RF
-				else if ((sed_pkt <= 25.0f) and (rx_state == ERxState::sync))
+				else if ((sed_pkt <= 25.0f) and (rx_state == ERxState::ptk))
 				{
 					//find L2's minimum
 					uint8_t sample_offset = 0;
@@ -1417,7 +1418,7 @@ void CCC1200::rxProcess()
 				}
 				
 				//RX sync timeout
-				if (rx_state==ERxState::sync)
+				if (rx_state != ERxState::idle)
 				{
 					sample_cnt++;
 					if (960*2 <= sample_cnt) // 80 ms without detecting anything in the sync'ed state
