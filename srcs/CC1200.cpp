@@ -1054,8 +1054,9 @@ void CCC1200::rxProcess()
 	int8_t rx_bsb_sample = 0;
 	int8_t raw_bsb_rx[960];
 	uint8_t lsf_b[30];
+	bool first_frame = true;
 	uint16_t fn;
-	int last_fn = -1;
+	uint16_t last_fn = 0xffffu;
 	uint16_t sid;
 	uint16_t sample_cnt = 0;
 	RingBuffer<uint8_t, 3> rx_header;
@@ -1079,8 +1080,7 @@ void CCC1200::rxProcess()
 	// for packet mode
 	uint8_t pkt_pld[825];
 	uint8_t *ppkt = pkt_pld;
-	unsigned pkt_count = 0;
-	uint8_t last_pkt_fn = 0xffu;
+	uint16_t plsize = 0;
 
 	//file for debug data dumping
 	//FILE *fp=fopen("test_dump.bin", "wb");
@@ -1265,8 +1265,13 @@ void CCC1200::rxProcess()
 					uint32_t e = decode_str_frame(frame_data, lich, &fn, &lich_cnt, pld);
 					if (0 == lich_cnt)
 						lich_parts = 0;
+					uint16_t frame_count = fn & 0x7fffu;
+					if (first_frame) {
+						last_fn = frame_count - 1;
+						first_frame = false;
+					}
 					
-					if (last_fn != fn)
+					if ((last_fn+1)%0x7fffu == frame_count)
 					{
 						if (got_lsf) // send this data frame to the gateway
 						{
@@ -1333,7 +1338,8 @@ void CCC1200::rxProcess()
 						rx_state = ERxState::idle; // last stream frame
 						got_lsf = false;
 						lich_parts = 0;
-						last_fn = -1;
+						last_fn = 0xfffu;
+						first_frame = true;
 					}
 				}
 
@@ -1362,51 +1368,49 @@ void CCC1200::rxProcess()
 					}
 
 					float pld[SYM_PER_PLD];
-					uint8_t pkt_frame_data[25] = { 0 };
-					
 					for (uint16_t i=0; i<SYM_PER_PLD; i++)
 					{
 						pld[i]=f_flt_buff[8*5+i*5+sample_offset];
 					}
 
 					uint8_t eof, pkt_fn;
-					uint32_t e = decode_pkt_frame(pkt_frame_data, &eof, &pkt_fn, pld);
-					sample_cnt = 0; // packet frame
+					uint32_t e = decode_pkt_frame(ppkt, &eof, &pkt_fn, pld);
+					sample_cnt = 0;
 
-					if (last_pkt_fn != pkt_fn)
+					if (cfg.debug) printMsg(TC_CYAN, TC_DEFAULT, "RF PacketFrame: EOF: %s FN: %u d^2:%5.2f MER: %4.1f ii:%u\n", (eof ? "true " : "false"), unsigned(pkt_fn), sed_pkt, e*escale, ii);
+
+					// increment size and pointer
+					plsize += eof ? pkt_fn : 25;
+					ppkt += 25;
+
+					if(eof)
 					{
-						last_pkt_fn = pkt_fn;
-						if (cfg.debug)
+						if (g_Crc.CheckCRC(pkt_pld, plsize))
 						{
-							printMsg(TC_CYAN, TC_MAGENTA, "RF Packet Frame: ");
-							printMsg(nullptr, TC_GREEN, "EOF: %s PKT_FN: %u D^2: %5.2f MER: %4.1f%% ii:%d\n", (eof ? "true " : "false"), unsigned(pkt_fn), sed_pkt, float(e)*escale, ii);
-						}
-
-						memcpy(ppkt, pkt_frame_data, eof ? pkt_fn : 25);
-
-						if (eof) {
-							unsigned pld_size = 25u * pkt_count + pkt_fn;
-							if (g_Crc.CheckCRC(pkt_pld, pld_size)) {
-								printMsg(nullptr, TC_RED, "Packet payload failed CRC check\n");
-								Dump(nullptr, pkt_pld, pld_size);
-							} else {
-								auto p = std::make_unique<CPacket>();
-								p->Initialize(EPacketType::packet, pld_size+34);
-								memcpy(p->GetData()+4, lsf.GetCData(), 30);
-								memcpy(p->GetPayload(), pkt_pld, pld_size);
-								// send it to the gateway
-								if (g_GateState.TryState(EGateState::modemin))
-									Modem2Gate.Push(p);
-								// reset
-								rx_state = ERxState::idle; // last packet frame
-								got_lsf = false;
-								pkt_count = 0;
-								ppkt = pkt_pld;
-								last_pkt_fn = 0xffu;
-							}
+							printMsg(TC_CYAN, TC_RED, "RF PKT: Payload CRC failed");
+							Dump(nullptr, pkt_pld, plsize);
 						} else {
-							ppkt += 25;
-							pkt_count++;
+							if (got_lsf)
+							{
+								if (g_GateState.TryState(EGateState::modemin)) {
+									auto pkt = std::make_unique<CPacket>();
+									pkt->Initialize(EPacketType::packet, plsize+34);
+									memcpy(pkt->GetData()+4, lsf.GetCData(), 30);
+									memcpy(pkt->GetData()+34, pkt_pld, plsize);
+									// crc will be calulated by the gateway
+									Modem2Gate.Push(pkt);
+								}
+							} else {
+								printMsg(TC_CYAN, TC_RED, "Got a Packet Payload, but not the LSF!");
+							}
+							if (cfg.debug) {
+								if (0x5u == *pkt_pld and 0u == pkt_pld[plsize-3]) {
+									printMsg(TC_CYAN, TC_DEFAULT, "RF SMS Msg: %s", (char *)(pkt_pld+1));
+								} else {
+									printMsg(TC_CYAN, TC_DEFAULT, "Packet Payload:\n");
+									Dump(nullptr, pkt_pld, plsize);
+								}
+							}
 						}
 					}
 				}
@@ -1423,11 +1427,9 @@ void CCC1200::rxProcess()
 						sample_cnt = 0;
 						// stream mode reset
 						lich_parts = 0;
-						last_fn = -1;
+						last_fn = 0xffffu;
 						// packet mode reset
-						pkt_count = 0;
 						ppkt = pkt_pld;
-						last_pkt_fn = 0xffu;
 					}
 				}
 			}
