@@ -110,8 +110,6 @@ void CFrameType::SetFrameType(uint16_t t)
 		// 1 Get the payload type
 		if (t & 1u)
 		{
-			m_payload = EPayloadType::packet;
-		} else {
 			switch ((t >> 1) & 0x3u)
 			{
 			case 1u:
@@ -125,6 +123,8 @@ void CFrameType::SetFrameType(uint16_t t)
 				m_payload = EPayloadType::c2_1600;
 				break;
 			}
+		} else {
+			m_payload = EPayloadType::packet;
 		}
 		uint8_t subtype = (t >> 5) & 0x3u;	// get the subtype field
 		switch ((t >> 3) & 0x3u) // get the encrypt field
@@ -186,16 +186,16 @@ void CFrameType::buildLegacy()
 	switch (m_payload)
 	{
 	case EPayloadType::packet:
-		m_legacy = 1u;
+		m_legacy = 0u;
 		break;
 	case EPayloadType::dataonly:
-		m_legacy = 2u;
+		m_legacy = 3u;
 		break;
 	case EPayloadType::c2_3200:
-		m_legacy = 4u;
+		m_legacy = 5u;
 		break;
 	case EPayloadType::c2_1600:
-		m_legacy = 6u;
+		m_legacy = 7u;
 		break;
 	}
 
