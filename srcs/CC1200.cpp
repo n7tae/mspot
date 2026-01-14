@@ -101,7 +101,7 @@ enum cmd_t
 // 40.0e3 is F_TCXO in kHz
 // 64 is `CFM_TX_DATA_IN` register value for max. F_DEV
 
-enum class ERxState { idle, str, ptk };
+enum class ERxState { idle, str, pkt };
 
 enum class ETxState { idle, active };
 
@@ -1211,7 +1211,7 @@ void CCC1200::rxProcess()
 						(void)g_GateState.TryState(EGateState::modemin);
 						got_lsf = true;
 						TYPE.SetFrameType(lsf.GetFrameType());
-						rx_state = ((EPayloadType::packet == TYPE.GetPayloadType()) ? ERxState::ptk : ERxState::str); // the LSF
+						rx_state = ((EPayloadType::packet == TYPE.GetPayloadType()) ? ERxState::pkt : ERxState::str); // the LSF
 						sample_cnt = 0; // the LSF
 
 						const CCallsign dst(lsf.GetCDstAddress());
@@ -1314,7 +1314,7 @@ void CCC1200::rxProcess()
 									{
 										TYPE.SetFrameType(lsf.GetFrameType());
 										(bool)g_GateState.TryState(EGateState::modemin);
-										rx_state = ((EPayloadType::packet == TYPE.GetPayloadType()) ? ERxState::ptk : ERxState::str); // the LICH
+										rx_state = ((EPayloadType::packet == TYPE.GetPayloadType()) ? ERxState::pkt : ERxState::str); // the LICH
 										sample_cnt = 0; // LICH LSF
 										got_lsf = true;
 										sid = g_RNG.Get();
@@ -1346,7 +1346,7 @@ void CCC1200::rxProcess()
 				}
 
 				//TODO: handle packet mode reception over RF
-				else if ((sed_pkt <= 25.0f) and (rx_state == ERxState::ptk))
+				else if ((sed_pkt <= 25.0f) and (rx_state == ERxState::pkt))
 				{
 					//find L2's minimum
 					uint8_t sample_offset = 0;
