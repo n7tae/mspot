@@ -118,9 +118,6 @@ enum err_t
 	ERR_OTHER
 };
 
-std::atomic<bool> keep_running = true;
-time_t last_refl_ping;
-
 //debug printf
 
 uint32_t CCC1200::getMS(void)
@@ -1082,11 +1079,6 @@ void CCC1200::rxProcess()
 	uint8_t pkt_pld[825];
 	uint8_t *ppkt = pkt_pld;
 	uint16_t plsize = 0;
-
-	//file for debug data dumping
-	//FILE *fp=fopen("test_dump.bin", "wb");
-
-	last_refl_ping = time(nullptr);
 
 	fd_set rfds;
 

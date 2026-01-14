@@ -85,5 +85,6 @@ private:
 	struct gpiod_chip *gpio_chip = nullptr;
 	struct gpiod_line_request *boot0_line = nullptr;
 	struct gpiod_line_request *nrst_line = nullptr;
-	volatile bool uart_lock = false;
+	std::atomic<bool> uart_lock = false;
+	std::atomic<bool> keep_running = true;
 };
