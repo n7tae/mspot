@@ -18,10 +18,11 @@
 
 #pragma once
 
-#include <atomic>
 #include <cstdint>
+#include <atomic>
 #include <string>
 #include <future>
+#include <mutex>
 #include <termios.h>
 #include <unistd.h>
 #include <gpiod.h>
@@ -77,6 +78,8 @@ private:
 	void filterSymbols(int8_t* __restrict out, const int8_t* __restrict in, const float* __restrict flt, uint8_t phase_inv);
 
 	std::future<void> rxFuture, txFuture;
+	std::atomic<bool> keep_running = true;
+	std::mutex read_mux;
 
 	int fd = -1; // the handle to the CC1200
 	SConfig cfg;
@@ -85,6 +88,4 @@ private:
 	struct gpiod_chip *gpio_chip = nullptr;
 	struct gpiod_line_request *boot0_line = nullptr;
 	struct gpiod_line_request *nrst_line = nullptr;
-	std::atomic<bool> uart_lock = false;
-	std::atomic<bool> keep_running = true;
 };
