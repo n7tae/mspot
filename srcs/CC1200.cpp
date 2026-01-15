@@ -563,11 +563,11 @@ bool CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
 	uint8_t cmd[4] { cid, 4, 0, onoff };
 	uint8_t resp[4] = { 0 };
 
-	std::lock_guard<std::mutex> lgd(read_mux);
 	tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
 	writeDev(cmd, 4, what);
 
+	std::lock_guard<std::mutex> lgd(read_mux);
 	if (readDev(resp, sizeof(resp)))
 	{
 		return true;
