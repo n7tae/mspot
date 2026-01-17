@@ -32,6 +32,7 @@
 #include <sys/time.h>
 #include <arpa/inet.h>
 
+#include "poll.h"
 #include <fcntl.h> 
 #include <sys/ioctl.h>
 #include <time.h>
@@ -39,8 +40,7 @@
 //libm17
 #include <m17.h>
 
-#include "SafePacketQueue.h"
-#include "RingBuffer.h"
+#include "UnixDgramSocket.h"
 #include "Configure.h"
 #include "GateState.h"
 #include "Gateway.h"
@@ -53,9 +53,8 @@ extern CConfigure g_Cfg;
 extern CGateway   g_Gateway;
 extern CRandom    g_RNG;
 extern CCRC       g_Crc;
-
-extern IPFrameFIFO Modem2Gate;
-extern IPFrameFIFO Gate2Modem;
+extern const char *Modem2Gate;
+extern const char *Gate2Modem;
 
 //CC1200 commands
 enum cmd_t
@@ -100,10 +99,6 @@ enum cmd_t
 // +0.8kHz is the deviation for symbol +1
 // 40.0e3 is F_TCXO in kHz
 // 64 is `CFM_TX_DATA_IN` register value for max. F_DEV
-
-enum class ERxState { idle, str, pkt };
-
-enum class ETxState { idle, active };
 
 enum err_t
 {
@@ -393,15 +388,17 @@ bool CCC1200::pingDev()
 	uint8_t cmd[3] = { cid, 3, 0 };
 	uint8_t resp[7] = { 0 };
 
-	std::lock_guard<std::mutex> lgd(read_mux);
+	uart_lock = true;
     tcflush(fd, TCIFLUSH); // clear leftover bytes
 
     writeDev(cmd, 3, "pingDev");
 
     if (readDev(resp, sizeof(resp)))
 	{
+		uart_lock = false;
 		return true;
 	}
+	uart_lock = false;
 
 	const uint8_t good[7] { cid, 7, 0, 0, 0, 0, 0 };
     if (0 == memcmp(resp, good, 7))
@@ -423,15 +420,17 @@ bool CCC1200::setRxFreq(uint32_t freq)
 	memcpy(&cmd[3], (uint8_t*)&freq, sizeof(freq));
 	uint8_t resp[4] = { 0 };
 
-	std::lock_guard<std::mutex> lgd(read_mux);
+	uart_lock = true;
     tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
     writeDev(cmd, 7, "setRxFreq");
 
     if (readDev(resp, sizeof(resp)))
 	{
+		uart_lock = false;
 		return true;
 	}
+	uart_lock = false;
 
 	printMsg(TC_CYAN, TC_DEFAULT, "RX frequency: ");
 	const uint8_t good[4] = { cid, 4, 0, ERR_OK };
@@ -452,15 +451,17 @@ bool CCC1200::setTxFreq(uint32_t freq)
 	memcpy(&cmd[3], (uint8_t*)&freq, sizeof(freq));
 	uint8_t resp[4] = { 0 };
 
-	std::lock_guard<std::mutex> lgd(read_mux);
+	uart_lock = true;
     tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
     writeDev(cmd, 7, "setTxFreq");
 
     if (readDev(resp, sizeof(resp)))
 	{
+		uart_lock = false;
 		return true;
 	}
+	uart_lock = false;
 
 	printMsg(TC_CYAN, TC_DEFAULT, "TX frequency: ");
 	const uint8_t good[4] { cid, 4, 0, ERR_OK };
@@ -480,15 +481,17 @@ bool CCC1200::setFreqCorr(int16_t corr)
 	uint8_t cmd[5] = {cid, 5, 0, uint8_t(corr&0xffu), uint8_t((corr>>8)&0xffu)};
 	uint8_t resp[4] = { 0 };
 
-	std::lock_guard<std::mutex> lgd(read_mux);
+	uart_lock = true;
     tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
     writeDev(cmd, 5, "setFreqCorr");
 
 	if (readDev(resp, sizeof(resp)))
 	{
-	return true;
+		uart_lock = false;
+		return true;
 	}
+	uart_lock = false;
 
 	printMsg(TC_CYAN, TC_DEFAULT, "Frequency correction: ");
 	const uint8_t good[4] { cid, 4, 0, ERR_OK };
@@ -508,15 +511,17 @@ bool CCC1200::setAfc(bool en)
 	uint8_t cmd[3+1] = { cid, 4, 0, uint8_t(en ? 0 : 1) };
 	uint8_t resp[4] = { 0 };
 
-	std::lock_guard<std::mutex> lgd(read_mux);
+	uart_lock = true;
     tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
     writeDev(cmd, 4, "setAfc");
 
     if (readDev(resp, sizeof(resp)))
 	{
+		uart_lock = false;
 		return true;
 	}
+	uart_lock = false;
 
 	printMsg(TC_CYAN, TC_DEFAULT, "AFC: ");
 	const uint8_t good[4] { cid, 4, 0, ERR_OK };
@@ -536,15 +541,17 @@ bool CCC1200::setTxPower(float power) //powr in dBm
 	uint8_t cmd[4] = { cid, 4, 0, uint8_t(roundf(power*4.0f)) };
 	uint8_t resp[4] = { 0 };
 
-	std::lock_guard<std::mutex> lgd(read_mux);
+	uart_lock = true;
     tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
     writeDev(cmd, 4, "setTxPower");
 
     if (readDev(resp, sizeof(resp)))
 	{
+		uart_lock = false;
 		return true;
 	}
+	uart_lock = false;
 
 	printMsg(TC_CYAN, TC_DEFAULT, "TX power: ");
 	uint8_t good[4] { cid, 4, 0, ERR_OK };
@@ -567,11 +574,13 @@ bool CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
 
 	writeDev(cmd, 4, what);
 
-	std::lock_guard<std::mutex> lgd(read_mux);
+	uart_lock = true;
 	if (readDev(resp, sizeof(resp)))
 	{
+		uart_lock = false;
 		return true;
 	}
+	uart_lock = false;
 
 	const uint8_t good[3] { cid, 4, 0 };
 	if (memcmp(resp, good, 3) or (ERR_OK != resp[3] and ERR_NOP != resp[3]))
@@ -699,6 +708,11 @@ bool CCC1200::Start()
 		return true;
 	printMsg(nullptr, TC_GREEN, " OK\n");
 
+	// prepare unix sockets
+	m2g.SetUp(Modem2Gate);
+	if (g2m.Open(Gate2Modem))
+		return true;
+
 	//PING-PONG test
 	printMsg(TC_CYAN, TC_DEFAULT, "Radio board's reply to PING... ");
 	if (pingDev())
@@ -714,20 +728,7 @@ bool CCC1200::Start()
 		return true;
 	}
 
-	txFuture = std::async(std::launch::async, &CCC1200::txProcess, this);
-	if (not txFuture.valid())
-	{
-		printMsg(TC_CYAN, TC_RED, "Could not start Tx thread\n");
-		keep_running = false;
-		return true;
-	}
-	rxFuture = std::async(std::launch::async, &CCC1200::rxProcess, this);
-	if (not rxFuture.valid())
-	{
-		printMsg(TC_CYAN, TC_RED, "Could not start RX thread\n");
-		keep_running = false;
-		return true;
-	}
+	// prepare unix sockets
 
 	//start RX
 	while (stopTx())
@@ -740,254 +741,162 @@ bool CCC1200::Start()
 
 void CCC1200::Stop()
 {
-	keep_running = false;
-	if (rxFuture.valid())
-		rxFuture.get();
-	if (txFuture.valid())
-		txFuture.get();
+	g2m.Close();
 	gpioCleanup();
 	printMsg(TC_CYAN, TC_GREEN, "All resources closed\n");
 }
 
+void CCC1200::Run()
+{
+	while (true)
+	{
+		struct pollfd pfd[2];	// 0 is the CC1200 uart and 1 is the gateway
+		pfd[0].fd = fd;
+		pfd[0].events = POLLIN;
+		pfd[1].fd = g2m.GetFD();
+		pfd[1].events = POLLIN;
+		auto rval = poll(pfd, 2, -1);
+		if (0 > rval) {
+			if (EINTR == errno) {
+				printMsg(TC_CYAN, TC_GREEN, "Signal received, shutting down\n");
+			} else {
+				printMsg(TC_RED, TC_YELLOW, "Modem poll() error: %s\n", strerror(errno));
+			}
+			break;
+		} else if (0 == rval) {
+			printMsg(TC_RED, TC_YELLOW, "Modem poll() returned zero\n");
+			break;
+		}
+		if (pfd[0].revents & POLLIN)
+		{
+			rxProcess();
+		}
+		if (pfd[1].revents & POLLIN)
+		{
+			txProcess();
+		}
+		auto ccerr = (pfd[0].revents != POLLIN);
+		if (ccerr) {
+			printMsg(TC_RED, TC_YELLOW, "%s returned error to poll() in revents: %d\n", cfg.uartDev.c_str(), ccerr);
+			break;
+		}
+		auto gerr = (pfd[1].revents != POLLIN);
+		if (gerr) {
+			printMsg(TC_RED, TC_YELLOW, "Gateway returned error to poll() in revents: %d\n", gerr);
+			break;
+		}
+	}
+}
+
 void CCC1200::txProcess()
 {
-	uint32_t tx_timer = 0;
-	ETxState tx_state = ETxState::idle;
-	SLSF lsf;
-	CFrameType lsfType;
-	uint16_t frame_count;
-	
-	while (keep_running)
+	std::unique_ptr<CPacket> pack;
+	uint8_t buf[859];
+	auto len = g2m.Read(buf, sizeof(buf), "CC1200");
+	if ((len == 54) and (0 == memcmp(buf, "M17 ", 4))) {
+		pack = std::make_unique<CPacket>();
+		pack->Initialize(EPacketType::stream, buf);
+	} else if ((len > 27) and (0 == memcmp(buf, "M17P", 4))) {
+		pack = std::make_unique<CPacket>();
+		pack->Initialize(EPacketType::packet, buf, len);
+	}
+	if (pack)
 	{
-		auto pack = Gate2Modem.PopWaitFor(40);
-
-		if (pack)
+		if (EPacketType::stream == pack->GetType())
 		{
-			if (EPacketType::stream == pack->GetType())
+			int8_t frame_symbols[SYM_PER_FRA];					// raw frame symbols
+			int8_t bsb_samples[963] = {CMD_TX_DATA, -61, 3};	// baseband samples wrapped in a frame
+
+			if (tx_state == ETxState::idle and (not pack->IsLastPacket())) // first received frame
 			{
-				int8_t frame_symbols[SYM_PER_FRA];					// raw frame symbols
-				int8_t bsb_samples[963] = {CMD_TX_DATA, -61, 3};	// baseband samples wrapped in a frame
+				tx_state = ETxState::active;
 
-				if (tx_state == ETxState::idle and (not pack->IsLastPacket())) // first received frame
-				{
-					tx_state = ETxState::active;
+				usleep(10e3);
 
-					usleep(10e3);
+				frame_count = 0; // we'll renumber each frame starting from zero
+				// now we'll make the LSF
+				memcpy(txlsf.GetData(), pack->GetCDstAddress(), 12); // copy the dst & src
+				txType.SetFrameType(txlsf.GetFrameType());          // get the TYPE
+				txType.SetMetaDataType(EMetaDatType::ecd);        // set the META to extended c/s data
+				// the next line will set the frame TYPE according to the configured user's radio
+				txlsf.SetFrameType(txType.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
+				auto meta = txlsf.GetMetaData();             // save the address to the meta array
+				g_Gateway.GetLink().CodeOut(meta);            // put the linked reflect into the 1st position
+				memcpy(meta+6, pack->GetCSrcAddress(), 6); // and the src c/s in the 2nd position
+				memset(meta+12, 0, 2);                     // zero the last 2 bytes
+				txlsf.CalcCRC();                             // this LSF is done!
 
-					frame_count = 0; // we'll renumber each frame starting from zero
-					// now we'll make the LSF
-					memcpy(lsf.GetData(), pack->GetCDstAddress(), 12); // copy the dst & src
-					lsfType.SetFrameType(lsf.GetFrameType());          // get the TYPE
-					lsfType.SetMetaDataType(EMetaDatType::ecd);        // set the META to extended c/s data
-					// the next line will set the frame TYPE according to the configured user's radio
-					lsf.SetFrameType(lsfType.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
-					auto meta = lsf.GetMetaData();             // save the address to the meta array
-					g_Gateway.GetLink().CodeOut(meta);            // put the linked reflect into the 1st position
-					memcpy(meta+6, pack->GetCSrcAddress(), 6); // and the src c/s in the 2nd position
-					memset(meta+12, 0, 2);                     // zero the last 2 bytes
-					lsf.CalcCRC();                             // this LSF is done!
-
-					printMsg(TC_CYAN, TC_GREEN, " Stream TX start\n");
-
-					//stop RX, set PA_EN=1 and initialize TX
-					while (stopRx())
-						usleep(40e3);
-					usleep(2e3);
-					while (startTx())
-						usleep(40e3);
-					usleep(10e3);
-
-					//flush the RRC baseband filter
-					filterSymbols(nullptr, nullptr, nullptr, 0);
-				
-					//generate frame symbols, filter them and send out to the device
-					//we need to prepare 3 frames to begin the transmission - preamble, LSF and stream frame 0
-					//let's start with the preamble
-					uint32_t frame_buff_cnt=0;
-					gen_preamble_i8(frame_symbols, &frame_buff_cnt, PREAM_LSF);
-
-					//filter and send out to the device
-					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
-					writeDev(bsb_samples, sizeof(bsb_samples), "SM Pream");
-
-					//now the LSF
-					gen_frame_i8(frame_symbols, nullptr, FRAME_LSF, (lsf_t *)(lsf.GetCData()), 0, 0);
-
-					//filter and send out to the device
-					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
-					writeDev(bsb_samples, sizeof(bsb_samples), "SM LSF");
-
-					//finally, the first frame
-					gen_frame_i8(frame_symbols, pack->GetCPayload(), FRAME_STR, (const lsf_t *)(lsf.GetCData()), 0, 0);
-
-					//filter and send out to the device
-					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
-					writeDev(bsb_samples, sizeof(bsb_samples), "SM first Frame");
-				}
-				else
-				{
-					if (0 == ++frame_count % 6u)
-					{
-						// make a LSF from the LSD in this packet
-						memcpy(lsf.GetData(), pack->GetCDstAddress(), 28);
-						lsfType.SetFrameType(pack->GetFrameType());
-						pack->SetFrameType(lsfType.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
-						lsf.CalcCRC();
-					}
-					uint8_t lich_count = frame_count % 6u;
-					if (pack->IsLastPacket())
-						frame_count |= 0x8000u;
-
-					//only one frame is needed
-					gen_frame_i8(frame_symbols, pack->GetCPayload(), FRAME_STR, (lsf_t *)(lsf.GetCData()), lich_count, frame_count);
-
-					//filter and send out to the device
-					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
-					writeDev(bsb_samples, sizeof(bsb_samples), "SM Frame");
-				}
-
-				if (pack->IsLastPacket()) //last stream frame
-				{
-					//send the final EOT marker
-					uint32_t frame_buff_cnt=0;
-					gen_eot_i8(frame_symbols, &frame_buff_cnt);
-
-					//filter and send out to the device
-					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
-					writeDev(bsb_samples, sizeof(bsb_samples), "SM EOT");
-
-					printMsg(TC_CYAN, TC_GREEN, " Stream TX end\n");
-					usleep(8*40e3); //wait 320ms (8 M17 frames) - let the transmitter consume all the buffered samples
-
-					//restart RX
-					while (stopTx())
-						usleep(40e3);
-					while (startRx())
-						usleep(40e3);
-					printMsg(TC_CYAN, TC_GREEN, " RX start\n");
-					g_GateState.Set2IdleIf(EGateState::gatestreamin);
-
-					tx_state = ETxState::idle;
-				}
-				tx_timer = getMS();
-			}
-
-			//M17 packet data - "Packet Mode IP Packet"
-			else if (EPacketType::packet == pack->GetType())
-			{
-				printMsg(TC_CYAN, TC_GREEN, " M17 Inet packet received\n");
-
-				const CCallsign dst(pack->GetCDstAddress());
-				const CCallsign src(pack->GetCSrcAddress());
-				CFrameType TYPE(pack->GetFrameType());
-				if ((cfg.isV3 ? EVersionType::v3 : EVersionType::legacy) != TYPE.GetVersion())
-				{
-					pack->SetFrameType(TYPE.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
-					pack->CalcCRC();
-				}
-				const auto can = TYPE.GetCan();
-				const unsigned type = *(pack->GetCPayload());
-				
-				printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
-				printMsg(nullptr, TC_YELLOW, "DST: ");
-				printMsg(nullptr, TC_DEFAULT, "%s\n", dst.c_str());
-				printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
-				printMsg(nullptr, TC_YELLOW, "SRC: ");
-				printMsg(nullptr, TC_DEFAULT, "%s\n", src.c_str());
-				printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
-				printMsg(nullptr, TC_YELLOW, "CAN: ");
-				printMsg(nullptr, TC_DEFAULT, "%u\n", unsigned(can));
-				if (type != 5u or *(pack->GetCPayload()+pack->GetSize()-3)) //assuming 1-byte type specifier
-				{
-					printMsg(TC_CYAN, TC_DEFAULT, " └ ");
-					printMsg(nullptr, TC_YELLOW, "TYPE: ");
-					printMsg(nullptr, TC_DEFAULT, "%u\n", unsigned(pack->GetCPayload()[0]));
-				}
-				else
-				{
-					printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
-					printMsg(nullptr, TC_YELLOW, "TYPE: ");
-					printMsg(nullptr, TC_DEFAULT, "SMS\n");
-					printMsg(TC_CYAN, TC_DEFAULT, " └ ");
-					printMsg(nullptr, TC_YELLOW, "MSG: ");
-					printMsg(nullptr, TC_DEFAULT, "%s\n", (char *)(pack->GetPayload()+1));
-				}
-
-				//TODO: handle TX here
-				int8_t frame_symbols[SYM_PER_FRA];						//raw frame symbols
-				int8_t bsb_samples[SYM_PER_FRA*5];						//filtered baseband samples = symbols*sps
-				uint8_t bsb_chunk[963] = {CMD_TX_DATA, 0xC3, 0x03};		//baseband samples wrapped in a frame
-				
-				printMsg(TC_CYAN, TC_GREEN, " Packet TX start\n");
+				printMsg(TC_CYAN, TC_GREEN, " Stream TX start\n");
 
 				//stop RX, set PA_EN=1 and initialize TX
 				while (stopRx())
 					usleep(40e3);
 				usleep(2e3);
-
 				while (startTx())
 					usleep(40e3);
 				usleep(10e3);
-				
+
 				//flush the RRC baseband filter
 				filterSymbols(nullptr, nullptr, nullptr, 0);
-				
+			
 				//generate frame symbols, filter them and send out to the device
 				//we need to prepare 3 frames to begin the transmission - preamble, LSF and stream frame 0
 				//let's start with the preamble
-				uint32_t frame_buff_cnt = 0;
+				uint32_t frame_buff_cnt=0;
 				gen_preamble_i8(frame_symbols, &frame_buff_cnt, PREAM_LSF);
-				
-				//filter and send out to the device
-				filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
-				memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
-				writeDev(bsb_samples, sizeof(bsb_samples), "PM LSF Pream");
-				
-				//now the LSF
-				gen_frame_i8(frame_symbols, nullptr, FRAME_LSF, (lsf_t*)(pack->GetCDstAddress()), 0, 0);
-				
-				//filter and send out to the device
-				filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
-				memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
-				writeDev(bsb_samples, sizeof(bsb_samples), "PM LSF");
-				
-				//packet frames
-				uint16_t pld_len = pack->GetSize() - 34u;
-				uint8_t frame = 0;
-				uint8_t pld[26];
-				
-				while(pld_len > 25)
-				{
-					memcpy(pld, pack->GetCPayload()+(frame*25), 25);
-					pld[25] = frame<<2;
-					gen_frame_i8(frame_symbols, pld, FRAME_PKT, nullptr, 0, 0);
-					filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
-					memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
-					writeDev(bsb_samples, sizeof(bsb_samples), "PM Frame");
-					pld_len -= 25;
-					frame++;
-					usleep(40*1000U);
-				}
-				memset(pld, 0, 26);
-				memcpy(pld, pack->GetCPayload()+(frame*25), pld_len);
-				pld[25] = (1<<7)  | (pld_len<<2); //EoT flag set, amount of remaining data in the 'frame number' field
-				gen_frame_i8(frame_symbols, pld, FRAME_PKT, nullptr, 0, 0);
-				filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
-				memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
-				writeDev(bsb_samples, sizeof(bsb_samples), "PM Frame");
-				usleep(40*1000U);
 
-				//now the final EOT marker
-				frame_buff_cnt=0;
+				//filter and send out to the device
+				filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+				writeDev(bsb_samples, sizeof(bsb_samples), "SM Pream");
+
+				//now the LSF
+				gen_frame_i8(frame_symbols, nullptr, FRAME_LSF, (lsf_t *)(txlsf.GetCData()), 0, 0);
+
+				//filter and send out to the device
+				filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+				writeDev(bsb_samples, sizeof(bsb_samples), "SM LSF");
+
+				//finally, the first frame
+				gen_frame_i8(frame_symbols, pack->GetCPayload(), FRAME_STR, (const lsf_t *)(rxlsf.GetCData()), 0, 0);
+
+				//filter and send out to the device
+				filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+				writeDev(bsb_samples, sizeof(bsb_samples), "SM first Frame");
+			}
+			else
+			{
+				if (0 == ++frame_count % 6u)
+				{
+					// make a LSF from the LSD in this packet
+					memcpy(txlsf.GetData(), pack->GetCDstAddress(), 28);
+					txType.SetFrameType(pack->GetFrameType());
+					pack->SetFrameType(txType.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
+					txlsf.CalcCRC();
+				}
+				uint8_t lich_count = frame_count % 6u;
+				if (pack->IsLastPacket())
+					frame_count |= 0x8000u;
+
+				//only one frame is needed
+				gen_frame_i8(frame_symbols, pack->GetCPayload(), FRAME_STR, (lsf_t *)(txlsf.GetCData()), lich_count, frame_count);
+
+				//filter and send out to the device
+				filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+				writeDev(bsb_samples, sizeof(bsb_samples), "SM Frame");
+			}
+
+			if (pack->IsLastPacket()) //last stream frame
+			{
+				//send the final EOT marker
+				uint32_t frame_buff_cnt=0;
 				gen_eot_i8(frame_symbols, &frame_buff_cnt);
 
 				//filter and send out to the device
-				filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
-				memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
-				writeDev(bsb_samples, sizeof(bsb_samples), "PM EOT");
+				filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+				writeDev(bsb_samples, sizeof(bsb_samples), "SM EOT");
 
-				printMsg(TC_CYAN, TC_GREEN, " PKT TX end\n");
-				usleep(3*40e3); //wait 120ms (3 M17 frames)
+				printMsg(TC_CYAN, TC_GREEN, " Stream TX end\n");
+				usleep(8*40e3); //wait 320ms (8 M17 frames) - let the transmitter consume all the buffered samples
 
 				//restart RX
 				while (stopTx())
@@ -995,20 +904,129 @@ void CCC1200::txProcess()
 				while (startRx())
 					usleep(40e3);
 				printMsg(TC_CYAN, TC_GREEN, " RX start\n");
-
-				g_GateState.Set2IdleIf(EGateState::gatepacketin);
-				tx_timer = getMS();
+				g_GateState.Set2IdleIf(EGateState::gatestreamin);
 
 				tx_state = ETxState::idle;
 			}
+			tx_timer = getMS();
 		}
 
-		//tx timeout
-		if ((tx_state == ETxState::active) and ((getMS()-tx_timer) > 240)) //240ms timeout
+		//M17 packet data - "Packet Mode IP Packet"
+		else if (EPacketType::packet == pack->GetType())
 		{
-			g_GateState.Set2IdleIf(EGateState::gatestreamin);
-			printMsg(TC_CYAN, TC_RED, " TX timeout\n");
-			//usleep(10*40e3); //wait 400ms (10 M17 frames)
+			printMsg(TC_CYAN, TC_GREEN, " M17 Inet packet received\n");
+
+			const CCallsign dst(pack->GetCDstAddress());
+			const CCallsign src(pack->GetCSrcAddress());
+			CFrameType TYPE(pack->GetFrameType());
+			if ((cfg.isV3 ? EVersionType::v3 : EVersionType::legacy) != TYPE.GetVersion())
+			{
+				pack->SetFrameType(TYPE.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
+				pack->CalcCRC();
+			}
+			const auto can = TYPE.GetCan();
+			const unsigned type = *(pack->GetCPayload());
+			
+			printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
+			printMsg(nullptr, TC_YELLOW, "DST: ");
+			printMsg(nullptr, TC_DEFAULT, "%s\n", dst.c_str());
+			printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
+			printMsg(nullptr, TC_YELLOW, "SRC: ");
+			printMsg(nullptr, TC_DEFAULT, "%s\n", src.c_str());
+			printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
+			printMsg(nullptr, TC_YELLOW, "CAN: ");
+			printMsg(nullptr, TC_DEFAULT, "%u\n", unsigned(can));
+			if (type != 5u or *(pack->GetCPayload()+pack->GetSize()-3)) //assuming 1-byte type specifier
+			{
+				printMsg(TC_CYAN, TC_DEFAULT, " └ ");
+				printMsg(nullptr, TC_YELLOW, "TYPE: ");
+				printMsg(nullptr, TC_DEFAULT, "%u\n", unsigned(pack->GetCPayload()[0]));
+			}
+			else
+			{
+				printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
+				printMsg(nullptr, TC_YELLOW, "TYPE: ");
+				printMsg(nullptr, TC_DEFAULT, "SMS\n");
+				printMsg(TC_CYAN, TC_DEFAULT, " └ ");
+				printMsg(nullptr, TC_YELLOW, "MSG: ");
+				printMsg(nullptr, TC_DEFAULT, "%s\n", (char *)(pack->GetPayload()+1));
+			}
+
+			//TODO: handle TX here
+			int8_t frame_symbols[SYM_PER_FRA];						//raw frame symbols
+			int8_t bsb_samples[SYM_PER_FRA*5];						//filtered baseband samples = symbols*sps
+			uint8_t bsb_chunk[963] = {CMD_TX_DATA, 0xC3, 0x03};		//baseband samples wrapped in a frame
+			
+			printMsg(TC_CYAN, TC_GREEN, " Packet TX start\n");
+
+			//stop RX, set PA_EN=1 and initialize TX
+			while (stopRx())
+				usleep(40e3);
+			usleep(2e3);
+
+			while (startTx())
+				usleep(40e3);
+			usleep(10e3);
+			
+			//flush the RRC baseband filter
+			filterSymbols(nullptr, nullptr, nullptr, 0);
+			
+			//generate frame symbols, filter them and send out to the device
+			//we need to prepare 3 frames to begin the transmission - preamble, LSF and stream frame 0
+			//let's start with the preamble
+			uint32_t frame_buff_cnt = 0;
+			gen_preamble_i8(frame_symbols, &frame_buff_cnt, PREAM_LSF);
+			
+			//filter and send out to the device
+			filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
+			memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
+			writeDev(bsb_samples, sizeof(bsb_samples), "PM LSF Pream");
+			
+			//now the LSF
+			gen_frame_i8(frame_symbols, nullptr, FRAME_LSF, (lsf_t*)(pack->GetCDstAddress()), 0, 0);
+			
+			//filter and send out to the device
+			filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
+			memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
+			writeDev(bsb_samples, sizeof(bsb_samples), "PM LSF");
+			
+			//packet frames
+			uint16_t pld_len = pack->GetSize() - 34u;
+			uint8_t frame = 0;
+			uint8_t pld[26];
+			
+			while(pld_len > 25)
+			{
+				memcpy(pld, pack->GetCPayload()+(frame*25), 25);
+				pld[25] = frame<<2;
+				gen_frame_i8(frame_symbols, pld, FRAME_PKT, nullptr, 0, 0);
+				filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
+				memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
+				writeDev(bsb_samples, sizeof(bsb_samples), "PM Frame");
+				pld_len -= 25;
+				frame++;
+				usleep(40*1000U);
+			}
+			memset(pld, 0, 26);
+			memcpy(pld, pack->GetCPayload()+(frame*25), pld_len);
+			pld[25] = (1<<7)  | (pld_len<<2); //EoT flag set, amount of remaining data in the 'frame number' field
+			gen_frame_i8(frame_symbols, pld, FRAME_PKT, nullptr, 0, 0);
+			filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
+			memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
+			writeDev(bsb_samples, sizeof(bsb_samples), "PM Frame");
+			usleep(40*1000U);
+
+			//now the final EOT marker
+			frame_buff_cnt=0;
+			gen_eot_i8(frame_symbols, &frame_buff_cnt);
+
+			//filter and send out to the device
+			filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
+			memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
+			writeDev(bsb_samples, sizeof(bsb_samples), "PM EOT");
+
+			printMsg(TC_CYAN, TC_GREEN, " PKT TX end\n");
+			usleep(3*40e3); //wait 120ms (3 M17 frames)
 
 			//restart RX
 			while (stopTx())
@@ -1017,399 +1035,360 @@ void CCC1200::txProcess()
 				usleep(40e3);
 			printMsg(TC_CYAN, TC_GREEN, " RX start\n");
 
-			tx_state=ETxState::idle;
+			g_GateState.Set2IdleIf(EGateState::gatepacketin);
+			tx_timer = getMS();
+
+			tx_state = ETxState::idle;
 		}
 	}
-	printMsg(TC_CYAN, TC_GREEN, "Tx loop terminated\n");
+
+	//tx timeout
+	if ((tx_state == ETxState::active) and ((getMS()-tx_timer) > 240)) //240ms timeout
+	{
+		g_GateState.Set2IdleIf(EGateState::gatestreamin);
+		printMsg(TC_CYAN, TC_RED, " TX timeout\n");
+		//usleep(10*40e3); //wait 400ms (10 M17 frames)
+
+		//restart RX
+		while (stopTx())
+			usleep(40e3);
+		while (startRx())
+			usleep(40e3);
+		printMsg(TC_CYAN, TC_GREEN, " RX start\n");
+
+		tx_state=ETxState::idle;
+	}
 }
 
 void CCC1200::rxProcess()
 {
-	//UART comms
-	bool uart_rx_data_valid = false;
-	bool got_lsf = false;
-	int8_t rx_bsb_sample = 0;
-	int8_t raw_bsb_rx[960];
-	uint8_t lsf_b[30];
-	bool first_frame = true;
-	uint16_t fn;
-	uint16_t last_fn = 0xffffu;
-	uint16_t sid;
-	uint16_t sample_cnt = 0;
-	RingBuffer<uint8_t, 3> rx_header;
-	RingBuffer<int8_t, 41> flt_buff;
-	RingBuffer<float, 2042> f_flt_buff;
-	// why 2042? 8*5+2*(8*5+4800/25*5)+2 = 2042
-	// 8 preamble symbols, 8 for the syncword, and 960 for the payload.
-	// floor(sps/2)=2 extra samples for timing error correction
-	const int8_t lsf_sync_ext[16] { +3, -3, +3, -3, +3, -3, +3, -3, +3, +3, +3, +3, -3, -3, +3, -3 };
-	const int8_t eot_symbols[8]   { +3, +3, +3, +3, +3, +3, -3, +3 };
-	const float escale = 4.14647334e-6f; // 100%/0xffff/SYM_PER_PLD/2
-
-	SLSF lsf;
-	CFrameType TYPE;
-
-	ERxState rx_state = ERxState::idle;
-
-	// for stream mode
-	uint8_t lich_parts = 0;
-
-	// for packet mode
-	uint8_t pkt_pld[825];
-	uint8_t *ppkt = pkt_pld;
-	uint16_t plsize = 0;
-
-	fd_set rfds;
-
-	while(keep_running)
+	uart_lock = true;
+	if (readDev(&rx_bsb_sample, 1))
 	{
-		FD_ZERO(&rfds);
-		FD_SET(fd, &rfds);
-		struct timeval tv;
-		tv.tv_sec = 0;
-		tv.tv_usec = 40000;
+		return;
+		uart_lock = false;
+	}
 
-		auto sval = select(fd+1, &rfds, nullptr, nullptr, &tv);
-		if (sval < 0)
+	rx_header.Push(rx_bsb_sample);
+
+	if (rx_header[0]==CMD_RX_DATA and rx_header[1]==0xC3 and rx_header[2]==0x03)
+	{
+		readDev(raw_bsb_rx, 960);
+		uart_rx_data_valid = true;
+	}
+	uart_lock = false;
+
+	if (uart_rx_data_valid)
+	{
+		// we can clear this right away
+		uart_rx_data_valid = false;
+		for (uint16_t ii=0; ii<960; ii++)
 		{
-			if (EINTR != errno)
-				printMsg(TC_RED, "select() error: %s\n", strerror(errno));
-			keep_running = false;
-			break;
-		}
+			//push the next sample into the buffer
+			flt_buff.Push(raw_bsb_rx[ii]);
 
-		//are there any new baseband samples to process?
-		if (FD_ISSET(fd, &rfds))
-		{
-			std::lock_guard<std::mutex> lgd(read_mux);
-			if (readDev(&rx_bsb_sample, 1))
+			// filter the buffer to get the new sample
+			float f_sample = 0.0f;
+			for (uint8_t i=0; i<flt_buff.Size(); i++)
+				f_sample += rrc_taps_5[i] * float(flt_buff[i]);
+
+			// push the sample on into the float buffer
+			f_flt_buff.Push(f_sample*RX_SYMBOL_SCALING_COEFF);
+
+			//L2 norm check against syncword
+			float symbols[16];
+			for (uint8_t i=0; i<16; i++)
+				symbols[i]=f_flt_buff[i*5];
+			float sed_lsf = sed(symbols, lsf_sync_ext,    16);
+			float sed_sma = sed(symbols, str_sync_symbols, 8);
+			float sed_pma = sed(symbols, pkt_sync_symbols, 8);
+			for (uint8_t i=0; i<16; i++)
+				symbols[i]=f_flt_buff[960+i*5];
+			float sed_eot = sed(symbols, eot_symbols,      8);
+			float sed_smb = sed(symbols, str_sync_symbols, 8);
+			float sed_str = sed_sma + ((sed_smb < sed_eot) ? sed_smb : sed_eot);
+			float sed_pmb = sed(symbols, pkt_sync_symbols, 8);
+			float sed_pkt = sed_pma + ((sed_pmb < sed_eot) ? sed_pmb : sed_eot);
+			// if (sed_lsf < lmin) {
+			// 	lmin = sed_lsf;
+			// 	printMsg(TC_CYAN, TC_GREEN, "lmin=%6.2f smin=%6.2f pmin=%6.2f\n", lmin, smin, pmin);
+			// }
+			// if (sed_str < smin) {
+			// 	smin = sed_str;
+			// 	printMsg(TC_CYAN, TC_GREEN, "lmin=%6.2f smin=%6.2f pmin=%6.2f\n", lmin, smin, pmin);
+			// }
+			// if (sed_pkt < pmin) {
+			// 	pmin = sed_pkt;
+			// 	printMsg(TC_CYAN, TC_GREEN, "lmin=%6.2f smin=%6.2f pmin=%6.2f\n", lmin, smin, pmin);
+			// }
+
+			//printMsg(TC_YELLOW, "%.3u %6.2f %6.2f %6.2f\n", ii, sed_lsf, sed_pkt, sed_str);
+
+			//LSF received at idle state
+			if ((sed_lsf <= 22.25f) and (rx_state == ERxState::idle))
 			{
-				keep_running = false;
-				break;
-			}
-
-			rx_header.Push(rx_bsb_sample);
-
-			if (rx_header[0]==CMD_RX_DATA and rx_header[1]==0xC3 and rx_header[2]==0x03)
-			{
-				readDev(raw_bsb_rx, 960);
-				uart_rx_data_valid = true;
-			}
-		}
-
-		if (uart_rx_data_valid)
-		{
-			// we can clear this right away
-			uart_rx_data_valid = false;
-			for (uint16_t ii=0; ii<960; ii++)
-			{
-				//push the next sample into the buffer
-				flt_buff.Push(raw_bsb_rx[ii]);
-
-				// filter the buffer to get the new sample
-				float f_sample = 0.0f;
-				for (uint8_t i=0; i<flt_buff.Size(); i++)
-					f_sample += rrc_taps_5[i] * float(flt_buff[i]);
-
-				// push the sample on into the float buffer
-				f_flt_buff.Push(f_sample*RX_SYMBOL_SCALING_COEFF);
-
-				//L2 norm check against syncword
-				float symbols[16];
-				for (uint8_t i=0; i<16; i++)
-					symbols[i]=f_flt_buff[i*5];
-				float sed_lsf = sed(symbols, lsf_sync_ext,    16);
-				float sed_sma = sed(symbols, str_sync_symbols, 8);
-				float sed_pma = sed(symbols, pkt_sync_symbols, 8);
-				for (uint8_t i=0; i<16; i++)
-					symbols[i]=f_flt_buff[960+i*5];
-				float sed_eot = sed(symbols, eot_symbols,      8);
-				float sed_smb = sed(symbols, str_sync_symbols, 8);
-				float sed_str = sed_sma + ((sed_smb < sed_eot) ? sed_smb : sed_eot);
-				float sed_pmb = sed(symbols, pkt_sync_symbols, 8);
-				float sed_pkt = sed_pma + ((sed_pmb < sed_eot) ? sed_pmb : sed_eot);
-				// if (sed_lsf < lmin) {
-				// 	lmin = sed_lsf;
-				// 	printMsg(TC_CYAN, TC_GREEN, "lmin=%6.2f smin=%6.2f pmin=%6.2f\n", lmin, smin, pmin);
-				// }
-				// if (sed_str < smin) {
-				// 	smin = sed_str;
-				// 	printMsg(TC_CYAN, TC_GREEN, "lmin=%6.2f smin=%6.2f pmin=%6.2f\n", lmin, smin, pmin);
-				// }
-				// if (sed_pkt < pmin) {
-				// 	pmin = sed_pkt;
-				// 	printMsg(TC_CYAN, TC_GREEN, "lmin=%6.2f smin=%6.2f pmin=%6.2f\n", lmin, smin, pmin);
-				// }
-
-				//printMsg(TC_YELLOW, "%.3u %6.2f %6.2f %6.2f\n", ii, sed_lsf, sed_pkt, sed_str);
-
-				//LSF received at idle state
-				if ((sed_lsf <= 22.25f) and (rx_state == ERxState::idle))
+				//find minimum
+				uint8_t sample_offset = 0;
+				for (uint8_t i=1; i<=2; i++)
 				{
-					//find minimum
-					uint8_t sample_offset = 0;
-					for (uint8_t i=1; i<=2; i++)
+					for (uint8_t j=0; j<16; j++)
+						symbols[j] = f_flt_buff[j*5+i];
+
+					float d = sed(symbols, lsf_sync_ext, 16);
+
+					if (d < sed_lsf)
 					{
-						for (uint8_t j=0; j<16; j++)
-							symbols[j] = f_flt_buff[j*5+i];
-
-						float d = sed(symbols, lsf_sync_ext, 16);
-
-						if (d < sed_lsf)
-						{
-							sed_lsf = d;
-							sample_offset = i;
-						}
-					}
-
-					float pld[SYM_PER_PLD];
-
-					for (uint16_t i=0; i<SYM_PER_PLD; i++)
-					{
-						pld[i]=f_flt_buff[16*5+i*5+sample_offset]; //add symbol timing correction
-					}
-
-					uint32_t e = decode_LSF((lsf_t*)(lsf.GetData()), pld);
-
-
-					printMsg(TC_CYAN, TC_MAGENTA, "RF LSF: ");
-
-					if (lsf.CheckCRC()) //if CRC valid
-					{
-						printMsg(nullptr, TC_RED, "CRC ERR\n");
-					}
-					else
-					{
-						(void)g_GateState.TryState(EGateState::modemin);
-						got_lsf = true;
-						TYPE.SetFrameType(lsf.GetFrameType());
-						rx_state = ((EPayloadType::packet == TYPE.GetPayloadType()) ? ERxState::pkt : ERxState::str); // the LSF
-						sample_cnt = 0; // the LSF
-
-						const CCallsign dst(lsf.GetCDstAddress());
-						const CCallsign src(lsf.GetCSrcAddress());
-
-						printMsg(nullptr, TC_GREEN, "DST: %s SRC: %s TYPE: %04X (CAN=%d) ED^2: %5.2f MER: %4.1f%% ii: %d\n", dst.c_str(), src.c_str(), TYPE.GetOriginType(), TYPE.GetCan(), sed_lsf, float(e)*escale, ii);
-
-						if (EPayloadType::packet != TYPE.GetPayloadType()) //if stream
-						{
-							// init values for stream mode
-							fn = 0;
-							sid = g_RNG.Get();
-						}
+						sed_lsf = d;
+						sample_offset = i;
 					}
 				}
 
-				//stream frame received
-				else if (sed_str <= 25.0f)
+				float pld[SYM_PER_PLD];
+
+				for (uint16_t i=0; i<SYM_PER_PLD; i++)
 				{
-					sample_cnt = 0; // packet frame
-					//find L2's minimum
-					uint8_t sample_offset=0;
-					for (uint8_t i=1; i<=2; i++)
+					pld[i]=f_flt_buff[16*5+i*5+sample_offset]; //add symbol timing correction
+				}
+
+				uint32_t e = decode_LSF((lsf_t*)(rxlsf.GetData()), pld);
+
+
+				printMsg(TC_CYAN, TC_MAGENTA, "RF LSF: ");
+
+				if (rxlsf.CheckCRC()) //if CRC valid
+				{
+					printMsg(nullptr, TC_RED, "CRC ERR\n");
+				}
+				else
+				{
+					(void)g_GateState.TryState(EGateState::modemin);
+					got_lsf = true;
+					rxType.SetFrameType(rxlsf.GetFrameType());
+					rx_state = ((EPayloadType::packet == rxType.GetPayloadType()) ? ERxState::pkt : ERxState::str); // the LSF
+					sample_cnt = 0; // the LSF
+
+					const CCallsign dst(rxlsf.GetCDstAddress());
+					const CCallsign src(rxlsf.GetCSrcAddress());
+
+					printMsg(nullptr, TC_GREEN, "DST: %s SRC: %s TYPE: %04X (CAN=%d) ED^2: %5.2f MER: %4.1f%% ii: %d\n", dst.c_str(), src.c_str(), rxType.GetOriginType(), rxType.GetCan(), sed_lsf, float(e)*escale, ii);
+
+					if (EPayloadType::packet != rxType.GetPayloadType()) //if stream
 					{
-						for (uint8_t j=0; j<16; j++)
-							symbols[j]=f_flt_buff[j*5+i];
-						
-						float tmp_a = sed(symbols, str_sync_symbols, 8);
-						// check the next frame, look for another data frame or EOT frame
-						for (uint8_t j=0; j<16; j++)
-							symbols[j] = f_flt_buff[960+j*5+i];
-						float tmp_b = sed(symbols, str_sync_symbols, 8);
-						float tmp_e = sed(symbols, eot_symbols,      8);
-						float d = tmp_a + ((tmp_b < tmp_e) ? tmp_b : tmp_e);
-
-						if (d < sed_str)
-						{
-							sed_str = d;
-							sample_offset = i;
-						}
+						// init values for stream mode
+						fn = 0;
+						sid = g_RNG.Get();
 					}
+				}
+			}
 
-					float pld[SYM_PER_PLD];
+			//stream frame received
+			else if (sed_str <= 25.0f)
+			{
+				sample_cnt = 0; // packet frame
+				//find L2's minimum
+				uint8_t sample_offset=0;
+				for (uint8_t i=1; i<=2; i++)
+				{
+					for (uint8_t j=0; j<16; j++)
+						symbols[j]=f_flt_buff[j*5+i];
 					
-					for (uint16_t i=0; i<SYM_PER_PLD; i++)
+					float tmp_a = sed(symbols, str_sync_symbols, 8);
+					// check the next frame, look for another data frame or EOT frame
+					for (uint8_t j=0; j<16; j++)
+						symbols[j] = f_flt_buff[960+j*5+i];
+					float tmp_b = sed(symbols, str_sync_symbols, 8);
+					float tmp_e = sed(symbols, eot_symbols,      8);
+					float d = tmp_a + ((tmp_b < tmp_e) ? tmp_b : tmp_e);
+
+					if (d < sed_str)
 					{
-						pld[i]=f_flt_buff[40+i*5+sample_offset];
-					}
-
-					uint8_t lich[6];
-					uint8_t lich_cnt;
-					uint8_t frame_data[16];
-					uint32_t e = decode_str_frame(frame_data, lich, &fn, &lich_cnt, pld);
-					if (0 == lich_cnt)
-						lich_parts = 0;
-					uint16_t frame_count = fn & 0x7fffu;
-					if (first_frame) {
-						last_fn = frame_count - 1;
-						first_frame = false;
-					}
-					
-					if (((last_fn+1) & 0x7fffu) == frame_count)
-					{
-						if (got_lsf) // send this data frame to the gateway
-						{
-							auto p = std::make_unique<CPacket>();
-							p->Initialize(EPacketType::stream);
-							p->SetStreamId(sid);
-							memcpy(p->GetDstAddress(), lsf.GetCData(), 28);
-							p->SetFrameNumber(fn);
-							memcpy(p->GetPayload(), frame_data, 16);
-							p->CalcCRC();
-							if (g_GateState.TryState(EGateState::modemin))
-								Modem2Gate.Push(p);
-
-							if (cfg.debug)
-							{
-								printMsg(TC_CYAN, TC_YELLOW, "RF Stream Frame: ");
-								printMsg(nullptr, TC_GREEN, "FN:%04X LICH_CNT:%d ED^2:%5.2f MER:%4.1f%% ii=%u\n", fn, lich_cnt, sed_str, float(e)*escale, ii);
-							}
-						}
-
-						if (lich_parts != 0x3fu) // if the lich data is not complete
-						{
-							//reconstruct LSF chunk by chunk
-							memcpy(lsf_b+(5u*lich_cnt), lich, 5); //40 bits
-							lich_parts |= (1<<lich_cnt);
-							if (0x3fu == lich_parts) //collected all of them?
-							{
-								if (g_Crc.CheckCRC(lsf_b, 30)) {
-									if (cfg.debug)
-									{
-										printMsg(TC_CYAN, TC_MAGENTA, "RF LICH LSF: ");
-										printMsg(nullptr, TC_RED, "CRC Error\n");
-										Dump(nullptr, lsf_b, 30);
-									}
-								} else {
-									memcpy(lsf.GetData(), lsf_b, 30);
-									if (not got_lsf)
-									{
-										TYPE.SetFrameType(lsf.GetFrameType());
-										(bool)g_GateState.TryState(EGateState::modemin);
-										rx_state = ((EPayloadType::packet == TYPE.GetPayloadType()) ? ERxState::pkt : ERxState::str); // the LICH
-										sample_cnt = 0; // LICH LSF
-										got_lsf = true;
-										sid = g_RNG.Get();
-										const CCallsign dst(lsf.GetCDstAddress());
-										const CCallsign src(lsf.GetCSrcAddress());
-										TYPE.SetFrameType(lsf.GetFrameType());
-										if (cfg.debug)
-										{
-											printMsg(TC_CYAN, TC_MAGENTA, "LICH LSF: ");
-											printMsg(nullptr, TC_GREEN, "DST: %s SRC: %s TYPE: 0x%04X (CAN=%d)\n", dst.c_str(), src.c_str(), lsf.GetFrameType(), TYPE.GetCan());
-										}
-									}
-								}
-								lich_parts = 0;
-							}
-						}
-						last_fn = fn;
-					}
-
-					if (fn >> 15) // is this the last frame?
-					{
-						// this is the last packet
-						rx_state = ERxState::idle; // last stream frame
-						got_lsf = false;
-						lich_parts = 0;
-						last_fn = 0xfffu;
-						first_frame = true;
+						sed_str = d;
+						sample_offset = i;
 					}
 				}
 
-				//TODO: handle packet mode reception over RF
-				else if ((sed_pkt <= 25.0f) and (rx_state == ERxState::pkt))
+				float pld[SYM_PER_PLD];
+				
+				for (uint16_t i=0; i<SYM_PER_PLD; i++)
 				{
-					//find L2's minimum
-					uint8_t sample_offset = 0;
-					for (uint8_t i=1; i<=2; i++)
-					{
-						for (uint8_t j=0; j<8; j++)
-							symbols[j]=f_flt_buff[j*5+i];
-							
-						float tmp_a = sed(symbols, pkt_sync_symbols, 8);
-						for (uint8_t j=0; j<16; j++)
-							symbols[j] = f_flt_buff[960+j*5+i];
-						float tmp_b = sed(symbols, pkt_sync_symbols, 8);
-						float tmp_c = sed(symbols, eot_symbols, 8);
-						float d = tmp_a + ((tmp_c > tmp_b) ? tmp_b : tmp_c);
+					pld[i]=f_flt_buff[40+i*5+sample_offset];
+				}
 
-						if (d < sed_pkt)
-						{
-							sed_pkt = d;
-							sample_offset = i;
-						}
-					}
-
-					float pld[SYM_PER_PLD];
-					for (uint16_t i=0; i<SYM_PER_PLD; i++)
-					{
-						pld[i]=f_flt_buff[8*5+i*5+sample_offset];
-					}
-
-					uint8_t eof, pkt_fn;
-					uint32_t e = decode_pkt_frame(ppkt, &eof, &pkt_fn, pld);
-					sample_cnt = 0;
-
-					if (cfg.debug) printMsg(TC_CYAN, TC_DEFAULT, "RF PacketFrame: EOF: %s FN: %u d^2:%5.2f MER: %4.1f ii:%u\n", (eof ? "true " : "false"), unsigned(pkt_fn), sed_pkt, e*escale, ii);
-
-					// increment size and pointer
-					plsize += eof ? pkt_fn : 25;
-					ppkt += 25;
-
-					if(eof)
-					{
-						if (g_Crc.CheckCRC(pkt_pld, plsize))
-						{
-							printMsg(TC_CYAN, TC_RED, "RF PKT: Payload CRC failed\n");
-							Dump(nullptr, pkt_pld, plsize);
-						} else {
-							if (got_lsf)
-							{
-								if (g_GateState.TryState(EGateState::modemin)) {
-									auto pkt = std::make_unique<CPacket>();
-									pkt->Initialize(EPacketType::packet, plsize+34);
-									memcpy(pkt->GetData()+4, lsf.GetCData(), 30);
-									memcpy(pkt->GetData()+34, pkt_pld, plsize);
-									// crc will be calulated by the gateway
-									Modem2Gate.Push(pkt);
-								}
-							} else {
-								printMsg(TC_CYAN, TC_RED, "Got a Packet Payload, but not the LSF!");
-							}
-							if (cfg.debug) {
-								if (0x5u == *pkt_pld and 0u == pkt_pld[plsize-3]) {
-									printMsg(TC_CYAN, TC_DEFAULT, "RF SMS Msg: %s", (char *)(pkt_pld+1));
-								} else {
-									printMsg(TC_CYAN, TC_DEFAULT, "Packet Payload:\n");
-									Dump(nullptr, pkt_pld, plsize);
-								}
-							}
-						}
-					}
+				uint8_t lich[6];
+				uint8_t lich_cnt;
+				uint8_t frame_data[16];
+				uint32_t e = decode_str_frame(frame_data, lich, &fn, &lich_cnt, pld);
+				if (0 == lich_cnt)
+					lich_parts = 0;
+				uint16_t frame_count = fn & 0x7fffu;
+				if (first_frame) {
+					last_fn = frame_count - 1;
+					first_frame = false;
 				}
 				
-				//RX sync timeout
-				if (rx_state != ERxState::idle)
+				if (((last_fn+1) & 0x7fffu) == frame_count)
 				{
-					sample_cnt++;
-					if (960*2 <= sample_cnt) // 80 ms without detecting anything in the sync'ed state
+					if (got_lsf) // send this data frame to the gateway
 					{
-						printMsg(TC_CYAN, TC_RED, "RF Timeout\n");
-						rx_state = ERxState::idle; // timeout
-						got_lsf = false;
-						sample_cnt = 0;
-						// stream mode reset
-						lich_parts = 0;
-						last_fn = 0xffffu;
-						// packet mode reset
-						ppkt = pkt_pld;
+						CPacket p;
+						p.Initialize(EPacketType::stream);
+						p.SetStreamId(sid);
+						memcpy(p.GetDstAddress(), rxlsf.GetCData(), 28);
+						p.SetFrameNumber(fn);
+						memcpy(p.GetPayload(), frame_data, 16);
+						p.CalcCRC();
+						if (g_GateState.TryState(EGateState::modemin))
+							m2g.Send(p.GetCData(), p.GetSize());
+
+						if (cfg.debug)
+						{
+							printMsg(TC_CYAN, TC_YELLOW, "RF Stream Frame: ");
+							printMsg(nullptr, TC_GREEN, "FN:%04X LICH_CNT:%d ED^2:%5.2f MER:%4.1f%% ii=%u\n", fn, lich_cnt, sed_str, float(e)*escale, ii);
+						}
 					}
+
+					if (lich_parts != 0x3fu) // if the lich data is not complete
+					{
+						//reconstruct LSF chunk by chunk
+						memcpy(lsf_b+(5u*lich_cnt), lich, 5); //40 bits
+						lich_parts |= (1<<lich_cnt);
+						if (0x3fu == lich_parts) //collected all of them?
+						{
+							if (g_Crc.CheckCRC(lsf_b, 30)) {
+								if (cfg.debug)
+								{
+									printMsg(TC_CYAN, TC_MAGENTA, "RF LICH LSF: ");
+									printMsg(nullptr, TC_RED, "CRC Error\n");
+									Dump(nullptr, lsf_b, 30);
+								}
+							} else {
+								memcpy(rxlsf.GetData(), lsf_b, 30);
+								if (not got_lsf)
+								{
+									rxType.SetFrameType(txlsf.GetFrameType());
+									(bool)g_GateState.TryState(EGateState::modemin);
+									rx_state = ((EPayloadType::packet == rxType.GetPayloadType()) ? ERxState::pkt : ERxState::str); // the LICH
+									sample_cnt = 0; // LICH LSF
+									got_lsf = true;
+									sid = g_RNG.Get();
+									const CCallsign dst(rxlsf.GetCDstAddress());
+									const CCallsign src(rxlsf.GetCSrcAddress());
+									rxType.SetFrameType(txlsf.GetFrameType());
+									if (cfg.debug)
+									{
+										printMsg(TC_CYAN, TC_MAGENTA, "LICH LSF: ");
+										printMsg(nullptr, TC_GREEN, "DST: %s SRC: %s TYPE: 0x%04X (CAN=%d)\n", dst.c_str(), src.c_str(), rxlsf.GetFrameType(), rxType.GetCan());
+									}
+								}
+							}
+							lich_parts = 0;
+						}
+					}
+					last_fn = fn;
+				}
+
+				if (fn >> 15) // is this the last frame?
+				{
+					// this is the last packet
+					rx_state = ERxState::idle; // last stream frame
+					got_lsf = false;
+					lich_parts = 0;
+					last_fn = 0xfffu;
+					first_frame = true;
+				}
+			}
+
+			//TODO: handle packet mode reception over RF
+			else if ((sed_pkt <= 25.0f) and (rx_state == ERxState::pkt))
+			{
+				//find L2's minimum
+				uint8_t sample_offset = 0;
+				for (uint8_t i=1; i<=2; i++)
+				{
+					for (uint8_t j=0; j<8; j++)
+						symbols[j]=f_flt_buff[j*5+i];
+						
+					float tmp_a = sed(symbols, pkt_sync_symbols, 8);
+					for (uint8_t j=0; j<16; j++)
+						symbols[j] = f_flt_buff[960+j*5+i];
+					float tmp_b = sed(symbols, pkt_sync_symbols, 8);
+					float tmp_c = sed(symbols, eot_symbols, 8);
+					float d = tmp_a + ((tmp_c > tmp_b) ? tmp_b : tmp_c);
+
+					if (d < sed_pkt)
+					{
+						sed_pkt = d;
+						sample_offset = i;
+					}
+				}
+
+				float pld[SYM_PER_PLD];
+				for (uint16_t i=0; i<SYM_PER_PLD; i++)
+				{
+					pld[i]=f_flt_buff[8*5+i*5+sample_offset];
+				}
+
+				uint8_t eof, pkt_fn;
+				uint32_t e = decode_pkt_frame(ppkt, &eof, &pkt_fn, pld);
+				sample_cnt = 0;
+
+				if (cfg.debug) printMsg(TC_CYAN, TC_DEFAULT, "RF PacketFrame: EOF: %s FN: %u d^2:%5.2f MER: %4.1f ii:%u\n", (eof ? "true " : "false"), unsigned(pkt_fn), sed_pkt, e*escale, ii);
+
+				// increment size and pointer
+				plsize += eof ? pkt_fn : 25;
+				ppkt += 25;
+
+				if(eof)
+				{
+					if (g_Crc.CheckCRC(pkt_pld, plsize))
+					{
+						printMsg(TC_CYAN, TC_RED, "RF PKT: Payload CRC failed\n");
+						Dump(nullptr, pkt_pld, plsize);
+					} else {
+						if (got_lsf)
+						{
+							if (g_GateState.TryState(EGateState::modemin)) {
+								CPacket pkt;
+								pkt.Initialize(EPacketType::packet, plsize+34);
+								memcpy(pkt.GetData()+4, rxlsf.GetCData(), 30);
+								memcpy(pkt.GetData()+34, pkt_pld, plsize);
+								// crc will be calulated by the gateway
+								m2g.Send(pkt.GetCData(), pkt.GetSize());
+							}
+						} else {
+							printMsg(TC_CYAN, TC_RED, "Got a Packet Payload, but not the LSF!");
+						}
+						if (cfg.debug) {
+							if (0x5u == *pkt_pld and 0u == pkt_pld[plsize-3]) {
+								printMsg(TC_CYAN, TC_DEFAULT, "RF SMS Msg: %s", (char *)(pkt_pld+1));
+							} else {
+								printMsg(TC_CYAN, TC_DEFAULT, "Packet Payload:\n");
+								Dump(nullptr, pkt_pld, plsize);
+							}
+						}
+					}
+				}
+			}
+			
+			//RX sync timeout
+			if (rx_state != ERxState::idle)
+			{
+				sample_cnt++;
+				if (960*2 <= sample_cnt) // 80 ms without detecting anything in the sync'ed state
+				{
+					printMsg(TC_CYAN, TC_RED, "RF Timeout\n");
+					rx_state = ERxState::idle; // timeout
+					got_lsf = false;
+					sample_cnt = 0;
+					// stream mode reset
+					lich_parts = 0;
+					last_fn = 0xffffu;
+					// packet mode reset
+					ppkt = pkt_pld;
 				}
 			}
 		}
 	}
-	printMsg(TC_CYAN, TC_GREEN, "Rx loop terminated\n");
 }
 
 /**

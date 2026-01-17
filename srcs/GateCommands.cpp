@@ -16,68 +16,91 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <string>
+#include <filesystem>
 #include <sstream>
 #include <fstream>
-#include <filesystem>
+#include <string>
 #include <thread>
 #include <chrono>
 
-#include "SafePacketQueue.h"
+#include <poll.h>
+
 #include "SteadyTimer.h"
 #include "FrameType.h"
 #include "Configure.h"
 #include "Gateway.h"
 #include "Random.h"
 #include "CRC.h"
-#include "Log.h"
 
 extern CCRC g_Crc;
 extern CRandom g_RNG;
 extern CConfigure g_Cfg;
-extern IPFrameFIFO Modem2Gate;
-extern IPFrameFIFO Gate2Modem;
 
 static const std::string m17alphabet(" ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/.");
 
-static const std::string fnames[39]
-{
-	"ECHO",  "alpha",  "bravo"     "charlie", "delta", "echo",    "foxtrot",  "golf",
-	"hotel", "india",  "juliette", "kilo",    "lima",  "mike",    "november", "oscar",
-	"papa",  "quebec", "romeo",    "sierra",  "tango", "uniform", "victor",   "whiskey",
-	"x-ray", "yankee", "zulu",     "zero",    "one",   "two",     "three",    "four",
-	"five",  "six",    "seven",    "eight",   "nine",  "dash",    "slash",    "dot"
-};
+static const std::string fnames[39]{
+	"ECHO", "alpha", "bravo"
+					 "charlie",
+	"delta", "echo", "foxtrot", "golf",
+	"hotel", "india", "juliette", "kilo", "lima", "mike", "november", "oscar",
+	"papa", "quebec", "romeo", "sierra", "tango", "uniform", "victor", "whiskey",
+	"x-ray", "yankee", "zulu", "zero", "one", "two", "three", "four",
+	"five", "six", "seven", "eight", "nine", "dash", "slash", "dot"};
 
-void CGateway::wait4end(std::unique_ptr<CPacket> &pack)
+void CGateway::wait4end(CPacket &pack)
 {
 	// check the starting packet first
-	if (pack->IsLastPacket())
+	if (pack.IsLastPacket())
 		return;
 
 	CSteadyTimer ptime;
 
 	// we're only going to reset the packet timer if subsequent incoming packets have this SID
-	auto streamid = pack->GetStreamId();
+	auto streamid = pack.GetStreamId();
 
 	while (keep_running)
 	{
-		pack = Modem2Gate.PopWaitFor(100);
-		if (pack and (pack->GetStreamId() == streamid))
+		struct pollfd pfd;
+		pfd.fd = m2g.GetFD();
+		pfd.events = POLLIN;
+		auto rval = poll(&pfd, 1, 100);
+		if (0 > rval)
 		{
-			ptime.start();
-			if (pack->IsLastPacket())
-				break;
+			printMsg(TC_MAGENTA, TC_RED, "in wait4End, poll error: %s\n", strerror(errno));
+			keep_running = false;
+			return;
 		}
-		if (ptime.time() > 0.5)
+		if (rval > 0)
 		{
-			break;
+			if (pfd.revents != POLLIN)
+			{
+				printMsg(TC_MAGENTA, TC_RED, "wait4end poll() returned bad revents: %d\n", pfd.revents);
+				keep_running = false;
+			}
+			else
+			{
+				CPacket p;
+				p.Initialize(EPacketType::stream);
+				if (54 != m2g.Read(p.GetData(), p.GetSize(), "wait4end"))
+				{
+					keep_running = false;
+					return;
+				}
+				if (p.GetStreamId() == streamid)
+				{
+					ptime.start();
+					if (p.IsLastPacket())
+						break;
+				}
+				if (ptime.time() > 0.5)
+					break; // a timeout!
+			}
 		}
 	}
 	return;
 }
 
-void CGateway::doStatus(std::unique_ptr<CPacket> &pack)
+void CGateway::doStatus(CPacket &pack)
 {
 	wait4end(pack);
 	if (ELinkState::linked == mlink.state)
@@ -88,13 +111,13 @@ void CGateway::doStatus(std::unique_ptr<CPacket> &pack)
 		addMessage("repeater is_unlinked");
 }
 
-void CGateway::doUnlink(std::unique_ptr<CPacket> &pack)
+void CGateway::doUnlink(CPacket &pack)
 {
 	wait4end(pack);
 	if (ELinkState::unlinked == mlink.state)
 	{
 		addMessage("repeater is_already_unlinked");
-		LogInfo("%s is already unlinked", thisCS.c_str());
+		printMsg(TC_MAGENTA, TC_YELLOW, "%s is already unlinked\n", thisCS.c_str());
 	}
 	else
 	{
@@ -103,68 +126,66 @@ void CGateway::doUnlink(std::unique_ptr<CPacket> &pack)
 		memcpy(disc.magic, "DISC", 4);
 		thisCS.CodeOut(disc.cscode);
 		sendPacket(disc.magic, 10, mlink.addr);
-		LogInfo("DISConnect packet sent to %s", mlink.cs.c_str());
+		printMsg(TC_MAGENTA, TC_GREEN, "DISConnect packet sent to %s", mlink.cs.c_str());
 		// the gateway proccess loop will disconnect when is receives the confirming DISC packet.
 	}
 }
 
-void CGateway::doEcho(std::unique_ptr<CPacket> &pack)
+void CGateway::doEcho(CPacket &pack)
 {
-	if (pack->IsLastPacket())
+	if (pack.IsLastPacket())
 	{
 		return;
 	}
-	auto streamID = pack->GetStreamId();
+	auto streamID = pack.GetStreamId();
 
 	doRecord(' ', streamID);
 }
 
-void CGateway::doRecord(std::unique_ptr<CPacket> &pack)
+void CGateway::doRecord(CPacket &pack)
 {
-	if (pack->IsLastPacket())
+	if (pack.IsLastPacket())
 	{
 		return;
 	}
-	CCallsign dst(pack->GetCDstAddress());
-	auto streamID = pack->GetStreamId();
+	CCallsign dst(pack.GetCDstAddress());
+	auto streamID = pack.GetStreamId();
 	doRecord(dst.GetModule(), streamID);
 }
 
 void CGateway::doRecord(char c, uint16_t streamID)
 {
 	// record payload in queue
-	using payload = std::array<uint8_t, 16>;
-	CSafePacketQueue<std::unique_ptr<payload>> fifo;
 	uint16_t fn = 0;
 	CSteadyTimer timer;
 	while (true) // record the payloads in fifo
 	{
-		auto pack = Modem2Gate.PopWaitFor(100);
-		if (nullptr == pack)
+		CPacket p;
+		if (getModemPacket(p))
+			break;
+		if (EPacketType::stream != p.GetType())
 			continue;
-		if (streamID != pack->GetStreamId())
+		if (streamID != p.GetStreamId())
 			continue;
 		if (timer.time() > 2.0)
 			break;
 		timer.start();
 		if (++fn < 3000) // only collect up to 2 minutes
 		{
-			auto newpl = std::make_unique<payload>();
-			memcpy(newpl->data(), pack->GetCPayload(), 16);
-			fifo.Push(newpl);
+			fifo.emplace(p.GetPayload());
 		}
-		if (pack->IsLastPacket())
+		if (p.IsLastPacket())
 			break;
 	}
 	if (fn > 3000)
 	{
-		LogWarning("Too long, did not save the last %.2f seconds of the transmission", 0.04f * (fn-3000));
+		printMsg(TC_MAGENTA, TC_YELLOW, "Too long, did not save the last %.2f seconds of the transmission\n", 0.04f * (fn - 3000));
 	}
 	if (fn < 25)
 	{
-		while (not fifo.IsEmpty())
-			fifo.Pop().reset();
-		LogInfo("Only recorded %d milliseconds, not saved", 40 * fn);
+		while (not fifo.empty())
+			fifo.pop();
+		printMsg(TC_MAGENTA, TC_RED, "Only recorded %d milliseconds, not saved\n", 40 * fn);
 		return;
 	}
 
@@ -175,10 +196,10 @@ void CGateway::doRecord(char c, uint16_t streamID)
 	if (std::string::npos == pos)
 	{
 		if (isprint(c))
-			LogError("'%c' is not a valid M17 character", c);
+			printMsg(TC_MAGENTA, TC_RED, "'%c' is not a valid M17 character\n", c);
 		else
-			LogError("0x%02x is not a valid M17 character", unsigned(c));
-		LogInfo("Invalid character will be replaced with ' '");
+			printMsg(TC_MAGENTA, TC_RED, "0x%02x is not a valid M17 character\n", unsigned(c));
+		printMsg(TC_MAGENTA, TC_DEFAULT, "Invalid character will be replaced with ' '\n");
 		pos = 0;
 	}
 	std::filesystem::path pathname(audioPath);
@@ -190,16 +211,14 @@ void CGateway::doRecord(char c, uint16_t streamID)
 	{
 		while (true)
 		{
-			auto pl = fifo.Pop();
-			if (not pl)
-				break;
-			ofs.write((const char *)pl->data(), 16);
+			ofs.write((char *)fifo.front().Data(), 16);
+			fifo.pop();
 		}
 		ofs.close();
 	}
 	else
 	{
-		LogError("Could not open %s for writing", pathname.c_str());
+		printMsg(TC_MAGENTA, TC_RED, "Could not open %s for writing\n", pathname.c_str());
 	}
 
 	// after a short wait
@@ -207,11 +226,11 @@ void CGateway::doRecord(char c, uint16_t streamID)
 	doPlay(c);
 }
 
-void CGateway::doPlay(std::unique_ptr<CPacket> &pack)
+void CGateway::doPlay(CPacket &p)
 {
-	wait4end(pack);
+	wait4end(p);
 	std::this_thread::sleep_for(std::chrono::milliseconds(300));
-	CCallsign dst(pack->GetCDstAddress());
+	CCallsign dst(p.GetCDstAddress());
 	doPlay(dst.GetModule());
 }
 
@@ -223,9 +242,9 @@ void CGateway::doPlay(char c)
 	if (std::string::npos == pos)
 	{
 		if (isprint(c))
-			LogError("'%c' is not a valid M17 character", c);
+			printMsg(TC_MAGENTA, TC_RED, "'%c' is not a valid M17 character\n", c);
 		else
-			LogError("0x%02x is not a valid M17 character", unsigned(c));
+			printMsg(TC_MAGENTA, TC_RED, "0x%02x is not a valid M17 character\n", unsigned(c));
 		return;
 	}
 	pathname /= fnames[pos];
@@ -239,7 +258,7 @@ void CGateway::doPlay(char c)
 		// no partial payloads or less than 1 sec duration or more than 2 minute
 		if ((count % 16) or (count / 16 < 25) or (count / 16 > 3000))
 		{
-			LogError("'%s' has an unexpected file size of %lu", pathname.c_str(), count);
+			printMsg(TC_MAGENTA, TC_RED, "'%s' has an unexpected file size of %u\n", pathname.c_str(), count);
 			return;
 		}
 	}
@@ -268,17 +287,17 @@ void CGateway::doPlay(char c)
 	{
 		while (fn < count)
 		{
-			auto pack = std::make_unique<CPacket>();
-			pack->Initialize(EPacketType::stream, master.GetCData(), 54);
-			ifs.read((char *)(pack->GetPayload()), 16);
-			pack->SetFrameNumber((fn < count) ? fn++ : fn++ & 0x8000u);
-			pack->CalcCRC();
+			CPacket p;
+			p.Initialize(EPacketType::stream, master.GetCData());
+			ifs.read((char *)(p.GetPayload()), 16);
+			p.SetFrameNumber((fn < count) ? fn++ : fn++ & 0x8000u);
+			p.CalcCRC();
 			clock = clock + std::chrono::milliseconds(40);
 			std::this_thread::sleep_until(clock);
-			Gate2Modem.Push(pack);
+			g2m.Send(p.GetCData(), p.GetSize());
 		}
 		ifs.close();
 	}
 	else
-		LogError("Could not open file '%s'", pathname.c_str());
+		printMsg(TC_MAGENTA, TC_RED, "Could not open file '%s'\n", pathname.c_str());
 }

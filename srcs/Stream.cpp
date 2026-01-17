@@ -16,7 +16,6 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "Log.h"
 #include "Stream.h"
 
 void CStream::Initialize(const std::string &n)
@@ -31,13 +30,13 @@ bool CStream::OpenStream(const uint8_t *src, uint16_t sid, const std::string &f)
 	previousid = streamid = sid;
 	count = 0u;
 	from.assign(f);
-	LogInfo("Open %s stream id=0x%04x from %s at %s", name.c_str(), streamid, source.GetCS().c_str(), from.c_str());
+	printMsg(TC_BLUE, TC_GREEN, "Open %s stream id=0x%04x from %s at %s\n", name.c_str(), streamid, source.GetCS().c_str(), from.c_str());
 	return false;
 }
 
 void CStream::CloseStream(bool istimeout)
 {
-	LogInfo("%s stream %s id=0x%02hu, duration=%.2f sec", name.c_str(), istimeout ? "timeout" : "closed", streamid, 0.04f * count);
+	printMsg(TC_BLUE, TC_GREEN, "%s stream %s id=0x%02hu, duration=%.2f sec\n", name.c_str(), istimeout ? "timeout" : "closed", streamid, 0.04f * count);
 	streamid = 0u;
 }
 

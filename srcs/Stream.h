@@ -21,10 +21,11 @@
 #include <cstdint>
 #include <string>
 
-#include "Callsign.h"
 #include "SteadyTimer.h"
+#include "Callsign.h"
+#include "Base.h"
 
-class CStream
+class CStream : public CBase
 {
 public:
 	CStream() : streamid(0) {}

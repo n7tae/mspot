@@ -40,6 +40,7 @@ class CPacket
 public:
 	void Initialize(EPacketType t, unsigned length = 54);
 	void Initialize(EPacketType t, const uint8_t *in, unsigned length = 54);
+	void Reset(void) { data.clear(), ptype = EPacketType::none; }
 	// get pointer to different parts
 	      uint8_t *GetData()        { return data.data(); }
 	const uint8_t *GetCData() const { return data.data(); }

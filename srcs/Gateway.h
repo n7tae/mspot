@@ -24,8 +24,9 @@
 #include <future>
 #include <vector>
 #include <mutex>
+#include <queue>
 
-#include "SafePacketQueue.h"
+#include "UnixDgramSocket.h"
 #include "SteadyTimer.h"
 #include "SockAddress.h"
 #include "Configure.h"
@@ -38,6 +39,18 @@
 
 enum class ELinkState { unlinked, linking, linked };
 enum class EInternetType { ipv4only, ipv6only, both };
+
+class CPayload
+{
+private:
+	uint8_t data[16];
+public:
+	CPayload(uint8_t *f)
+	{
+		memcpy(data, f, 16);
+	}
+	uint8_t *Data() { return data; }
+};
 
 using SM17Link = struct sm17link_tag
 {
@@ -83,12 +96,16 @@ private:
 	CHostMap destMap;
 	std::queue<std::string> voiceQueue;
 	std::unique_ptr<SMessageTask> msgTask;
+	CUnixDgramReader m2g;
+	CUnixDgramWriter g2m;
+	std::queue<CPayload> fifo;
 
+	bool getModemPacket(CPacket &p);
 	void ProcessGateway();
 	EPacketType validate(uint8_t *in, unsigned length);
 	void sendPacket(const void *buf, const size_t size, const CSockAddress &addr) const;
-	void sendPacket2Modem(std::unique_ptr<CPacket> pack);
-	void sendPacket2Dest(std::unique_ptr<CPacket> pack);
+	void sendPacket2Modem(CPacket &);
+	void sendPacket2Dest(CPacket &pack);
 	void ProcessModem();
 	void sendLinkRequest();
 	// returns true on error
@@ -100,12 +117,12 @@ private:
 	unsigned PlayVoiceFiles(std::string message);
 
 	// for executing rf based commands!
-	void doUnlink(std::unique_ptr<CPacket> &);
-	void doEcho(std::unique_ptr<CPacket> &);
-	void doRecord(std::unique_ptr<CPacket> &);
+	void doUnlink(CPacket &);
+	void doEcho(CPacket &);
+	void doRecord(CPacket &);
 	void doRecord(char, uint16_t);
-	void doPlay(std::unique_ptr<CPacket> &);
+	void doPlay(CPacket &);
 	void doPlay(char c);
-	void doStatus(std::unique_ptr<CPacket> &);
-	void wait4end(std::unique_ptr<CPacket> &);
+	void doStatus(CPacket &);
+	void wait4end(CPacket &);
 };

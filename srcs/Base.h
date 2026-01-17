@@ -24,8 +24,8 @@ public:
 	CBase(void) {}
 	virtual ~CBase(void) {}
 protected:
-	void printMsg(const char *tsColor, const char *txColor, const char *fmt, ...);
-	void Dump(const char *title, const void *data, unsigned length);
+	void printMsg(const char *tsColor, const char *txColor, const char *fmt, ...) const;
+	void Dump(const char *title, const void *data, unsigned length) const;
 	const char *TC_BLACK   {"\033[30m"};
 	const char *TC_RED     {"\033[31m"};
 	const char *TC_GREEN   {"\033[32m"};
@@ -44,5 +44,5 @@ protected:
 	const char *TC_B_WHITE   {"\033[97m"};
 	const char *TC_DEFAULT   {"\033[39m"};
 private:
-	void timeStamp(const char *color_esc);
+	void timeStamp(const char *color_esc) const;
 };

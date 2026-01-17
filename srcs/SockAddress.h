@@ -28,9 +28,9 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
-#include "Log.h"
+#include "Base.h"
 
-class CSockAddress
+class CSockAddress : public CBase
 {
 public:
 	CSockAddress()
@@ -42,7 +42,7 @@ public:
 
 	bool Initialize(const std::string &address, uint16_t port = 0)
 	{
-			Clear();
+		Clear();
 		struct addrinfo hints, *result;
 		memset(&hints, 0, sizeof(struct addrinfo));
 		hints.ai_family = AF_UNSPEC;
@@ -58,7 +58,7 @@ public:
 		}
 		else
 		{
-			LogError("Could not find address for %s", address.c_str());
+			printMsg(TC_MAGENTA, TC_RED, "Could not find address for %s\n", address.c_str());
 			return true;
 		}
 	}
@@ -81,7 +81,7 @@ public:
 				{
 					if (1 > inet_pton(AF_INET, address, &(addr4->sin_addr)))
 					{
-						LogError("IPv4 SockAddress initialization failed for '%s'", address);
+						printMsg(TC_MAGENTA, TC_RED, "IPv4 SockAddress initialization failed for '%s'\n", address);
 						return true;
 					}
 				}
@@ -101,7 +101,7 @@ public:
 				{
 					if (1 > inet_pton(AF_INET6, address, &(addr6->sin6_addr)))
 					{
-						LogError("IPv6 SockAddress initialization failed for '%s'", address);
+						printMsg(TC_MAGENTA, TC_RED, "IPv6 SockAddress initialization failed for '%s'\n", address);
 						return true;
 					}
 				}
@@ -110,7 +110,7 @@ public:
 		else
 		{
 			addr.ss_family = AF_INET;
-			LogError("Address Family must be IPv4 or IPv6");
+			printMsg(TC_MAGENTA, TC_RED, "Address Family must be IPv4 or IPv6\n");
 			return true;
 		}
 		return false;
@@ -200,7 +200,7 @@ public:
 			auto addr6 = (struct sockaddr_in6 *)&addr;
 			inet_ntop(AF_INET6, &(addr6->sin6_addr), straddr, INET6_ADDRSTRLEN);
 		} else {
-			LogError("Can't get address, unknown family: %u", addr.ss_family);
+			printMsg(TC_MAGENTA, TC_RED, "Can't get address, unknown family: %u", addr.ss_family);
 			return "UNKNOWN";
 		}
 		return straddr;

@@ -23,13 +23,15 @@
 #include <memory>
 #include <map>
 
+#include "Base.h"
+
 struct SHost
 {
 	std::string cs, version, domainname, ipv4address, ipv6address, mods, smods, source, url;
 	uint16_t port;
 };
 
-class CHostMap
+class CHostMap : public CBase
 {
 public:
 	CHostMap();

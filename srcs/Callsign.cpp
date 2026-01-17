@@ -18,7 +18,6 @@
 
 #include <ctype.h>
 #include "Callsign.h"
-#include "Log.h"
 
 const std::string m17_alphabet(" ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/.");
 
@@ -118,7 +117,7 @@ void CCallsign::CodeIn(const uint8_t *in)
 
 	if (coded > 0xee6b27ffffffu)
 	{
-		LogWarning("Callsign code is too large, 0x%x", coded);
+		printMsg(TC_BLUE, TC_RED, "Callsign code is too large, 0x%x\n", coded);
 		coded = 0;
 		return;
 	}
@@ -179,9 +178,9 @@ void CCallsign::SetModule(char m)
 	if (not isupper(m))
 	{
 		if (isprint(m))
-			LogWarning("'%c' is not a vaild module", m);
+			printMsg(TC_BLUE, TC_RED, "'%c' is not a vaild module\n", m);
 		else
-			LogWarning("0x%02x is not a valid module character", unsigned(m));
+			printMsg(TC_BLUE, TC_RED, "0x%02x is not a valid module character\n", unsigned(m));
 		return;
 	}
 	std::string call(cs);

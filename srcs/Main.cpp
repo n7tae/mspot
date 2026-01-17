@@ -25,11 +25,10 @@
 
 #include <pwd.h>
 
-#include "Version.h"
 #include "Configure.h"
+#include "Version.h"
 #include "Gateway.h"
 #include "CC1200.h"
-#include "Log.h"
 #include "CRC.h"
 
 // global defs
@@ -43,7 +42,7 @@ static int  caught_signal = 0;
 static void sigHandler(int signum)
 {
 	caught_signal = signum;
-	LogInfo("Caught signal %d", signum);
+	printf("Caught signal %d", signum);
 }
 
 static void usage(const std::string &exename)
@@ -77,18 +76,12 @@ int main(int argc, char** argv)
 	if (g_Cfg.ReadData(arg))
 		return EXIT_FAILURE;
 
-	if (g_Log.Open(g_Cfg.GetString(g_Keys.log.section, g_Keys.log.dashpath), g_Cfg.GetUnsigned(g_Keys.log.section, g_Keys.log.level)))
-	{
-		::fprintf(stderr, "ERROR: unable to open the dashboard log file\n");
-		return EXIT_FAILURE;
-	}
+	printf("This software is for use on amateur radio networks only,");
+	printf("Its use on commercial networks is strictly prohibited.");
+	printf("Copyright (C) 2026 by Thomas A. Early, N7TAE");
 
-	LogInfo("This software is for use on amateur radio networks only,");
-	LogInfo("Its use on commercial networks is strictly prohibited.");
-	LogInfo("Copyright (C) 2026 by Thomas A. Early, N7TAE");
-
-	LogInfo("%s-%s is starting", pp.filename().c_str(), g_Version.c_str());
-	LogInfo("Built %s %s", __TIME__, __DATE__);
+	printf("%s-%s is starting", pp.filename().c_str(), g_Version.c_str());
+	printf("Built %s %s", __TIME__, __DATE__);
 
 	g_Gateway.SetName(pp.filename());
 	CCC1200 modem;
@@ -105,7 +98,7 @@ int main(int argc, char** argv)
 			return EXIT_FAILURE;
 		}
 		
-		pause();	// wait for a signal
+		modem.Run();	// wait for a signal
 
 		g_Gateway.Stop();
 		modem.Stop();
@@ -113,22 +106,20 @@ int main(int argc, char** argv)
 		switch (caught_signal)
 		{
 			case 2:
-				::LogInfo("%s exited on receipt of SIGINT", pp.filename().c_str());
+				printf("%s exited on receipt of SIGINT", pp.filename().c_str());
 				break;
 			case 15:
-				::LogInfo("%s exited on receipt of SIGTERM", pp.filename().c_str());
+				printf("%s exited on receipt of SIGTERM", pp.filename().c_str());
 				break;
 			case 1:
-				::LogInfo("%s is restarting on receipt of SIGHUP", pp.filename().c_str());
+				printf("%s is restarting on receipt of SIGHUP", pp.filename().c_str());
 				std::this_thread::sleep_for(std::chrono::seconds(5));
 				break;
 			default:
-				::LogInfo("%s exited on receipt of an unknown signal", pp.filename().c_str());
+				printf("%s exited on receipt of an unknown signal", pp.filename().c_str());
 				break;
 		}
 	} while (caught_signal == SIGHUP);
-
-	g_Log.Close();
 
 	return EXIT_SUCCESS;
 }

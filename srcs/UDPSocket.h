@@ -19,10 +19,11 @@
 #pragma once
 
 #include "SockAddress.h"
+#include "Base.h"
 
 #define UDP_BUFFER_LENMAX 1024
 
-class CUDPSocket
+class CUDPSocket : public CBase
 {
 public:
 	CUDPSocket();

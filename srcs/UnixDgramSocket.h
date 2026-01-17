@@ -16,10 +16,38 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <memory>
+#pragma once
 
- #include "SafePacketQueue.h"
+#include <cstdlib>
+#include <cstdint>
+#include <sys/un.h>
 
-// global packet FIFO queues
-IPFrameFIFO Modem2Gate;
-IPFrameFIFO Gate2Modem;
+#include "Base.h"
+
+class CUnixDgramReader : public CBase
+{
+public:
+	CUnixDgramReader();
+	~CUnixDgramReader();
+	bool Open(const char *path);
+	ssize_t Read(uint8_t *pack, size_t size, const char *where) const;
+	void Close();
+	int GetFD() const;
+
+	private:
+	int fd;
+};
+
+class CUnixDgramWriter : public CBase
+{
+public:
+	CUnixDgramWriter();
+	~CUnixDgramWriter();
+	void SetUp(const char *path);
+	bool Send(const uint8_t *pack, size_t size) const;
+
+	private:
+	bool Write(const void *buf, ssize_t size) const;
+	struct sockaddr_un addr;
+	int path_len;
+};

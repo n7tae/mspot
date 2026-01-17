@@ -27,22 +27,20 @@
 #include <chrono>
 #include <map>
 
-#include "SafePacketQueue.h"
 #include "FrameType.h"
 #include "Configure.h"
 #include "GateState.h"
 #include "Gateway.h"
 #include "Random.h"
 #include "CRC.h"
-#include "Log.h"
 
 extern CConfigure g_Cfg;
 extern CCRC       g_Crc;
 extern CRandom    g_RNG;
 extern CGateState g_GateState;
+extern const char *Modem2Gate;
+extern const char *Gate2Modem;
 
-extern IPFrameFIFO Modem2Gate;
-extern IPFrameFIFO Gate2Modem;
 
 static const uint8_t quiet[] { 0x01u, 0x00u, 0x09u, 0x43u, 0x9Cu, 0xE4u, 0x21u, 0x08u };
 
@@ -124,26 +122,33 @@ constexpr uint64_t CalcCSCode(const char *cs)
 
 void CGateway::Stop()
 {
-	LogInfo("stopping the Gateway...");
+	printMsg(TC_MAGENTA, TC_GREEN, "stopping the Gateway...\n");
 	keep_running = false;
 	if (gateFuture.valid())
 		gateFuture.get();
 	if (modemFuture.valid())
 		modemFuture.get();
-	LogDebug("Gateway and Modem processing threads closed...");
+	printMsg(TC_MAGENTA, TC_GREEN, "Gateway and Modem processing threads closed...\n");
 	ipv4.Close();
 	ipv6.Close();
-	LogInfo("All resourced released");
+	printMsg(TC_MAGENTA, TC_GREEN, "Closing %s...\n", Modem2Gate);
+	m2g.Close();
+	printMsg(TC_MAGENTA, TC_GREEN, "All Gateway resourced released\n");
 }
 
 bool CGateway::Start()
 {
+	g2m.SetUp(Gate2Modem);
+	printMsg(TC_MAGENTA, TC_DEFAULT, "Opening %s...", Modem2Gate);
+	if (m2g.Open(Modem2Gate)) {
+		return true;
+	}
 	destMap.ReadAll();
 	std::string cs(g_Cfg.GetString(g_Keys.repeater.section, g_Keys.repeater.callsign));
 	cs.resize(8, ' ');
 	cs.append(1, g_Cfg.GetString(g_Keys.repeater.section, g_Keys.repeater.module).at(0));
 	thisCS.CSIn(cs);
-	LogInfo("Station Callsign: %s", cs.c_str());
+	printMsg(TC_MAGENTA, TC_GREEN, "Station Callsign: %s\n", cs.c_str());
 
 	if (g_Cfg.GetBoolean(g_Keys.gateway.section, g_Keys.gateway.ipv4))
 	{
@@ -155,19 +160,19 @@ bool CGateway::Start()
 	}
 	else
 	{
-		LogError("Neither IPv4 or IPV6 is enabled!");
+		printMsg(TC_MAGENTA, TC_RED,"Neither IPv4 or IPV6 is enabled!\n");
 		return true;
 	}
 	switch (internetType)
 	{
 	case EInternetType::ipv4only:
-		LogInfo("Gateway supports IPv4 Only");
+		printMsg(TC_MAGENTA, TC_DEFAULT, "Gateway supports IPv4 Only\n");
 		break;
 	case EInternetType::ipv6only:
-		LogInfo("Gateway supports IPv6 Only");
+		printMsg(TC_MAGENTA, TC_DEFAULT, "Gateway supports IPv6 Only\n");
 		break;
 	default:
-		LogInfo("Gateway supports Dual Stack (IPv4 and IPv6)");
+		printMsg(TC_MAGENTA, TC_DEFAULT, "Gateway supports Dual Stack (IPv4 and IPv6)\n");
 		break;
 	}
 
@@ -178,7 +183,7 @@ bool CGateway::Start()
 			return true;
 		if (ipv4.Open(addr))
 			return true;
-		LogInfo("Gateway listening on %s:%u", addr.GetAddress(), ipv4.GetPort());
+		printMsg(TC_MAGENTA, TC_DEFAULT, "Gateway listening on %s:%u", addr.GetAddress(), ipv4.GetPort());
 	}
 	if (EInternetType::ipv4only != internetType)
 	{
@@ -187,33 +192,33 @@ bool CGateway::Start()
 			return true;
 		if (ipv6.Open(addr))
 			return true;
-		LogInfo("Gateway listening on [%s]:%u", addr.GetAddress(), ipv6.GetPort());
+		printMsg(TC_MAGENTA, TC_DEFAULT, "Gateway listening on [%s]:%u\n", addr.GetAddress(), ipv6.GetPort());
 	}
 
 	can = g_Cfg.GetUnsigned(g_Keys.repeater.section, g_Keys.repeater.can);
 	radioTypeIsV3 = g_Cfg.GetBoolean(g_Keys.repeater.section, g_Keys.repeater.radioTypeIsV3);
-	LogInfo("Radio is using %s TYPE values", radioTypeIsV3 ? "V#3" : "Legacy");
+	printMsg(TC_MAGENTA, TC_DEFAULT, "Radio is using %s TYPE values\n", radioTypeIsV3 ? "V#3" : "Legacy");
 
 	mlink.state = ELinkState::unlinked;
 	keep_running = true;
 	gateStream.Initialize("Gateway");
 	modemStream.Initialize("Modem");
 	mlink.maintainLink = g_Cfg.GetBoolean(g_Keys.gateway.section, g_Keys.gateway.maintainLink);
-	LogInfo("Gateway will%s try to re-establish a dropped link", mlink.maintainLink ? "" : " NOT");
+	printMsg(TC_MAGENTA, TC_DEFAULT, "Gateway will%s try to re-establish a dropped link\n", mlink.maintainLink ? "" : " NOT");
 	if (g_Cfg.IsString(g_Keys.gateway.section, g_Keys.gateway.startupLink))
 	{
 		setDestination(g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.startupLink));
 	}
 
 	audioPath.assign(g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.audioFolder));
-	LogInfo("Audio folder is at %s", audioPath.c_str());
+	printMsg(TC_MAGENTA,TC_DEFAULT, "Audio folder is at %s\n", audioPath.c_str());
 
 	makeCSData(thisCS, "repeater.dat");
 
 	gateFuture = std::async(std::launch::async, &CGateway::ProcessGateway, this);
 	if (not gateFuture.valid())
 	{
-		LogError("Could not start the ProcessGateway() thread");
+		printMsg(TC_MAGENTA, TC_RED, "Could not start the ProcessGateway() thread\n");
 		keep_running = false;
 		return true;
 	}
@@ -221,7 +226,7 @@ bool CGateway::Start()
 	modemFuture = std::async(std::launch::async, &CGateway::ProcessModem, this);
 	if (not modemFuture.valid())
 	{
-		LogError("Could not start the ProcessModem() thread");
+		printMsg(TC_MAGENTA, TC_RED, "Could not start the ProcessModem() thread\n");
 		keep_running = false;
 		return true;
 	}
@@ -229,6 +234,52 @@ bool CGateway::Start()
 	std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 	addMessage("welcome repeater");
 	return false;
+}
+
+bool CGateway::getModemPacket(CPacket &p)
+{
+	if (EPacketType::none != p.GetType())
+		p.Reset();
+	struct pollfd pfd;
+	pfd.fd = m2g.GetFD();
+	pfd.events = POLLIN;
+	auto rv = poll(&pfd, 1, 100);
+	if (rv < 0)
+	{
+		if (EINTR == errno)
+			printMsg(TC_MAGENTA, TC_YELLOW, "poll() interrupted by signal\n");
+		else
+			printMsg(TC_MAGENTA, TC_RED, "Modem poll() error: %s\n", strerror(errno));
+		keep_running = false;
+		return true;
+	}
+	if (rv > 0)
+	{
+		if (pfd.revents == POLLIN)
+		{
+			uint8_t buf[MAX_PACKET_SIZE];
+			auto len = m2g.Read(buf, MAX_PACKET_SIZE, "getModemPacket");
+			if (len < 37) {
+				if (len == 0) {
+					printMsg(TC_MAGENTA, TC_RED, "read zero bytes from modem\n");
+				} else if (len > 0) {
+					printMsg(TC_MAGENTA, TC_RED, "only read %d bytes from the modem:\n");
+					Dump(nullptr, buf, len);
+				}
+				keep_running = false;
+				return true;
+			}
+			auto type = validate(buf, len);
+			if (EPacketType::none != type) {
+				p.Initialize(type, buf, len);
+			}
+		} else {
+			printMsg(TC_MAGENTA, TC_RED, "Modem poll() returned bad revents: %d\n", int(pfd.events));
+			keep_running = false;
+			return true;
+		}
+	}
+	return false; // there was nothing to read
 }
 
 void CGateway::ProcessGateway()
@@ -251,7 +302,7 @@ void CGateway::ProcessGateway()
 			{
 				// looks like we lost contact
 				addMessage("repeater was_disconnected_from destination");
-				LogInfo("Disconnected from %s, TIMEOUT...\n", mlink.cs.c_str());
+				printMsg(TC_MAGENTA, TC_YELLOW, "Disconnected from %s, TIMEOUT...\n", mlink.cs.c_str());
 				mlink.state = ELinkState::unlinked;
 				if (not mlink.maintainLink)
 					mlink.addr.Clear();
@@ -260,7 +311,7 @@ void CGateway::ProcessGateway()
 		case ELinkState::linking:
 			if (linkingTime.time() >= 30)
 			{
-				LogInfo("Link request to %s timeout.\n", mlink.cs.c_str());
+				printMsg(TC_MAGENTA, TC_YELLOW, "Link request to %s timeout.\n", mlink.cs.c_str());
 				mlink.state = ELinkState::unlinked;
 			}
 			else
@@ -287,11 +338,11 @@ void CGateway::ProcessGateway()
 			if (msgTask->futTask.valid())
 			{
 				auto count = msgTask->futTask.get();
-				LogInfo("Played %.2f sec message", count*0.04f);
+				printMsg(TC_MAGENTA, TC_DEFAULT, "Played %.2f sec message\n", count*0.04f);
 			}
 			else
 			{
-				LogWarning("Message task is done, but future task is invalid");
+				printMsg(TC_MAGENTA, TC_YELLOW, "Message task is done, but future task is invalid");
 			}
 			msgTask.reset();
 			g_GateState.Idle();
@@ -306,13 +357,13 @@ void CGateway::ProcessGateway()
 				voiceQueue.pop();
 				if (msgTask)
 				{
-					LogError("Trying to initiate message play, the g_GateState was idle, but msgTask is not empty!");
-					LogError("'%s' will not be played!", message.c_str());
+					printMsg(TC_MAGENTA, TC_YELLOW, "Trying to initiate message play, the g_GateState was idle, but msgTask is not empty!\n");
+					printMsg(TC_MAGENTA, TC_YELLOW, "'%s' will not be played!\n", message.c_str());
 					g_GateState.Idle();
 				}
 				else
 				{
-					LogInfo("Playing message '%s'", message.c_str());
+					printMsg(TC_MAGENTA, TC_DEFAULT, "Playing message '%s'\n", message.c_str());
 					msgTask = std::make_unique<SMessageTask>();
 					msgTask->isDone = false;
 					msgTask->futTask = std::async(std::launch::async, &CGateway::PlayVoiceFiles, this, message);
@@ -328,7 +379,7 @@ void CGateway::ProcessGateway()
 		auto rval = poll(pfds, 2, 10);
 		if (0 > rval)
 		{
-			LogError("gateway poll() error: %s", strerror(errno));
+			printMsg(TC_MAGENTA, TC_RED, "gateway poll() error: %s\n", strerror(errno));
 			return;
 		}
 
@@ -353,7 +404,7 @@ void CGateway::ProcessGateway()
 			{
 				if (pfds[i].revents)
 				{
-					LogError("poll() returned revents %d from IPv%s port", pfds[i].revents, i ? '6' : '4');
+					printMsg(TC_MAGENTA, TC_RED, "poll() returned revents %d from IPv%s port\n", pfds[i].revents, i ? '6' : '4');
 					return;
 				}
 			}
@@ -371,14 +422,14 @@ void CGateway::ProcessGateway()
 						mlink.state = ELinkState::linked;
 						makeCSData(mlink.cs, "destination.dat");
 						addMessage("repeater is_linked_to destination");
-						LogInfo("Connected to %s at %s", mlink.cs.c_str(), mlink.addr.GetAddress());
+						printMsg(TC_MAGENTA, TC_GREEN, "Connected to %s at %s\n", mlink.cs.c_str(), mlink.addr.GetAddress());
 						mlink.receivePingTimer.start();
 					}
 					else if (0 == memcmp(buf, "NACK", 4))
 					{
 						mlink.state = ELinkState::unlinked;
 						addMessage("link_refused");
-						LogInfo("Connection request refused from %s\n", mlink.cs.c_str());
+						printMsg(TC_MAGENTA, TC_YELLOW, "Connection request refused from %s\n", mlink.cs.c_str());
 						mlink.cs.Clear();
 						mlink.addr.Clear();
 						mlink.state = ELinkState::unlinked;
@@ -386,19 +437,21 @@ void CGateway::ProcessGateway()
 					else if (0 == memcmp(buf, "DISC", 4))
 					{
 						addMessage("repeater is_unlinked");
-						LogInfo("Disconnected from %s at %s", mlink.cs.c_str(), mlink.addr.GetAddress());
+						printMsg(TC_MAGENTA, TC_YELLOW, "Disconnected from %s at %s\n", mlink.cs.c_str(), mlink.addr.GetAddress());
 						mlink.addr.Clear(); // initiated with UNLINK, so don't try to reconnect
 						mlink.cs.Clear();   // ^^^^^^^^^ ^^^^ ^^^^^^
 						mlink.state = ELinkState::unlinked;
 					}
 					else
 					{
-						Dump("Uknown Packet", buf, length);;
+						printMsg(TC_MAGENTA, TC_YELLOW, "Unknown Packet:\n");
+						Dump(nullptr, buf, length);
 					}
 				}
 				else
 				{
-					Dump("Unexpected Packet", buf, length);
+					printMsg(TC_MAGENTA, TC_YELLOW, "Unknown Packet:\n");
+					Dump(nullptr, buf, length);
 				}
 				break;
 			case 10: 				// PING or DISC
@@ -418,14 +471,15 @@ void CGateway::ProcessGateway()
 							mlink.state = ELinkState::unlinked;
 							if (not mlink.maintainLink)
 								mlink.addr.Clear();
-							LogInfo("%s initiated a disconnect", from.GetCS().c_str());
+							printMsg(TC_MAGENTA, TC_YELLOW, "%s initiated a disconnect\n", from.GetCS().c_str());
 						}
 						else
-							LogInfo("Got a bogus disconnect from '%s' @ %s", from.GetCS().c_str(), from17k.GetAddress());
+							printMsg(TC_MAGENTA, TC_YELLOW, "Got a bogus disconnect from '%s' @ %s\n", from.GetCS().c_str(), from17k.GetAddress());
 					}
 					else
 					{
-						Dump("Unknown Packet", buf, length);
+						printMsg(TC_MAGENTA, TC_YELLOW, "Unknown Packet:\n");
+						Dump(nullptr, buf, length);
 					}
 				}
 				break;
@@ -433,16 +487,17 @@ void CGateway::ProcessGateway()
 				auto t = validate(buf, length);
 				if (EPacketType::none == t)
 				{
-					Dump("Unknown Packet", buf, length);
+					printMsg(TC_MAGENTA, TC_YELLOW, "Unknown Packet:\n");
+					Dump(nullptr, buf, length);
 				} else {
-					auto pack = std::make_unique<CPacket>();
-					pack->Initialize(t, buf, length);
-					if (pack->CheckCRC())
+					CPacket pack;
+					pack.Initialize(t, buf, length);
+					if (pack.CheckCRC())
 					{
-						Dump("Incoming Gateway Packet failed CRC check", buf, length);
-						pack.reset();
+						printMsg(TC_MAGENTA, TC_RED, "Incoming Gateway Packet failed CRC check:\n");
+						Dump(nullptr, buf, length);
 					} else {
-						sendPacket2Modem(std::move(pack));
+						sendPacket2Modem(pack);
 					}
 				}
 				break;
@@ -462,10 +517,50 @@ void CGateway::ProcessModem()
 {
 	while (keep_running)
 	{
-		auto pack = Modem2Gate.PopWaitFor(100);
-		if (pack)
-		{
-			const CCallsign dst(pack->GetCDstAddress());
+		CPacket pack;
+		if (getModemPacket(pack))
+			break; // a serious error
+		const CCallsign dst(pack.GetCDstAddress());
+		if (EPacketType::packet == pack.GetType()) {
+			switch (mlink.state)
+			{
+			case ELinkState::linked:
+				if ((dst == mlink.cs) or (not dst.IsReflector())) // is the destination the linked reflector?
+				{
+					printMsg(TC_MAGENTA, TC_YELLOW, "Destination is %s but you are already linked to %s\n", dst.c_str(), mlink.cs.c_str());
+				} else {
+					sendPacket2Dest(pack);
+				}
+				break;
+			case ELinkState::linking:
+				if (dst == mlink.cs) {
+					printMsg(TC_MAGENTA, TC_DEFAULT, "%s is not yet linked", dst.c_str());
+				} else {
+					printMsg(TC_MAGENTA, TC_YELLOW, "Destination is %s but you are linking to %s\n", dst.c_str(), mlink.cs.c_str());
+				}
+				break;
+			case ELinkState::unlinked:
+				if (dst.IsReflector()) {
+					if (not setDestination(dst))
+					{
+						if (mlink.isReflector)
+							mlink.state = ELinkState::linking;
+						else
+							printMsg(TC_MAGENTA, TC_GREEN, "IP Address for %s found: %s\n", dst.c_str(), mlink.addr.GetAddress());
+					}
+				} else {
+					if (dst == mlink.cs) {
+						sendPacket2Dest(pack);
+					} else {
+						if (not setDestination(dst))
+						{
+							printMsg(TC_MAGENTA, TC_GREEN, "IP Address for %s found: %s\n", dst.c_str(), mlink.addr.GetAddress());
+						}
+					}
+				}
+				break;
+			}
+		} else if (EPacketType::stream == pack.GetType()) {
 			switch (dst.GetBase())
 			{
 			case CalcCSCode("E"):
@@ -495,23 +590,23 @@ void CGateway::ProcessModem()
 				switch (mlink.state)
 				{
 				case ELinkState::linked:
-					if (dst != mlink.cs and dst.IsReflector()) // is the destination the linked reflector?
+					if ((dst == mlink.cs) or (not dst.IsReflector())) // is the destination the linked reflector?
 					{
 						addMessage("repeater is_already_linked");
 						wait4end(pack);
-						LogWarning("Destination is %s but you are already linked to %s", dst.c_str(), mlink.cs.c_str());
+						printMsg(TC_MAGENTA, TC_YELLOW, "Destination is %s but you are already linked to %s\n", dst.c_str(), mlink.cs.c_str());
 						g_GateState.Idle();
 					} else {
-						sendPacket2Dest(std::move(pack));
+						sendPacket2Dest(pack);
 					}
 					break;
 				case ELinkState::linking:
 					wait4end(pack);
 					if (dst == mlink.cs) {
-						LogInfo("%s is not yet linked", dst.c_str());
+						printMsg(TC_MAGENTA, TC_DEFAULT, "%s is not yet linked", dst.c_str());
 					} else {
 						addMessage("repeater is_already_linking");
-						LogWarning("Destination is %s but you are linking to %s", dst.c_str(), mlink.cs.c_str());
+						printMsg(TC_MAGENTA, TC_YELLOW, "Destination is %s but you are linking to %s\n", dst.c_str(), mlink.cs.c_str());
 					}
 					g_GateState.Idle();
 					break;
@@ -523,26 +618,28 @@ void CGateway::ProcessModem()
 							if (mlink.isReflector)
 								mlink.state = ELinkState::linking;
 							else
-								LogInfo("IP Address for %s found: %s", dst.c_str(), mlink.addr.GetAddress());
+								printMsg(TC_MAGENTA, TC_GREEN, "IP Address for %s found: %s\n", dst.c_str(), mlink.addr.GetAddress());
 						}
 						g_GateState.Idle();
 					} else {
 						if (dst == mlink.cs) {
-							sendPacket2Dest(std::move(pack));
+							sendPacket2Dest(pack);
 						} else {
 							wait4end(pack);
 							if (not setDestination(dst))
 							{
-								LogInfo("IP Address for %s found: %s", dst.c_str(), mlink.addr.GetAddress());
+								printMsg(TC_MAGENTA, TC_GREEN, "IP Address for %s found: %s\n", dst.c_str(), mlink.addr.GetAddress());
 							}
 						}
 					}
+					break;
 				}
+				break;
 			}
 		}
 		else
 		{
-			// check for a timeout from the host
+			// check for a timeout from the modem
 			if (modemStream.IsOpen() and modemStream.GetLastTime() >= 1.0)
 			{
 				modemStream.CloseStream(true); // close the modemStream
@@ -564,56 +661,50 @@ void CGateway::sendLinkRequest()
 	thisCS.CodeOut(mlink.pongPacket.cscode);
 	// send the link request
 	sendPacket(conn.magic, 11, mlink.addr);
-	LogMessage("Link request sent to %s at %s on port %u", mlink.cs.c_str(), mlink.addr.GetAddress(), mlink.addr.GetPort());
+	printMsg(TC_MAGENTA,TC_DEFAULT, "Link request sent to %s at %s on port %u\n", mlink.cs.c_str(), mlink.addr.GetAddress(), mlink.addr.GetPort());
 	// finish up
 	lastLinkSent.start();
 	mlink.state = ELinkState::linking;
 }
 
 // this also opens and closes the gateStream
-void CGateway::sendPacket2Modem(std::unique_ptr<CPacket> pack)
+void CGateway::sendPacket2Modem(CPacket &pack)
 {
-	if (EPacketType::packet == pack->GetType())
+	if (EPacketType::packet == pack.GetType())
 	{
 		if (g_GateState.TryState(EGateState::gatepacketin))
-			Gate2Modem.Push(pack);
+			g2m.Send(pack.GetCData(), pack.GetSize());
 		else
 		{
-			const CCallsign dst(pack->GetCDstAddress());
-			const CCallsign src(pack->GetCSrcAddress());
-			LogInfo("PM data received from the Gateway, but the system was busy.");
-			LogInfo("SRC = %s, DST = %s", src.c_str(), dst.c_str());
-			if (0x5u == *pack->GetCPayload() and 0 == pack->GetCData()[pack->GetSize()-3])
-				LogInfo("SMS MSG: %s", (const char *)(pack->GetCPayload()+1));
+			const CCallsign dst(pack.GetCDstAddress());
+			const CCallsign src(pack.GetCSrcAddress());
+			printMsg(TC_MAGENTA, TC_YELLOW, "Packet mode data received from the Gateway, but the system was busy\n");
+			printMsg(TC_MAGENTA, TC_DEFAULT, "SRC = %s, DST = %s Message:\n", src.c_str(), dst.c_str());
+			if (0x5u == *pack.GetCPayload() and (0 == pack.GetCData()[pack.GetSize()-3]))
+				printMsg(TC_MAGENTA, TC_BLUE, "%s\n", (const char *)(pack.GetCPayload()+1));
 			else
-				Dump("Non-SMS DATA", pack->GetCPayload(), pack->GetSize()-34);
+				Dump(nullptr, pack.GetCPayload(), pack.GetSize()-34);
 		}
 		return;
 	}
-	const auto sid = pack->GetStreamId();
+	const auto sid = pack.GetStreamId();
 	if (gateStream.IsOpen())	// is the stream open?
 	{
 		if (gateStream.GetStreamID() == sid)
 		{
 			gateStream.CountnTouch();
-			auto islast = pack->IsLastPacket();
-			Gate2Modem.Push(pack);
+			auto islast = pack.IsLastPacket();
+			g2m.Send(pack.GetCData(), pack.GetSize());
 			if (islast)
 			{
 				gateStream.CloseStream(false); // close the stream
-				g_GateState.Idle();
 			}
-		}
-		else
-		{
-			pack.reset();  // this frame doesn't belong to the open stream
 		}
 	}
 	else
 	{
-		if (pack->IsLastPacket()) // don't open a stream on a last packet
+		if (pack.IsLastPacket()) // don't open a stream on a last packet
 		{
-			pack.reset();
 			g_GateState.Idle();
 			return;
 		}
@@ -623,15 +714,14 @@ void CGateway::sendPacket2Modem(std::unique_ptr<CPacket> pack)
 		//       In that case, up to a second of the beginning of the stream will be lost. Sorry.
 		if (sid == gateStream.GetPreviousID() and gateStream.GetLastTime() < 1.0)
 		{
-			pack.reset();
 			return;
 		}
 
 		// Open the stream
 		if (g_GateState.TryState(EGateState::gatestreamin))
 		{
-			gateStream.OpenStream(pack->GetCSrcAddress(), sid, from17k.GetAddress());
-			Gate2Modem.Push(pack);
+			gateStream.OpenStream(pack.GetCSrcAddress(), sid, from17k.GetAddress());
+			g2m.Send(pack.GetCData(), pack.GetSize());
 			gateStream.CountnTouch();
 		}
 	}
@@ -639,23 +729,23 @@ void CGateway::sendPacket2Modem(std::unique_ptr<CPacket> pack)
 }
 
 // this also opens and closes the modemStream
-void CGateway::sendPacket2Dest(std::unique_ptr<CPacket> pack)
+void CGateway::sendPacket2Dest(CPacket &pack)
 {
-	if (EPacketType::packet == pack->GetType())
+	if (EPacketType::packet == pack.GetType())
 	{
-		sendPacket(pack->GetCData(), pack->GetSize(), mlink.addr);
+		sendPacket(pack.GetCData(), pack.GetSize(), mlink.addr);
 		g_GateState.Idle();
 		return;
 	}
 
-	auto framesid = pack->GetStreamId();
+	auto framesid = pack.GetStreamId();
 	if (modemStream.IsOpen())	// is the stream open?
 	{
 		if (modemStream.GetStreamID() == framesid)
 		{	// Here's the next stream packet
-			auto islast = pack->IsLastPacket();
-			pack->CalcCRC();
-			sendPacket(pack->GetCData(), pack->GetSize(), mlink.addr);
+			auto islast = pack.IsLastPacket();
+			pack.CalcCRC();
+			sendPacket(pack.GetCData(), pack.GetSize(), mlink.addr);
 			modemStream.CountnTouch();
 			if (islast)
 			{
@@ -663,30 +753,24 @@ void CGateway::sendPacket2Dest(std::unique_ptr<CPacket> pack)
 				g_GateState.Idle();
 			}
 		}
-		else
-		{
-			pack.reset(); // this frame has the wrong SID
-		}
 	}
 	else
 	{
-		if (not pack->IsLastPacket()) // don't open a stream on a last packet
+		if (not pack.IsLastPacket()) // don't open a stream on a last packet
 		{
-			pack.reset();
 			g_GateState.Idle();
 			return;
 		}
 		// don't open a stream if this packet has the same SID as the last stream
 		if (framesid == modemStream.GetPreviousID() and modemStream.GetLastTime() < 1.0)
 		{
-			pack.reset();
 			g_GateState.Idle();
 			return;
 		}
 
 		// Open the Stream!!
-		modemStream.OpenStream(pack->GetCSrcAddress(), pack->GetStreamId(), "MSpot");
-		sendPacket(pack->GetCData(), pack->GetSize(), mlink.addr);
+		modemStream.OpenStream(pack.GetCSrcAddress(), pack.GetStreamId(), "MSpot");
+		sendPacket(pack.GetCData(), pack.GetSize(), mlink.addr);
 		modemStream.CountnTouch();
 	}
 }
@@ -724,14 +808,14 @@ bool CGateway::setDestination(const CCallsign &cs)
 		// if this is IPv6 only, we're done
 		if (EInternetType::ipv6only == internetType)
 		{
-			LogWarning("This IPv6-only system could not find an IPv6 address for '%s'", cs.c_str());
+			printMsg(TC_MAGENTA, TC_YELLOW, "This IPv6-only system could not find an IPv6 address for '%s'\n", cs.c_str());
 			return true;
 		}
 
 		// if the host is IPv6 only, we're also done
 		if (phost->ipv4address.empty())
 		{
-			LogWarning("There is no IPv4 address for '%s'", cs.c_str());
+			printMsg(TC_MAGENTA, TC_YELLOW, "There is no IPv4 address for '%s'\n", cs.c_str());
 			return true;
 		}
 
@@ -742,7 +826,7 @@ bool CGateway::setDestination(const CCallsign &cs)
 		return false;
 	}
 
-	LogWarning("Host '%s' not found", cs.c_str());
+	printMsg(TC_MAGENTA, TC_YELLOW, "Host '%s' not found\n", cs.c_str());
 	return true;
 }
 
@@ -758,7 +842,7 @@ void CGateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 	std::ofstream ofile(oFilePath, std::ios::binary | std::ios::trunc);
 	if (not ofile.is_open())
 	{
-		LogError("could not open %s", oFilePath.c_str());
+		printMsg(TC_MAGENTA, TC_RED, "could not open %s\n", oFilePath.c_str());
 		return;
 	}
 
@@ -786,14 +870,14 @@ void CGateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 	}
 	else
 	{
-		LogError("could not open %s", ap.c_str());
+		printMsg(TC_MAGENTA, TC_RED, "could not open %s\n", ap.c_str());
 		ofile.close();
 		return;
 	}
 
 	if (words.size() < 67)
 	{
-		LogError("Only found %u words in %s", words.size(), speakPath.c_str());
+		printMsg(TC_MAGENTA, TC_RED, "Only found %u words in %s\n", words.size(), speakPath.c_str());
 		ofile.close();
 		return;
 	}
@@ -804,11 +888,11 @@ void CGateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 	if (not sfile.is_open())
 	{
 		ofile.close();
-		LogError("Could not open %s", speakPath.c_str());
+		printMsg(TC_MAGENTA, TC_RED, "Could not open %s\n", speakPath.c_str());
 		return;
 	}
 
-	LogInfo("Building '%s' at %s", cs.c_str(), oFilePath.c_str());
+	printMsg(TC_MAGENTA, TC_DEFAULT, "Building '%s' at %s\n", cs.c_str(), oFilePath.c_str());
 
 	// fill the output file with voice data
 	auto callsign(cs.GetCS(8));
@@ -832,7 +916,7 @@ void CGateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
 		// now add the word to the data
 		if (0 == indx)
 		{
-			LogInfo("adding quiet (for ' ' at position %u)", pos);
+			printMsg(TC_MAGENTA, TC_DEFAULT, "adding quiet (for ' ' at position %u)\n", pos);
 			// insert 200 millisecond of quiet, this is a ' ' in the callsign (very rare)
 			for (int n=0; n<10; n++)
 				ofile.write(reinterpret_cast<const char *>(quiet), 8);
@@ -909,11 +993,11 @@ unsigned CGateway::PlayVoiceFiles(std::string message)
 			uint16_t fn = ((count / 2u) % 0x8000u);
 			master.SetFrameNumber(fn);
 			master.CalcCRC();
-			auto pack = std::make_unique<CPacket>();
-			pack->Initialize(EPacketType::stream, master.GetCData());
+			CPacket pack;
+			pack.Initialize(EPacketType::stream, master.GetCData());
 			clock = clock + std::chrono::milliseconds(40);
 			std::this_thread::sleep_until(clock);
-			Gate2Modem.Push(pack);
+			g2m.Send(pack.GetCData(), pack.GetSize());
 		}
 		else
 		{	// counter is even, this goes in the first half
@@ -932,21 +1016,21 @@ unsigned CGateway::PlayVoiceFiles(std::string message)
 
 		if (not std::filesystem::exists(afp))
 		{
-			LogError("'%s' does not exist", afp.c_str());
+			printMsg(TC_MAGENTA, TC_RED, "'%s' does not exist\n", afp.c_str());
 			continue;
 		}
 
 		unsigned fsize = std::filesystem::file_size(afp);
 		if (fsize % 8 or fsize == 0)
 		{
-			LogWarning("'%s' size, %u, is not a multiple of 8", afp.c_str(), fsize);
+			printMsg(TC_MAGENTA, TC_YELLOW, "'%s' size, %u, is not a multiple of 8\n", afp.c_str(), fsize);
 		}
 		fsize /= 8u; // count of 1/2 of a 16 byte payload, 20 ms
 
 		ifile.open(afp.c_str(), std::ios::binary);
 		if (not ifile.is_open())
 		{
-			LogError("'%s' could not be opened", afp.c_str());
+			printMsg(TC_MAGENTA, TC_RED, "'%s' could not be opened\n", afp.c_str());
 			continue;
 		}
 
@@ -963,12 +1047,12 @@ unsigned CGateway::PlayVoiceFiles(std::string message)
 				master.CalcCRC(); // seal it with the CRC
 
 				// make the packet to pass to the modem
-				auto pack = std::make_unique<CPacket>();
-				pack->Initialize(EPacketType::stream, master.GetCData());
+				CPacket pack;
+				pack.Initialize(EPacketType::stream, master.GetCData());
 				clock = clock + std::chrono::milliseconds(40);
 				std::this_thread::sleep_until(clock); // the frames will go out every 40 milliseconds
 				//LogDebug("pushing msg packet 0x%04x", pack->GetFrameNumber());
-				Gate2Modem.Push(pack);
+				g2m.Send(pack.GetCData(), pack.GetSize());
 			}
 			else
 			{	// counter is even, this is the first 20 ms of C2_3200 data
@@ -988,12 +1072,12 @@ unsigned CGateway::PlayVoiceFiles(std::string message)
 					uint16_t fn = ((count / 2u) % 0x8000u);
 					master.SetFrameNumber(fn);
 					master.CalcCRC();
-					auto pack = std::make_unique<CPacket>();
-					pack->Initialize(EPacketType::stream, master.GetCData());
+					CPacket pack;
+					pack.Initialize(EPacketType::stream, master.GetCData());
 					clock = clock + std::chrono::milliseconds(40);
 					std::this_thread::sleep_until(clock);
 					//LogDebug("pushing msg packet 0x%04x", pack->GetFrameNumber());
-					Gate2Modem.Push(pack);
+					g2m.Send(pack.GetCData(), pack.GetSize());
 				}
 				else
 				{	// counter is even, this goes in the first half
@@ -1009,12 +1093,12 @@ unsigned CGateway::PlayVoiceFiles(std::string message)
 		uint16_t fn = ((count %0x8000u) / 2u) + 0x8000u;
 		master.SetFrameNumber(fn);
 		master.CalcCRC();
-		auto pack = std::make_unique<CPacket>();
-		pack->Initialize(EPacketType::stream, master.GetCData());
+		CPacket pack;
+		pack.Initialize(EPacketType::stream, master.GetCData());
 		clock = clock + std::chrono::milliseconds(40);
 		std::this_thread::sleep_until(clock);
 		//LogDebug("pushing msg packet 0x%04x", pack->GetFrameNumber());
-		Gate2Modem.Push(pack);
+		g2m.Send(pack.GetCData(), pack.GetSize());
 	}
 
 	// this thread can be harvested

@@ -25,7 +25,7 @@
 
 #include "Base.h"
 
-void CBase::printMsg(const char *tsColor, const char *txColor, const char* fmt, ...)
+void CBase::printMsg(const char *tsColor, const char *txColor, const char* fmt, ...) const
 {
 	if (nullptr == fmt)
 		return;	// this should never happen
@@ -62,7 +62,7 @@ void CBase::printMsg(const char *tsColor, const char *txColor, const char* fmt, 
 		fflush(stdout);
 }
 
-void CBase::timeStamp(const char *color_esc)
+void CBase::timeStamp(const char *color_esc) const
 {
 	struct timeval now;
 	gettimeofday(&now, nullptr);
@@ -71,7 +71,7 @@ void CBase::timeStamp(const char *color_esc)
 }
 
 
-void CBase::Dump(const char *title, const void *pointer, unsigned length)
+void CBase::Dump(const char *title, const void *pointer, unsigned length) const
 {
 	const unsigned char *data = (const unsigned char *)pointer;
 

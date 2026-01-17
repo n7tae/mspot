@@ -25,7 +25,6 @@
 #include <sys/ioctl.h>
 #include <arpa/inet.h>
 
-#include "Log.h"
 #include "UDPSocket.h"
 
 CUDPSocket::CUDPSocket() : m_fd(-1) {}
@@ -41,13 +40,13 @@ bool CUDPSocket::Open(const CSockAddress &addr)
 	m_fd = socket(addr.GetFamily(), SOCK_DGRAM, 0);
 	if (0 > m_fd)
 	{
-		LogError("socket() on %s: %s", addr.GetAddress(), strerror(errno));
+		printMsg(TC_YELLOW, TC_RED, "socket() on %s: %s\n", addr.GetAddress(), strerror(errno));
 		return true;
 	}
 
 	if (0 > fcntl(m_fd, F_SETFL, O_NONBLOCK))
 	{
-		LogError("cannot set socket %s to non-blocking", addr.GetAddress());
+		printMsg(TC_YELLOW, TC_RED, "cannot set socket %s to non-blocking\n", addr.GetAddress());
 		close(m_fd);
 		m_fd = -1;
 		return true;
@@ -56,7 +55,7 @@ bool CUDPSocket::Open(const CSockAddress &addr)
 	const int reuse = 1;
 	if (0 > setsockopt(m_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(int)))
 	{
-		LogError("setsockopt() on %s err: %s", addr.GetAddress(), strerror(errno));
+		printMsg(TC_YELLOW, TC_RED, "setsockopt() on %s err: %s\n", addr.GetAddress(), strerror(errno));
 		close(m_fd);
 		m_fd = -1;
 		return true;
@@ -67,7 +66,7 @@ bool CUDPSocket::Open(const CSockAddress &addr)
 
 	if (0 != bind(m_fd, m_addr.GetCPointer(), m_addr.GetSize()))
 	{
-		LogError("bind() on %s err: %s", addr.GetAddress(), strerror(errno));
+		printMsg(TC_YELLOW, TC_RED, "bind() on %s err: %s\n", addr.GetAddress(), strerror(errno));
 		close(m_fd);
 		m_fd = -1;
 		return true;
@@ -77,12 +76,12 @@ bool CUDPSocket::Open(const CSockAddress &addr)
 		CSockAddress a;
 		socklen_t len = sizeof(struct sockaddr_storage);
 		if (getsockname(m_fd, a.GetPointer(), &len)) {
-			LogError("getsockname()) on %s err: %s", addr.GetAddress(), strerror(errno));
+			printMsg(TC_YELLOW, TC_RED, "getsockname()) on %s err: %s\n", addr.GetAddress(), strerror(errno));
 			Close();
 			return false;
 		}
 		if (a != m_addr)
-			LogWarning("getsockname didn't return the same address as set: returned %s, should have been %s", a.GetAddress(), m_addr.GetAddress());
+			printMsg(TC_YELLOW, TC_RED, "getsockname didn't return the same address as set: returned %s, should have been %s\n", a.GetAddress(), m_addr.GetAddress());
 
 		m_addr.SetPort(a.GetPort());
 	}
@@ -94,7 +93,7 @@ void CUDPSocket::Close(void)
 {
 	if ( m_fd >= 0 )
 	{
-		LogInfo("Closing socket %d on %s", m_fd, m_addr.GetAddress());
+		printMsg(TC_YELLOW, TC_RED, "Closing socket %d on %s\n", m_fd, m_addr.GetAddress());
 		close(m_fd);
 		m_fd = -1;
 	}
@@ -111,7 +110,7 @@ ssize_t CUDPSocket::Read(unsigned char *buf, const size_t size, CSockAddress &Ip
 	unsigned int len = sizeof(struct sockaddr_storage);
 	auto rval = recvfrom(m_fd, buf, size, 0, Ip.GetPointer(), &len);
 	if (0 > rval)
-		LogError("recvfrom() on %s: %s", m_addr.GetAddress(), strerror(errno));
+		printMsg(TC_YELLOW, TC_RED, "recvfrom() error on %s: %s\n", m_addr.GetAddress(), strerror(errno));
 
 	return rval;
 }
@@ -121,8 +120,8 @@ ssize_t CUDPSocket::Write(const void *Buffer, const size_t size, const CSockAddr
 	//std::cout << "Sent " << size << " bytes to " << Ip << std::endl;
 	auto rval = sendto(m_fd, Buffer, size, 0, Ip.GetCPointer(), Ip.GetSize());
 	if (0 > rval)
-		LogError("sendto() on %s: %s", Ip.GetAddress(), strerror(errno));
+		printMsg(TC_YELLOW, TC_RED, "sendto() error on %s: %s\n", Ip.GetAddress(), strerror(errno));
 	else if ((size_t)rval != size)
-		LogWarning("Short Write, %d < %u to %s", rval, size, Ip.GetAddress());
+		printMsg(TC_YELLOW, TC_RED, "Short Write, %d < %u to %s\n", rval, size, Ip.GetAddress());
 	return rval;
 }

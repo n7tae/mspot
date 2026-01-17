@@ -22,7 +22,9 @@
 #include <string>
 #include <cstring>
 
-class CCallsign
+#include "Base.h"
+
+class CCallsign : public CBase
 {
 public:
 	CCallsign();
