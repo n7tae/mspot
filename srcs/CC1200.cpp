@@ -899,7 +899,7 @@ void CCC1200::txProcess()
 			filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
 			writeDev(bsb_samples, sizeof(bsb_samples), "SM Frame");
 			if (cfg.debug)
-				(TC_CYAN, TC_GREEN, "GWY STR FN: 0x%04x\n", frame_count);
+				printMsg(TC_CYAN, TC_GREEN, "GWY STR FN: 0x%04x\n", frame_count);
 		}
 
 		if (pack.IsLastPacket()) //last stream frame
