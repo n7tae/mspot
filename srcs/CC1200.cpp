@@ -833,7 +833,7 @@ void CCC1200::txProcess()
 			memset(meta+12, 0, 2);                              // zero the last 2 bytes
 			txlsf.CalcCRC();                                    // this LSF is done!
 
-			printMsg(TC_CYAN, TC_GREEN, " Stream TX start\n");
+			printMsg(TC_CYAN, TC_GREEN, "Stream TX start\n");
 
 			//stop RX, set PA_EN=1 and initialize TX
 			while (stopRx())
@@ -912,7 +912,7 @@ void CCC1200::txProcess()
 			filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
 			writeDev(bsb_samples, sizeof(bsb_samples), "SM EOT");
 
-			printMsg(TC_CYAN, TC_GREEN, " Stream TX end\n");
+			printMsg(TC_CYAN, TC_GREEN, "Stream TX end\n");
 			usleep(8*40e3); //wait 320ms (8 M17 frames) - let the transmitter consume all the buffered samples
 
 			//restart RX
@@ -920,7 +920,7 @@ void CCC1200::txProcess()
 				usleep(40e3);
 			while (startRx())
 				usleep(40e3);
-			printMsg(TC_CYAN, TC_GREEN, " RX start\n");
+			printMsg(TC_CYAN, TC_GREEN, "RX start\n");
 			g_GateState.Set2IdleIf(EGateState::gatestreamin);
 
 			tx_state = ETxState::idle;
@@ -1198,7 +1198,7 @@ void CCC1200::rxProcess()
 			}
 
 			//stream frame received
-			else if (sed_str <= 25.0f)
+			else if (sed_str <= 20.0f)
 			{
 				sample_cnt = 0; // packet frame
 				//find L2's minimum
