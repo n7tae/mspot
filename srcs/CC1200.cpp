@@ -789,243 +789,120 @@ void CCC1200::Run()
 
 void CCC1200::txProcess()
 {
-	std::unique_ptr<CPacket> pack;
+	CPacket pack;
 	uint8_t buf[859];
+
 	auto len = g2m.Read(buf, sizeof(buf), "CC1200");
 	if ((len == 54) and (0 == memcmp(buf, "M17 ", 4))) {
-		pack = std::make_unique<CPacket>();
-		pack->Initialize(EPacketType::stream, buf);
+		pack.Initialize(EPacketType::stream, buf);
 	} else if ((len > 27) and (0 == memcmp(buf, "M17P", 4))) {
-		pack = std::make_unique<CPacket>();
-		pack->Initialize(EPacketType::packet, buf, len);
+		pack.Initialize(EPacketType::packet, buf, len);
 	}
-	if (pack)
+
+	if (EPacketType::none == pack.GetType())
 	{
-		if (EPacketType::stream == pack->GetType())
+		printMsg(TC_CYAN, TC_RED, "Unknown packet type from the Gateway:\n");
+		Dump(nullptr, buf, len);
+		return;
+	}
+
+	if (EPacketType::stream == pack.GetType())
+	{
+		int8_t frame_symbols[SYM_PER_FRA];					// raw frame symbols
+		int8_t bsb_samples[963] = {CMD_TX_DATA, -61, 3};	// baseband samples wrapped in a frame
+
+		if (tx_state == ETxState::idle) // first received frame
 		{
-			int8_t frame_symbols[SYM_PER_FRA];					// raw frame symbols
-			int8_t bsb_samples[963] = {CMD_TX_DATA, -61, 3};	// baseband samples wrapped in a frame
+			if (pack.IsLastPacket())
+				return;
+			tx_state = ETxState::active;
 
-			if (tx_state == ETxState::idle and (not pack->IsLastPacket())) // first received frame
-			{
-				tx_state = ETxState::active;
+			usleep(10e3);
 
-				usleep(10e3);
+			frame_count = 0; // we'll renumber each frame starting from zero
+			// now we'll make the LSF
+			memcpy(txlsf.GetData(), pack.GetCDstAddress(), 12); // copy the dst & src
+			txType.SetFrameType(txlsf.GetFrameType());          // get the TYPE
+			txType.SetMetaDataType(EMetaDatType::ecd);        // set the META to extended c/s data
+			// the next line will set the frame TYPE according to the configured user's radio
+			txlsf.SetFrameType(txType.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
+			auto meta = txlsf.GetMetaData();             // save the address to the meta array
+			g_Gateway.GetLink().CodeOut(meta);            // put the linked reflect into the 1st position
+			memcpy(meta+6, pack.GetCSrcAddress(), 6); // and the src c/s in the 2nd position
+			memset(meta+12, 0, 2);                     // zero the last 2 bytes
+			txlsf.CalcCRC();                             // this LSF is done!
 
-				frame_count = 0; // we'll renumber each frame starting from zero
-				// now we'll make the LSF
-				memcpy(txlsf.GetData(), pack->GetCDstAddress(), 12); // copy the dst & src
-				txType.SetFrameType(txlsf.GetFrameType());          // get the TYPE
-				txType.SetMetaDataType(EMetaDatType::ecd);        // set the META to extended c/s data
-				// the next line will set the frame TYPE according to the configured user's radio
-				txlsf.SetFrameType(txType.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
-				auto meta = txlsf.GetMetaData();             // save the address to the meta array
-				g_Gateway.GetLink().CodeOut(meta);            // put the linked reflect into the 1st position
-				memcpy(meta+6, pack->GetCSrcAddress(), 6); // and the src c/s in the 2nd position
-				memset(meta+12, 0, 2);                     // zero the last 2 bytes
-				txlsf.CalcCRC();                             // this LSF is done!
-
-				printMsg(TC_CYAN, TC_GREEN, " Stream TX start\n");
-
-				//stop RX, set PA_EN=1 and initialize TX
-				while (stopRx())
-					usleep(40e3);
-				usleep(2e3);
-				while (startTx())
-					usleep(40e3);
-				usleep(10e3);
-
-				//flush the RRC baseband filter
-				filterSymbols(nullptr, nullptr, nullptr, 0);
-			
-				//generate frame symbols, filter them and send out to the device
-				//we need to prepare 3 frames to begin the transmission - preamble, LSF and stream frame 0
-				//let's start with the preamble
-				uint32_t frame_buff_cnt=0;
-				gen_preamble_i8(frame_symbols, &frame_buff_cnt, PREAM_LSF);
-
-				//filter and send out to the device
-				filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
-				writeDev(bsb_samples, sizeof(bsb_samples), "SM Pream");
-
-				//now the LSF
-				gen_frame_i8(frame_symbols, nullptr, FRAME_LSF, (lsf_t *)(txlsf.GetCData()), 0, 0);
-
-				//filter and send out to the device
-				filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
-				writeDev(bsb_samples, sizeof(bsb_samples), "SM LSF");
-
-				//finally, the first frame
-				gen_frame_i8(frame_symbols, pack->GetCPayload(), FRAME_STR, (const lsf_t *)(rxlsf.GetCData()), 0, 0);
-
-				//filter and send out to the device
-				filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
-				writeDev(bsb_samples, sizeof(bsb_samples), "SM first Frame");
-			}
-			else
-			{
-				if (0 == ++frame_count % 6u)
-				{
-					// make a LSF from the LSD in this packet
-					memcpy(txlsf.GetData(), pack->GetCDstAddress(), 28);
-					txType.SetFrameType(pack->GetFrameType());
-					pack->SetFrameType(txType.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
-					txlsf.CalcCRC();
-				}
-				uint8_t lich_count = frame_count % 6u;
-				if (pack->IsLastPacket())
-					frame_count |= 0x8000u;
-
-				//only one frame is needed
-				gen_frame_i8(frame_symbols, pack->GetCPayload(), FRAME_STR, (lsf_t *)(txlsf.GetCData()), lich_count, frame_count);
-
-				//filter and send out to the device
-				filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
-				writeDev(bsb_samples, sizeof(bsb_samples), "SM Frame");
-			}
-
-			if (pack->IsLastPacket()) //last stream frame
-			{
-				//send the final EOT marker
-				uint32_t frame_buff_cnt=0;
-				gen_eot_i8(frame_symbols, &frame_buff_cnt);
-
-				//filter and send out to the device
-				filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
-				writeDev(bsb_samples, sizeof(bsb_samples), "SM EOT");
-
-				printMsg(TC_CYAN, TC_GREEN, " Stream TX end\n");
-				usleep(8*40e3); //wait 320ms (8 M17 frames) - let the transmitter consume all the buffered samples
-
-				//restart RX
-				while (stopTx())
-					usleep(40e3);
-				while (startRx())
-					usleep(40e3);
-				printMsg(TC_CYAN, TC_GREEN, " RX start\n");
-				g_GateState.Set2IdleIf(EGateState::gatestreamin);
-
-				tx_state = ETxState::idle;
-			}
-			tx_timer = getMS();
-		}
-
-		//M17 packet data - "Packet Mode IP Packet"
-		else if (EPacketType::packet == pack->GetType())
-		{
-			printMsg(TC_CYAN, TC_GREEN, " M17 Inet packet received\n");
-
-			const CCallsign dst(pack->GetCDstAddress());
-			const CCallsign src(pack->GetCSrcAddress());
-			CFrameType TYPE(pack->GetFrameType());
-			if ((cfg.isV3 ? EVersionType::v3 : EVersionType::legacy) != TYPE.GetVersion())
-			{
-				pack->SetFrameType(TYPE.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
-				pack->CalcCRC();
-			}
-			const auto can = TYPE.GetCan();
-			const unsigned type = *(pack->GetCPayload());
-			
-			printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
-			printMsg(nullptr, TC_YELLOW, "DST: ");
-			printMsg(nullptr, TC_DEFAULT, "%s\n", dst.c_str());
-			printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
-			printMsg(nullptr, TC_YELLOW, "SRC: ");
-			printMsg(nullptr, TC_DEFAULT, "%s\n", src.c_str());
-			printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
-			printMsg(nullptr, TC_YELLOW, "CAN: ");
-			printMsg(nullptr, TC_DEFAULT, "%u\n", unsigned(can));
-			if (type != 5u or *(pack->GetCPayload()+pack->GetSize()-3)) //assuming 1-byte type specifier
-			{
-				printMsg(TC_CYAN, TC_DEFAULT, " └ ");
-				printMsg(nullptr, TC_YELLOW, "TYPE: ");
-				printMsg(nullptr, TC_DEFAULT, "%u\n", unsigned(pack->GetCPayload()[0]));
-			}
-			else
-			{
-				printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
-				printMsg(nullptr, TC_YELLOW, "TYPE: ");
-				printMsg(nullptr, TC_DEFAULT, "SMS\n");
-				printMsg(TC_CYAN, TC_DEFAULT, " └ ");
-				printMsg(nullptr, TC_YELLOW, "MSG: ");
-				printMsg(nullptr, TC_DEFAULT, "%s\n", (char *)(pack->GetPayload()+1));
-			}
-
-			//TODO: handle TX here
-			int8_t frame_symbols[SYM_PER_FRA];						//raw frame symbols
-			int8_t bsb_samples[SYM_PER_FRA*5];						//filtered baseband samples = symbols*sps
-			uint8_t bsb_chunk[963] = {CMD_TX_DATA, 0xC3, 0x03};		//baseband samples wrapped in a frame
-			
-			printMsg(TC_CYAN, TC_GREEN, " Packet TX start\n");
+			printMsg(TC_CYAN, TC_GREEN, " Stream TX start\n");
 
 			//stop RX, set PA_EN=1 and initialize TX
 			while (stopRx())
 				usleep(40e3);
 			usleep(2e3);
-
 			while (startTx())
 				usleep(40e3);
 			usleep(10e3);
-			
+
 			//flush the RRC baseband filter
 			filterSymbols(nullptr, nullptr, nullptr, 0);
-			
+		
 			//generate frame symbols, filter them and send out to the device
 			//we need to prepare 3 frames to begin the transmission - preamble, LSF and stream frame 0
 			//let's start with the preamble
-			uint32_t frame_buff_cnt = 0;
+			uint32_t frame_buff_cnt=0;
 			gen_preamble_i8(frame_symbols, &frame_buff_cnt, PREAM_LSF);
-			
-			//filter and send out to the device
-			filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
-			memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
-			writeDev(bsb_samples, sizeof(bsb_samples), "PM LSF Pream");
-			
-			//now the LSF
-			gen_frame_i8(frame_symbols, nullptr, FRAME_LSF, (lsf_t*)(pack->GetCDstAddress()), 0, 0);
-			
-			//filter and send out to the device
-			filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
-			memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
-			writeDev(bsb_samples, sizeof(bsb_samples), "PM LSF");
-			
-			//packet frames
-			uint16_t pld_len = pack->GetSize() - 34u;
-			uint8_t frame = 0;
-			uint8_t pld[26];
-			
-			while(pld_len > 25)
-			{
-				memcpy(pld, pack->GetCPayload()+(frame*25), 25);
-				pld[25] = frame<<2;
-				gen_frame_i8(frame_symbols, pld, FRAME_PKT, nullptr, 0, 0);
-				filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
-				memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
-				writeDev(bsb_samples, sizeof(bsb_samples), "PM Frame");
-				pld_len -= 25;
-				frame++;
-				usleep(40*1000U);
-			}
-			memset(pld, 0, 26);
-			memcpy(pld, pack->GetCPayload()+(frame*25), pld_len);
-			pld[25] = (1<<7)  | (pld_len<<2); //EoT flag set, amount of remaining data in the 'frame number' field
-			gen_frame_i8(frame_symbols, pld, FRAME_PKT, nullptr, 0, 0);
-			filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
-			memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
-			writeDev(bsb_samples, sizeof(bsb_samples), "PM Frame");
-			usleep(40*1000U);
 
-			//now the final EOT marker
-			frame_buff_cnt=0;
+			//filter and send out to the device
+			filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+			writeDev(bsb_samples, sizeof(bsb_samples), "SM Pream");
+
+			//now the LSF
+			gen_frame_i8(frame_symbols, nullptr, FRAME_LSF, (lsf_t *)(txlsf.GetCData()), 0, 0);
+
+			//filter and send out to the device
+			filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+			writeDev(bsb_samples, sizeof(bsb_samples), "SM LSF");
+
+			//finally, the first frame
+			gen_frame_i8(frame_symbols, pack.GetCPayload(), FRAME_STR, (const lsf_t *)(rxlsf.GetCData()), 0, 0);
+
+			//filter and send out to the device
+			filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+			writeDev(bsb_samples, sizeof(bsb_samples), "SM first Frame");
+		}
+		else
+		{
+			if (0 == ++frame_count % 6u)
+			{
+				// make a LSF from the LSD in this packet
+				memcpy(txlsf.GetData(), pack.GetCDstAddress(), 28);
+				txType.SetFrameType(pack.GetFrameType());
+				pack.SetFrameType(txType.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
+				txlsf.CalcCRC();
+			}
+			uint8_t lich_count = frame_count % 6u;
+			if (pack.IsLastPacket())
+				frame_count |= 0x8000u;
+
+			//only one frame is needed
+			gen_frame_i8(frame_symbols, pack.GetCPayload(), FRAME_STR, (lsf_t *)(txlsf.GetCData()), lich_count, frame_count);
+
+			//filter and send out to the device
+			filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+			writeDev(bsb_samples, sizeof(bsb_samples), "SM Frame");
+		}
+
+		if (pack.IsLastPacket()) //last stream frame
+		{
+			//send the final EOT marker
+			uint32_t frame_buff_cnt=0;
 			gen_eot_i8(frame_symbols, &frame_buff_cnt);
 
 			//filter and send out to the device
-			filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
-			memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
-			writeDev(bsb_samples, sizeof(bsb_samples), "PM EOT");
+			filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
+			writeDev(bsb_samples, sizeof(bsb_samples), "SM EOT");
 
-			printMsg(TC_CYAN, TC_GREEN, " PKT TX end\n");
-			usleep(3*40e3); //wait 120ms (3 M17 frames)
+			printMsg(TC_CYAN, TC_GREEN, " Stream TX end\n");
+			usleep(8*40e3); //wait 320ms (8 M17 frames) - let the transmitter consume all the buffered samples
 
 			//restart RX
 			while (stopTx())
@@ -1033,12 +910,141 @@ void CCC1200::txProcess()
 			while (startRx())
 				usleep(40e3);
 			printMsg(TC_CYAN, TC_GREEN, " RX start\n");
-
-			g_GateState.Set2IdleIf(EGateState::gatepacketin);
-			tx_timer = getMS();
+			g_GateState.Set2IdleIf(EGateState::gatestreamin);
 
 			tx_state = ETxState::idle;
 		}
+		tx_timer = getMS();
+	}
+
+	//M17 packet data - "Packet Mode IP Packet"
+	else if (EPacketType::packet == pack.GetType())
+	{
+		printMsg(TC_CYAN, TC_GREEN, " M17 Inet packet received\n");
+
+		const CCallsign dst(pack.GetCDstAddress());
+		const CCallsign src(pack.GetCSrcAddress());
+		CFrameType TYPE(pack.GetFrameType());
+		if ((cfg.isV3 ? EVersionType::v3 : EVersionType::legacy) != TYPE.GetVersion())
+		{
+			pack.SetFrameType(TYPE.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
+			pack.CalcCRC();
+		}
+		const auto can = TYPE.GetCan();
+		const unsigned type = *(pack.GetCPayload());
+		
+		printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
+		printMsg(nullptr, TC_YELLOW, "DST: ");
+		printMsg(nullptr, TC_DEFAULT, "%s\n", dst.c_str());
+		printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
+		printMsg(nullptr, TC_YELLOW, "SRC: ");
+		printMsg(nullptr, TC_DEFAULT, "%s\n", src.c_str());
+		printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
+		printMsg(nullptr, TC_YELLOW, "CAN: ");
+		printMsg(nullptr, TC_DEFAULT, "%u\n", unsigned(can));
+		if (type != 5u or *(pack.GetCPayload()+pack.GetSize()-3)) //assuming 1-byte type specifier
+		{
+			printMsg(TC_CYAN, TC_DEFAULT, " └ ");
+			printMsg(nullptr, TC_YELLOW, "TYPE: ");
+			printMsg(nullptr, TC_DEFAULT, "%u\n", unsigned(pack.GetCPayload()[0]));
+		}
+		else
+		{
+			printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
+			printMsg(nullptr, TC_YELLOW, "TYPE: ");
+			printMsg(nullptr, TC_DEFAULT, "SMS\n");
+			printMsg(TC_CYAN, TC_DEFAULT, " └ ");
+			printMsg(nullptr, TC_YELLOW, "MSG: ");
+			printMsg(nullptr, TC_DEFAULT, "%s\n", (char *)(pack.GetPayload()+1));
+		}
+
+		//TODO: handle TX here
+		int8_t frame_symbols[SYM_PER_FRA];						//raw frame symbols
+		int8_t bsb_samples[SYM_PER_FRA*5];						//filtered baseband samples = symbols*sps
+		uint8_t bsb_chunk[963] = {CMD_TX_DATA, 0xC3, 0x03};		//baseband samples wrapped in a frame
+		
+		printMsg(TC_CYAN, TC_GREEN, " Packet TX start\n");
+
+		//stop RX, set PA_EN=1 and initialize TX
+		while (stopRx())
+			usleep(40e3);
+		usleep(2e3);
+
+		while (startTx())
+			usleep(40e3);
+		usleep(10e3);
+		
+		//flush the RRC baseband filter
+		filterSymbols(nullptr, nullptr, nullptr, 0);
+		
+		//generate frame symbols, filter them and send out to the device
+		//we need to prepare 3 frames to begin the transmission - preamble, LSF and stream frame 0
+		//let's start with the preamble
+		uint32_t frame_buff_cnt = 0;
+		gen_preamble_i8(frame_symbols, &frame_buff_cnt, PREAM_LSF);
+		
+		//filter and send out to the device
+		filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
+		memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
+		writeDev(bsb_samples, sizeof(bsb_samples), "PM LSF Pream");
+		
+		//now the LSF
+		gen_frame_i8(frame_symbols, nullptr, FRAME_LSF, (lsf_t*)(pack.GetCDstAddress()), 0, 0);
+		
+		//filter and send out to the device
+		filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
+		memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
+		writeDev(bsb_samples, sizeof(bsb_samples), "PM LSF");
+		
+		//packet frames
+		uint16_t pld_len = pack.GetSize() - 34u;
+		uint8_t frame = 0;
+		uint8_t pld[26];
+		
+		while(pld_len > 25)
+		{
+			memcpy(pld, pack.GetCPayload()+(frame*25), 25);
+			pld[25] = frame<<2;
+			gen_frame_i8(frame_symbols, pld, FRAME_PKT, nullptr, 0, 0);
+			filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
+			memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
+			writeDev(bsb_samples, sizeof(bsb_samples), "PM Frame");
+			pld_len -= 25;
+			frame++;
+			usleep(40*1000U);
+		}
+		memset(pld, 0, 26);
+		memcpy(pld, pack.GetCPayload()+(frame*25), pld_len);
+		pld[25] = (1<<7)  | (pld_len<<2); //EoT flag set, amount of remaining data in the 'frame number' field
+		gen_frame_i8(frame_symbols, pld, FRAME_PKT, nullptr, 0, 0);
+		filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
+		memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
+		writeDev(bsb_samples, sizeof(bsb_samples), "PM Frame");
+		usleep(40*1000U);
+
+		//now the final EOT marker
+		frame_buff_cnt=0;
+		gen_eot_i8(frame_symbols, &frame_buff_cnt);
+
+		//filter and send out to the device
+		filterSymbols(bsb_samples, frame_symbols, rrc_taps_5_poly, 0);
+		memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
+		writeDev(bsb_samples, sizeof(bsb_samples), "PM EOT");
+
+		printMsg(TC_CYAN, TC_GREEN, " PKT TX end\n");
+		usleep(3*40e3); //wait 120ms (3 M17 frames)
+
+		//restart RX
+		while (stopTx())
+			usleep(40e3);
+		while (startRx())
+			usleep(40e3);
+		printMsg(TC_CYAN, TC_GREEN, " RX start\n");
+
+		g_GateState.Set2IdleIf(EGateState::gatepacketin);
+		tx_timer = getMS();
+
+		tx_state = ETxState::idle;
 	}
 
 	//tx timeout
