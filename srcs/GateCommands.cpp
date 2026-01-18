@@ -209,7 +209,7 @@ void CGateway::doRecord(char c, uint16_t streamID)
 	std::ofstream ofs(pathname, std::ios::binary | std::ios::trunc);
 	if (ofs.is_open())
 	{
-		while (true)
+		while (not fifo.empty())
 		{
 			ofs.write((char *)fifo.front().Data(), 16);
 			fifo.pop();
