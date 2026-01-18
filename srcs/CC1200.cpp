@@ -706,7 +706,6 @@ bool CCC1200::Start()
 		return true;
 	} else if (setAttributes(cfg.baudRate, 0))
 		return true;
-	printMsg(nullptr, TC_GREEN, " OK\n");
 
 	// prepare unix sockets
 	m2g.SetUp(Modem2Gate);
@@ -775,12 +774,12 @@ void CCC1200::Run()
 		{
 			txProcess();
 		}
-		auto ccerr = (pfd[0].revents != POLLIN);
+		auto ccerr = (pfd[0].revents & short(~POLLIN));
 		if (ccerr) {
 			printMsg(TC_RED, TC_YELLOW, "%s returned error to poll() in revents: %d\n", cfg.uartDev.c_str(), ccerr);
 			break;
 		}
-		auto gerr = (pfd[1].revents != POLLIN);
+		auto gerr = (pfd[1].revents & short(~POLLIN));
 		if (gerr) {
 			printMsg(TC_RED, TC_YELLOW, "Gateway returned error to poll() in revents: %d\n", gerr);
 			break;
