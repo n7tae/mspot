@@ -1070,8 +1070,8 @@ void CCC1200::rxProcess()
 	uart_lock = true;
 	if (readDev(&rx_bsb_sample, 1))
 	{
-		return;
 		uart_lock = false;
+		return;
 	}
 
 	rx_header.Push(rx_bsb_sample);

@@ -183,7 +183,7 @@ bool CGateway::Start()
 			return true;
 		if (ipv4.Open(addr))
 			return true;
-		printMsg(TC_MAGENTA, TC_DEFAULT, "Gateway listening on %s:%u", addr.GetAddress(), ipv4.GetPort());
+		printMsg(TC_MAGENTA, TC_DEFAULT, "Gateway listening on %s:%u\n", addr.GetAddress(), ipv4.GetPort());
 	}
 	if (EInternetType::ipv4only != internetType)
 	{
