@@ -822,15 +822,16 @@ void CCC1200::txProcess()
 			frame_count = 0; // we'll renumber each frame starting from zero
 			// now we'll make the LSF
 			memcpy(txlsf.GetData(), pack.GetCDstAddress(), 12); // copy the dst & src
-			txType.SetFrameType(txlsf.GetFrameType());          // get the TYPE
-			txType.SetMetaDataType(EMetaDatType::ecd);        // set the META to extended c/s data
-			// the next line will set the frame TYPE according to the configured user's radio
-			txlsf.SetFrameType(txType.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
-			auto meta = txlsf.GetMetaData();             // save the address to the meta array
-			g_Gateway.GetLink().CodeOut(meta);            // put the linked reflect into the 1st position
-			memcpy(meta+6, pack.GetCSrcAddress(), 6); // and the src c/s in the 2nd position
-			memset(meta+12, 0, 2);                     // zero the last 2 bytes
-			txlsf.CalcCRC();                             // this LSF is done!
+			txType.SetFrameType(pack.GetFrameType());           // get the TYPE
+			// the next 2 lines will set the frame TYPE according to the configured user's radio
+			if (txType.GetVersion() != (cfg.isV3 ? EVersionType::v3 : EVersionType::legacy))
+				txlsf.SetFrameType(txType.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
+			txType.SetMetaDataType(EMetaDatType::ecd);          // set the META to extended c/s data
+			auto meta = txlsf.GetMetaData();                    // save the address to the meta array
+			g_Gateway.GetLink().CodeOut(meta);                  // put the linked reflect into the 1st position
+			memcpy(meta+6, pack.GetCSrcAddress(), 6);           // and the src c/s in the 2nd position
+			memset(meta+12, 0, 2);                              // zero the last 2 bytes
+			txlsf.CalcCRC();                                    // this LSF is done!
 
 			printMsg(TC_CYAN, TC_GREEN, " Stream TX start\n");
 
@@ -868,10 +869,18 @@ void CCC1200::txProcess()
 			//filter and send out to the device
 			filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
 			writeDev(bsb_samples, sizeof(bsb_samples), "SM first Frame");
+
+			if (cfg.debug)
+			{
+				const CCallsign dst(txlsf.GetCDstAddress());
+				const CCallsign src(txlsf.GetCSrcAddress());
+				printMsg(TC_CYAN, TC_GREEN, "GWY STR - DST: %s SRC: %s, TYPE: 0x%04x FN: 0x%04x\n", dst.c_str(), src.c_str(), txlsf.GetFrameType(), frame_count);
+			}
 		}
 		else
 		{
-			if (0 == ++frame_count % 6u)
+			frame_count = (frame_count + 1u) & 0x7fffu;
+			if (0 == frame_count % 6u)
 			{
 				// make a LSF from the LSD in this packet
 				memcpy(txlsf.GetData(), pack.GetCDstAddress(), 28);
@@ -889,6 +898,8 @@ void CCC1200::txProcess()
 			//filter and send out to the device
 			filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
 			writeDev(bsb_samples, sizeof(bsb_samples), "SM Frame");
+			if (cfg.debug)
+				(TC_CYAN, TC_GREEN, "GWY STR FN: 0x%04x\n", frame_count);
 		}
 
 		if (pack.IsLastPacket()) //last stream frame
