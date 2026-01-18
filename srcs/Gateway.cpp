@@ -520,6 +520,8 @@ void CGateway::ProcessModem()
 		CPacket pack;
 		if (getModemPacket(pack))
 			break; // a serious error
+		if (EPacketType::none == pack.GetType())
+			continue;
 		const CCallsign dst(pack.GetCDstAddress());
 		if (EPacketType::packet == pack.GetType()) {
 			switch (mlink.state)

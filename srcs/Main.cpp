@@ -76,12 +76,11 @@ int main(int argc, char** argv)
 	if (g_Cfg.ReadData(arg))
 		return EXIT_FAILURE;
 
-	printf("This software is for use on amateur radio networks only,");
-	printf("Its use on commercial networks is strictly prohibited.");
-	printf("Copyright (C) 2026 by Thomas A. Early, N7TAE");
-
-	printf("%s-%s is starting", pp.filename().c_str(), g_Version.c_str());
-	printf("Built %s %s", __TIME__, __DATE__);
+	printf("\n\nThis software is for use on amateur radio networks only,\n");
+	printf("Its use on commercial networks is strictly prohibited.\n");
+	printf("Copyright (C) 2026 by Thomas A. Early, N7TAE\n");
+	printf("Built %s %s\n", __TIME__, __DATE__);
+	printf("%s-%s is starting  \n\n", pp.filename().c_str(), g_Version.c_str());
 
 	g_Gateway.SetName(pp.filename());
 	CCC1200 modem;
