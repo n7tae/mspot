@@ -65,12 +65,13 @@ public:
 		currentState = EGateState::idle;
 	}
 
-	bool SetStateOnlyIfIdle(EGateState newstate)
+	// return true fo sucessful
+	bool SetStateToOnlyIfFrom(EGateState tostate, EGateState fromstate)
 	{
 		std::lock_guard<std::mutex> lg(mtx);
-		if (EGateState::idle == currentState)
+		if (fromstate == currentState)
 		{
-			currentState = newstate;
+			currentState = tostate;
 			return true;
 		}
 		return false;

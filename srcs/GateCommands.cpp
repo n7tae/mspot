@@ -28,6 +28,7 @@
 #include "SteadyTimer.h"
 #include "FrameType.h"
 #include "Configure.h"
+#include "GateState.h"
 #include "Gateway.h"
 #include "Random.h"
 #include "CRC.h"
@@ -35,6 +36,7 @@
 extern CCRC g_Crc;
 extern CRandom g_RNG;
 extern CConfigure g_Cfg;
+extern CGateState g_GateState;
 
 static const std::string m17alphabet(" ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/.");
 
@@ -163,12 +165,15 @@ void CGateway::doRecord(char c, uint16_t streamID)
 		CPacket p;
 		if (getModemPacket(p))
 			break;
+		if (timer.time() > 2.0)
+		{
+			printMsg(TC_MAGENTA, TC_RED, "Voice Recorder timeout!\n");
+			break;
+		}
 		if (EPacketType::stream != p.GetType())
 			continue;
 		if (streamID != p.GetStreamId())
 			continue;
-		if (timer.time() > 2.0)
-			break;
 		timer.start();
 		if (++fn < 3000) // only collect up to 2 minutes
 		{
@@ -223,15 +228,22 @@ void CGateway::doRecord(char c, uint16_t streamID)
 
 	// after a short wait
 	std::this_thread::sleep_for(std::chrono::milliseconds(500));
-	doPlay(c);
+	if (g_GateState.SetStateToOnlyIfFrom(EGateState::gatestreamin, EGateState::modemin))
+		doPlay(c);
+	else
+		printMsg(TC_MAGENTA, TC_RED, "Could not set state from ModemIn to GateStreamIn\n");
 }
 
 void CGateway::doPlay(CPacket &p)
 {
 	wait4end(p);
-	std::this_thread::sleep_for(std::chrono::milliseconds(300));
-	CCallsign dst(p.GetCDstAddress());
-	doPlay(dst.GetModule());
+	if (g_GateState.SetStateToOnlyIfFrom(EGateState::gatestreamin, EGateState::modemin)) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(300));
+		CCallsign dst(p.GetCDstAddress());
+		doPlay(dst.GetModule());
+	} else {
+		printMsg(TC_MAGENTA, TC_RED, "Could not change state from ModemIn to GateStreamIn\n");
+	}
 }
 
 void CGateway::doPlay(char c)
@@ -249,21 +261,21 @@ void CGateway::doPlay(char c)
 	}
 	pathname /= fnames[pos];
 
-	uintmax_t count = 0;
+	uint16_t fc = 0;
 
 	// make sure the file exists and its size looks okay
 	if (std::filesystem::exists(pathname))
 	{
-		count = std::filesystem::file_size(pathname);
+		auto size = std::filesystem::file_size(pathname);
 		// no partial payloads or less than 1 sec duration or more than 2 minute
-		if ((count % 16) or (count / 16 < 25) or (count / 16 > 3000))
+		if ((size % 16) or (size / 16 < 25) or (size / 16 > 3000))
 		{
-			printMsg(TC_MAGENTA, TC_RED, "'%s' has an unexpected file size of %u\n", pathname.c_str(), count);
+			printMsg(TC_MAGENTA, TC_RED, "'%s' has an unexpected file size of %u\n", pathname.c_str(), size);
 			return;
 		}
+		fc = uint16_t(size / 16) - 1u; // this is the last frame number
 	}
 
-	count = count / 16 - 1; // this will be the closing frame number
 
 	// make the TYPE
 	CFrameType ft;
@@ -280,17 +292,16 @@ void CGateway::doPlay(char c)
 	thisCS.CodeOut(master.GetSrcAddress());
 	master.SetFrameType(ft.GetFrameType(radioTypeIsV3 ? EVersionType::v3 : EVersionType::legacy));
 
-	uint16_t fn = 0;
 	std::ifstream ifs(pathname, std::ios::binary);
 	auto clock = std::chrono::steady_clock::now(); // start the packet clock
 	if (ifs.is_open())
 	{
-		while (fn < count)
+		for (uint16_t fn=0; fn<=fc; fn++)
 		{
 			CPacket p;
 			p.Initialize(EPacketType::stream, master.GetCData());
 			ifs.read((char *)(p.GetPayload()), 16);
-			p.SetFrameNumber((fn < count) ? fn++ : fn++ & 0x8000u);
+			p.SetFrameNumber((fn==fc) ? (fn | 0x8000u) : fn);
 			p.CalcCRC();
 			clock = clock + std::chrono::milliseconds(40);
 			std::this_thread::sleep_until(clock);
