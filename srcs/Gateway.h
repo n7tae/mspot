@@ -26,7 +26,6 @@
 #include <mutex>
 #include <queue>
 
-#include "UnixDgramSocket.h"
 #include "SteadyTimer.h"
 #include "SockAddress.h"
 #include "Configure.h"
@@ -96,33 +95,30 @@ private:
 	CHostMap destMap;
 	std::queue<std::string> voiceQueue;
 	std::unique_ptr<SMessageTask> msgTask;
-	CUnixDgramReader m2g;
-	CUnixDgramWriter g2m;
 	std::queue<CPayload> fifo;
 
-	bool getModemPacket(CPacket &p);
 	void ProcessGateway();
 	EPacketType validate(uint8_t *in, unsigned length);
 	void sendPacket(const void *buf, const size_t size, const CSockAddress &addr) const;
-	void sendPacket2Modem(CPacket &);
-	void sendPacket2Dest(CPacket &pack);
+	void sendPacket2Modem(std::unique_ptr<CPacket>);
+	void sendPacket2Dest(std::unique_ptr<CPacket>);
 	void ProcessModem();
 	void sendLinkRequest();
 	// returns true on error
 	bool setDestination(const std::string &cs);
 	// returns true on error
-	bool setDestination(const   CCallsign &cs);
+	bool setDestination(const CCallsign &cs);
 	void addMessage(const std::string &message);
 	void makeCSData(const CCallsign &cs, const std::string &ofileName);
 	unsigned PlayVoiceFiles(std::string message);
 
 	// for executing rf based commands!
-	void doUnlink(CPacket &);
-	void doEcho(CPacket &);
-	void doRecord(CPacket &);
+	void doUnlink(std::unique_ptr<CPacket> &);
+	void doEcho(std::unique_ptr<CPacket> &);
+	void doRecord(std::unique_ptr<CPacket> &);
 	void doRecord(char, uint16_t);
-	void doPlay(CPacket &);
+	void doPlay(std::unique_ptr<CPacket> &);
 	void doPlay(char c);
-	void doStatus(CPacket &);
-	void wait4end(CPacket &);
+	void doStatus(std::unique_ptr<CPacket> &);
+	void wait4end(std::unique_ptr<CPacket> &);
 };

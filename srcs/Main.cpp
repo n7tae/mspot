@@ -97,7 +97,7 @@ int main(int argc, char** argv)
 			return EXIT_FAILURE;
 		}
 		
-		modem.Run();	// wait for a signal
+		pause();	// wait for a signal
 
 		g_Gateway.Stop();
 		modem.Stop();

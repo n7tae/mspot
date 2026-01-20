@@ -25,6 +25,7 @@
 
 #include <poll.h>
 
+#include "SafePacketQueue.h"
 #include "SteadyTimer.h"
 #include "FrameType.h"
 #include "Configure.h"
@@ -37,6 +38,8 @@ extern CCRC g_Crc;
 extern CRandom g_RNG;
 extern CConfigure g_Cfg;
 extern CGateState g_GateState;
+extern IPFrameFIFO Modem2Gate;
+extern IPFrameFIFO Gate2Modem;
 
 static const std::string m17alphabet(" ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/.");
 
@@ -49,62 +52,36 @@ static const std::string fnames[39]{
 	"x-ray", "yankee", "zulu", "zero", "one", "two", "three", "four",
 	"five", "six", "seven", "eight", "nine", "dash", "slash", "dot"};
 
-void CGateway::wait4end(CPacket &pack)
+void CGateway::wait4end(std::unique_ptr<CPacket> &p)
 {
 	// check the starting packet first
-	if (pack.IsLastPacket())
+	if (p->IsLastPacket())
 		return;
 
 	CSteadyTimer ptime;
 
 	// we're only going to reset the packet timer if subsequent incoming packets have this SID
-	auto streamid = pack.GetStreamId();
+	auto streamid = p->GetStreamId();
 
 	while (keep_running)
 	{
-		struct pollfd pfd;
-		pfd.fd = m2g.GetFD();
-		pfd.events = POLLIN;
-		auto rval = poll(&pfd, 1, 100);
-		if (0 > rval)
+		auto p = Modem2Gate.PopWaitFor(40);
+		p->Initialize(EPacketType::stream);
+		if (p->GetStreamId() == streamid)
 		{
-			printMsg(TC_MAGENTA, TC_RED, "in wait4End, poll error: %s\n", strerror(errno));
-			keep_running = false;
-			return;
+			ptime.start();
+			if (p->IsLastPacket())
+				break;
 		}
-		if (rval > 0)
-		{
-			if (pfd.revents != POLLIN)
-			{
-				printMsg(TC_MAGENTA, TC_RED, "wait4end poll() returned bad revents: %d\n", pfd.revents);
-				keep_running = false;
-			}
-			else
-			{
-				CPacket p;
-				p.Initialize(EPacketType::stream);
-				if (54 != m2g.Read(p.GetData(), p.GetSize(), "wait4end"))
-				{
-					keep_running = false;
-					return;
-				}
-				if (p.GetStreamId() == streamid)
-				{
-					ptime.start();
-					if (p.IsLastPacket())
-						break;
-				}
-				if (ptime.time() > 0.5)
-					break; // a timeout!
-			}
-		}
+		if (ptime.time() > 0.5)
+			break; // a timeout!
 	}
 	return;
 }
 
-void CGateway::doStatus(CPacket &pack)
+void CGateway::doStatus(std::unique_ptr<CPacket> &p)
 {
-	wait4end(pack);
+	wait4end(p);
 	if (ELinkState::linked == mlink.state)
 		addMessage("repeater is_linked_to destination");
 	else if (ELinkState::linking == mlink.state)
@@ -113,9 +90,9 @@ void CGateway::doStatus(CPacket &pack)
 		addMessage("repeater is_unlinked");
 }
 
-void CGateway::doUnlink(CPacket &pack)
+void CGateway::doUnlink(std::unique_ptr<CPacket> &p)
 {
-	wait4end(pack);
+	wait4end(p);
 	if (ELinkState::unlinked == mlink.state)
 	{
 		addMessage("repeater is_already_unlinked");
@@ -133,25 +110,25 @@ void CGateway::doUnlink(CPacket &pack)
 	}
 }
 
-void CGateway::doEcho(CPacket &pack)
+void CGateway::doEcho(std::unique_ptr<CPacket> &p)
 {
-	if (pack.IsLastPacket())
+	if (p->IsLastPacket())
 	{
 		return;
 	}
-	auto streamID = pack.GetStreamId();
+	auto streamID = p->GetStreamId();
 
 	doRecord(' ', streamID);
 }
 
-void CGateway::doRecord(CPacket &pack)
+void CGateway::doRecord(std::unique_ptr<CPacket> &p)
 {
-	if (pack.IsLastPacket())
+	if (p->IsLastPacket())
 	{
 		return;
 	}
-	CCallsign dst(pack.GetCDstAddress());
-	auto streamID = pack.GetStreamId();
+	const CCallsign dst(p->GetCDstAddress());
+	auto streamID = p->GetStreamId();
 	doRecord(dst.GetModule(), streamID);
 }
 
@@ -162,24 +139,24 @@ void CGateway::doRecord(char c, uint16_t streamID)
 	CSteadyTimer timer;
 	while (true) // record the payloads in fifo
 	{
-		CPacket p;
-		if (getModemPacket(p))
-			break;
+		auto p = Modem2Gate.PopWaitFor(40);
+		if (nullptr == p)
+			continue;
 		if (timer.time() > 2.0)
 		{
 			printMsg(TC_MAGENTA, TC_RED, "Voice Recorder timeout!\n");
 			break;
 		}
-		if (EPacketType::stream != p.GetType())
+		if (EPacketType::stream != p->GetType())
 			continue;
-		if (streamID != p.GetStreamId())
+		if (streamID != p->GetStreamId())
 			continue;
 		timer.start();
 		if (++fn < 3000) // only collect up to 2 minutes
 		{
-			fifo.emplace(p.GetPayload());
+			fifo.emplace(p->GetPayload());
 		}
-		if (p.IsLastPacket())
+		if (p->IsLastPacket())
 			break;
 	}
 	if (fn > 3000)
@@ -234,12 +211,12 @@ void CGateway::doRecord(char c, uint16_t streamID)
 		printMsg(TC_MAGENTA, TC_RED, "Could not set state from ModemIn to GateStreamIn\n");
 }
 
-void CGateway::doPlay(CPacket &p)
+void CGateway::doPlay(std::unique_ptr<CPacket> &p)
 {
 	wait4end(p);
 	if (g_GateState.SetStateToOnlyIfFrom(EGateState::gatestreamin, EGateState::modemin)) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(300));
-		CCallsign dst(p.GetCDstAddress());
+		CCallsign dst(p->GetCDstAddress());
 		doPlay(dst.GetModule());
 	} else {
 		printMsg(TC_MAGENTA, TC_RED, "Could not change state from ModemIn to GateStreamIn\n");
@@ -298,14 +275,14 @@ void CGateway::doPlay(char c)
 	{
 		for (uint16_t fn=0; fn<=fc; fn++)
 		{
-			CPacket p;
-			p.Initialize(EPacketType::stream, master.GetCData());
-			ifs.read((char *)(p.GetPayload()), 16);
-			p.SetFrameNumber((fn==fc) ? (fn | 0x8000u) : fn);
-			p.CalcCRC();
+			auto p = std::make_unique<CPacket>();
+			p->Initialize(EPacketType::stream, master.GetCData());
+			ifs.read((char *)(p->GetPayload()), 16);
+			p->SetFrameNumber((fn==fc) ? (fn | 0x8000u) : fn);
+			p->CalcCRC();
 			clock = clock + std::chrono::milliseconds(40);
 			std::this_thread::sleep_until(clock);
-			g2m.Send(p.GetCData(), p.GetSize());
+			Gate2Modem.Push(p);
 		}
 		ifs.close();
 	}
