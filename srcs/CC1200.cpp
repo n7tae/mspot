@@ -800,9 +800,8 @@ void CCC1200::txProcess()
 					// now we'll make the LSF
 					memcpy(txlsf.GetData(), p->GetCDstAddress(), 12); // copy the dst & src
 					txType.SetFrameType(p->GetFrameType());           // get the TYPE
-					// the next 2 lines will set the frame TYPE according to the configured user's radio
-					if (txType.GetVersion() != (cfg.isV3 ? EVersionType::v3 : EVersionType::legacy))
-						txlsf.SetFrameType(txType.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
+					// the next line will set the frame TYPE according to the configured user's radio
+					txlsf.SetFrameType(txType.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
 					txType.SetMetaDataType(EMetaDatType::ecd);          // set the META to extended c/s data
 					auto meta = txlsf.GetMetaData();                    // save the address to the meta array
 					g_Gateway.GetLink().CodeOut(meta);                  // put the linked reflect into the 1st position
@@ -905,7 +904,7 @@ void CCC1200::txProcess()
 			}
 
 			//M17 packet data - "Packet Mode IP Packet"
-			else
+			else if (EPacketType::packet == p->GetType())
 			{
 				printMsg(TC_CYAN, TC_GREEN, " M17 Inet packet received\n");
 
@@ -1037,7 +1036,7 @@ void CCC1200::txProcess()
 		//tx timeout
 		if ((tx_state == ETxState::active) and ((getMS()-tx_timer) > 240)) //240ms timeout
 		{
-			g_GateState.Set2IdleIf(EGateState::gatestreamin);
+			g_GateState.Set2IdleIfGateIn();
 			printMsg(TC_CYAN, TC_RED, " TX timeout\n");
 			//usleep(10*40e3); //wait 400ms (10 M17 frames)
 
@@ -1307,7 +1306,7 @@ void CCC1200::rxProcess()
 								if (g_Crc.CheckCRC(lsf_b, 30)) {
 									if (cfg.debug)
 									{
-										printMsg(TC_CYAN, TC_MAGENTA, "RF LICH LSF: ");
+										printMsg(TC_CYAN, TC_MAGENTA, "LICH LSF: ");
 										printMsg(nullptr, TC_RED, "CRC Error\n");
 										Dump(nullptr, lsf_b, 30);
 									}
@@ -1323,7 +1322,6 @@ void CCC1200::rxProcess()
 										sid = g_RNG.Get();
 										const CCallsign dst(rxlsf.GetCDstAddress());
 										const CCallsign src(rxlsf.GetCSrcAddress());
-										rxType.SetFrameType(rxlsf.GetFrameType());
 										if (cfg.debug)
 										{
 											printMsg(TC_CYAN, TC_MAGENTA, "LICH LSF: ");

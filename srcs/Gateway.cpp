@@ -679,6 +679,16 @@ void CGateway::sendPacket2Modem(std::unique_ptr<CPacket> p)
 // this also opens and closes the modemStream
 void CGateway::sendPacket2Dest(std::unique_ptr<CPacket> p)
 {
+	// There are only legacy destinations out there, so for now this will work
+	// TODO: -----------------------------------------------------------------
+	// The HostMap returned version needs to be in mlink so we can set the correct TYPE!
+	CFrameType TYPE(p->GetFrameType());
+	if (EVersionType::v3 == TYPE.GetVersion())
+	{
+		p->SetFrameType(TYPE.GetFrameType(EVersionType::legacy));
+		p->CalcCRC();
+	}
+	// TODO: -----------------------------------------------------------------
 	if (EPacketType::packet == p->GetType())
 	{
 		sendPacket(p->GetCData(), p->GetSize(), mlink.addr);

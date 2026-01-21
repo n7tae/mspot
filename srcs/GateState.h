@@ -52,6 +52,13 @@ public:
 		return currentState;
 	}
 
+	void Set2IdleIfGateIn(void)
+	{
+		std::lock_guard<std::mutex> lg(mtx);
+		if (EGateState::gatepacketin==currentState or EGateState::gatestreamin==currentState)
+			currentState = EGateState::idle;
+	}
+
 	void Set2IdleIf(EGateState state)
 	{
 		std::lock_guard<std::mutex> lg(mtx);
@@ -65,7 +72,7 @@ public:
 		currentState = EGateState::idle;
 	}
 
-	// return true fo sucessful
+	// return true if sucessful
 	bool SetStateToOnlyIfFrom(EGateState tostate, EGateState fromstate)
 	{
 		std::lock_guard<std::mutex> lg(mtx);
