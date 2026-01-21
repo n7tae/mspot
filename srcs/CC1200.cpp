@@ -570,11 +570,11 @@ bool CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
 	uint8_t cmd[4] { cid, 4, 0, onoff };
 	uint8_t resp[4] = { 0 };
 
+	uart_lock = true;
 	tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
 	writeDev(cmd, 4, what);
 
-	uart_lock = true;
 	if (readDev(resp, sizeof(resp)))
 	{
 		uart_lock = false;
