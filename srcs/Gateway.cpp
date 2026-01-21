@@ -299,7 +299,7 @@ void CGateway::ProcessGateway()
 		// can we play an audio message?
 		if (not voiceQueue.empty())
 		{
-			if (g_GateState.SetStateToOnlyIfFrom(EGateState::messagein, EGateState::idle))
+			if (g_GateState.TryState(EGateState::messagein))
 			{
 				auto message = voiceQueue.front();
 				voiceQueue.pop();

@@ -896,7 +896,7 @@ void CCC1200::txProcess()
 					while (startRx())
 						usleep(40e3);
 					printMsg(TC_CYAN, TC_GREEN, "RX start\n");
-					g_GateState.Set2IdleIf(EGateState::gatestreamin);
+					g_GateState.Set2IdleIfGateIn();
 
 					tx_state = ETxState::idle;
 				}
@@ -1027,7 +1027,7 @@ void CCC1200::txProcess()
 					usleep(40e3);
 				printMsg(TC_CYAN, TC_GREEN, " RX start\n");
 
-				g_GateState.Set2IdleIf(EGateState::gatepacketin);
+				g_GateState.Set2IdleIfGateIn();
 				tx_timer = getMS();
 
 				tx_state = ETxState::idle;
