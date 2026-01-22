@@ -582,7 +582,7 @@ bool CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
 bool CCC1200::getFwVersion()
 {
 	uint8_t cid = CMD_GET_IDENT;
-	uint8_t cmd[3] { cid, 0, 3 };
+	uint8_t cmd[3] { cid, 3, 0 };
 	uint8_t resp[3] { 0 };
 
 	std::lock_guard<std::mutex> lg(mux);
@@ -723,12 +723,14 @@ bool CCC1200::Start()
 	//-----------------------------------device part-----------------------------------
 	printMsg(TC_CYAN, TC_DEFAULT, "UART init: %s at %d baud: ", (char*)cfg.uartDev.c_str(), cfg.baudRate);
 	fd = open((char*)cfg.uartDev.c_str(), O_RDWR | O_NOCTTY | O_SYNC);
-	if (fd < 0)
-	{
+	if (fd < 0) {
 		printMsg(nullptr, TC_RED, "open(%s) error: %s\n", cfg.uartDev.c_str(), strerror(errno));
 		return true;
-	} else if (setAttributes(cfg.baudRate, 0))
+	} else if (setAttributes(cfg.baudRate, 0)) {
 		return true;
+	} else {
+		printMsg(nullptr, TC_GREEN, "OK\n");
+	}
 
 	//PING-PONG test
 	printMsg(TC_CYAN, TC_DEFAULT, "Radio board's reply to PING... ");
