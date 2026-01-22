@@ -579,6 +579,36 @@ bool CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
 	return false;
 }
 
+bool CCC1200::getFwVersion()
+{
+	uint8_t cid = CMD_GET_IDENT;
+	uint8_t cmd[3] { cid, 0, 3 };
+	uint8_t resp[3] { 0 };
+
+	std::lock_guard<std::mutex> lg(mux);
+	tcflush(fd, TCIFLUSH);
+
+	writeDev(cmd, 3, "getFWVersion");
+
+	if (readDev(resp, sizeof(resp)))
+	{
+		return true;
+	}
+	
+	if (CMD_GET_IDENT == resp[0])
+	{
+		size_t size = 0x100u * resp[2] + resp[1];
+		std::vector<char> fwv;
+		if (readDev(fwv.data(), size))
+			return true;
+		printMsg(TC_CYAN, TC_GREEN, "CC1200 Firmware Version: ");
+		printMsg(nullptr, TC_DEFAULT, "%s\n", fwv.data());
+		return false;
+	}
+	printMsg(TC_CYAN, TC_RED, "Unexpected getFwVersion response: %02x %02x %02x\n", resp[0], resp[1], resp[2]);
+	return true;
+}
+
 bool CCC1200::startRx(void)
 {
 	return txrxControl(CMD_RX_START, 1, "startRx");
@@ -700,6 +730,9 @@ bool CCC1200::Start()
 	if (pingDev())
 		return true;
 
+	if (getFwVersion())
+		return true;
+
 	//config the device
 	if (setRxFreq(cfg.rxFreq) or
 		setTxFreq(cfg.txFreq) or
@@ -751,7 +784,7 @@ void CCC1200::Stop()
 	gpioCleanup();
 	if (fd >= 0)
 		close(fd);
-	printMsg(TC_CYAN, TC_GREEN, "done. All CC1200 resources closed!\n");
+	printMsg(TC_CYAN, TC_GREEN, "All CC1200 resources closed!\n");
 }
 
 void CCC1200::txProcess()
@@ -1206,7 +1239,7 @@ void CCC1200::rxProcess()
 						const CCallsign dst(rxlsf.GetCDstAddress());
 						const CCallsign src(rxlsf.GetCSrcAddress());
 
-						printMsg(nullptr, TC_GREEN, "DST: %s SRC: %s TYPE: %04X (CAN=%d) ED^2: %5.2f MER: %4.1f%% ii: %d\n", dst.c_str(), src.c_str(), rxType.GetOriginType(), rxType.GetCan(), sed_lsf, float(e)*escale, ii);
+						printMsg(nullptr, TC_GREEN, "DST: %s SRC: %s TYPE: %04X (CAN=%d) ED^2: %5.2f MER: %4.1f%%\n", dst.c_str(), src.c_str(), rxType.GetOriginType(), rxType.GetCan(), sed_lsf, float(e)*escale);
 
 						if (EPayloadType::packet != rxType.GetPayloadType()) //if stream
 						{
@@ -1279,7 +1312,7 @@ void CCC1200::rxProcess()
 							if (cfg.debug)
 							{
 								printMsg(TC_CYAN, TC_YELLOW, "RF Stream Frame: ");
-								printMsg(nullptr, TC_GREEN, "FN:%04X LICH_CNT:%d ED^2:%5.2f MER:%4.1f%% ii=%u\n", fn, lich_cnt, sed_str, float(e)*escale, ii);
+								printMsg(nullptr, TC_GREEN, "FN:%04X LICH_CNT:%d ED^2:%5.2f MER:%4.1f%%\n", fn, lich_cnt, sed_str, float(e)*escale);
 							}
 						}
 
@@ -1367,7 +1400,7 @@ void CCC1200::rxProcess()
 					uint32_t e = decode_pkt_frame(ppkt, &eof, &pkt_fn, pld);
 					sample_cnt = 0;
 
-					if (cfg.debug) printMsg(TC_CYAN, TC_DEFAULT, "RF PacketFrame: EOF: %s FN: %u d^2:%5.2f MER: %4.1f ii:%u\n", (eof ? "true " : "false"), unsigned(pkt_fn), sed_pkt, e*escale, ii);
+					if (cfg.debug) printMsg(TC_CYAN, TC_DEFAULT, "RF PacketFrame: EOF: %s FN: %u d^2:%5.2f MER: %4.1f\n", (eof ? "true " : "false"), unsigned(pkt_fn), sed_pkt, e*escale);
 
 					// increment size and pointer
 					plsize += eof ? pkt_fn : 25;

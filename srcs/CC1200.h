@@ -67,6 +67,7 @@ private:
 	void gpioCleanup(void);
 	bool readDev(void *buf, int size);
 	void writeDev(void *buf, int size, const char *where);
+	bool getFwVersion();
 	bool pingDev(void);
 	bool setRxFreq(uint32_t freq);
 	bool setTxFreq(uint32_t freq);
