@@ -388,17 +388,15 @@ bool CCC1200::pingDev()
 	uint8_t cmd[3] = { cid, 3, 0 };
 	uint8_t resp[7] = { 0 };
 
-	uart_lock = true;
+	std::lock_guard<std::mutex> lg(mux);
     tcflush(fd, TCIFLUSH); // clear leftover bytes
 
     writeDev(cmd, 3, "pingDev");
 
     if (readDev(resp, sizeof(resp)))
 	{
-		uart_lock = false;
 		return true;
 	}
-	uart_lock = false;
 
 	const uint8_t good[7] { cid, 7, 0, 0, 0, 0, 0 };
     if (0 == memcmp(resp, good, 7))
@@ -420,17 +418,15 @@ bool CCC1200::setRxFreq(uint32_t freq)
 	memcpy(&cmd[3], (uint8_t*)&freq, sizeof(freq));
 	uint8_t resp[4] = { 0 };
 
-	uart_lock = true;
+	std::lock_guard<std::mutex> lg(mux);
     tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
     writeDev(cmd, 7, "setRxFreq");
 
     if (readDev(resp, sizeof(resp)))
 	{
-		uart_lock = false;
 		return true;
 	}
-	uart_lock = false;
 
 	printMsg(TC_CYAN, TC_DEFAULT, "RX frequency: ");
 	const uint8_t good[4] = { cid, 4, 0, ERR_OK };
@@ -451,17 +447,15 @@ bool CCC1200::setTxFreq(uint32_t freq)
 	memcpy(&cmd[3], (uint8_t*)&freq, sizeof(freq));
 	uint8_t resp[4] = { 0 };
 
-	uart_lock = true;
+	std::lock_guard<std::mutex> lg(mux);
     tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
     writeDev(cmd, 7, "setTxFreq");
 
     if (readDev(resp, sizeof(resp)))
 	{
-		uart_lock = false;
 		return true;
 	}
-	uart_lock = false;
 
 	printMsg(TC_CYAN, TC_DEFAULT, "TX frequency: ");
 	const uint8_t good[4] { cid, 4, 0, ERR_OK };
@@ -481,17 +475,15 @@ bool CCC1200::setFreqCorr(int16_t corr)
 	uint8_t cmd[5] = {cid, 5, 0, uint8_t(corr&0xffu), uint8_t((corr>>8)&0xffu)};
 	uint8_t resp[4] = { 0 };
 
-	uart_lock = true;
+	std::lock_guard<std::mutex> lg(mux);
     tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
     writeDev(cmd, 5, "setFreqCorr");
 
 	if (readDev(resp, sizeof(resp)))
 	{
-		uart_lock = false;
 		return true;
 	}
-	uart_lock = false;
 
 	printMsg(TC_CYAN, TC_DEFAULT, "Frequency correction: ");
 	const uint8_t good[4] { cid, 4, 0, ERR_OK };
@@ -511,17 +503,15 @@ bool CCC1200::setAfc(bool en)
 	uint8_t cmd[3+1] = { cid, 4, 0, uint8_t(en ? 0 : 1) };
 	uint8_t resp[4] = { 0 };
 
-	uart_lock = true;
+	std::lock_guard<std::mutex> lg(mux);
     tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
     writeDev(cmd, 4, "setAfc");
 
     if (readDev(resp, sizeof(resp)))
 	{
-		uart_lock = false;
 		return true;
 	}
-	uart_lock = false;
 
 	printMsg(TC_CYAN, TC_DEFAULT, "AFC: ");
 	const uint8_t good[4] { cid, 4, 0, ERR_OK };
@@ -541,17 +531,15 @@ bool CCC1200::setTxPower(float power) //powr in dBm
 	uint8_t cmd[4] = { cid, 4, 0, uint8_t(roundf(power*4.0f)) };
 	uint8_t resp[4] = { 0 };
 
-	uart_lock = true;
+	std::lock_guard<std::mutex> lg(mux);
     tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
     writeDev(cmd, 4, "setTxPower");
 
     if (readDev(resp, sizeof(resp)))
 	{
-		uart_lock = false;
 		return true;
 	}
-	uart_lock = false;
 
 	printMsg(TC_CYAN, TC_DEFAULT, "TX power: ");
 	uint8_t good[4] { cid, 4, 0, ERR_OK };
@@ -570,17 +558,15 @@ bool CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
 	uint8_t cmd[4] { cid, 4, 0, onoff };
 	uint8_t resp[4] = { 0 };
 
-	uart_lock = true;
+	std::lock_guard<std::mutex> lg(mux);
 	tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
 	writeDev(cmd, 4, what);
 
 	if (readDev(resp, sizeof(resp)))
 	{
-		uart_lock = false;
 		return true;
 	}
-	uart_lock = false;
 
 	const uint8_t good[3] { cid, 4, 0 };
 	if (memcmp(resp, good, 3) or (ERR_OK != resp[3] and ERR_NOP != resp[3]))
@@ -1107,10 +1093,12 @@ void CCC1200::rxProcess()
 			break;
 		}
 
-		uart_lock = true;
+		if (not mux.try_lock())
+			continue;
+
 		if (readDev(&rx_bsb_sample, 1))
 		{
-			uart_lock = false;
+			mux.unlock();
 			break;
 		}
 
@@ -1120,12 +1108,12 @@ void CCC1200::rxProcess()
 		{
 			if (readDev(raw_bsb_rx, 960))
 			{
-				uart_lock = false;
+				mux.unlock();
 				break;
 			}
 			uart_rx_data_valid = true;
 		}
-		uart_lock = false;
+		mux.unlock();
 
 		if (uart_rx_data_valid)
 		{

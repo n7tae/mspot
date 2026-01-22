@@ -19,6 +19,7 @@
 #pragma once
 
 #include <future>
+#include <mutex>
 #include <cstdint>
 #include <string>
 #include <termios.h>
@@ -90,13 +91,8 @@ private:
 	struct gpiod_line_request *boot0_line = nullptr;
 	struct gpiod_line_request *nrst_line = nullptr;
 
-	bool uart_lock = false;
+	std::mutex mux;
 
 	std::atomic<bool> keep_running;
 	std::future<void> txFuture, rxFuture;
-
-	/*######################################## items for rxProcess ###########################################*/
-	//UART comms
-	
-	/*######################################## items for txProcess ###########################################*/
 };
