@@ -571,7 +571,8 @@ bool CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
 	const uint8_t good[3] { cid, 4, 0 };
 	if (memcmp(resp, good, 3) or (ERR_OK != resp[3] and ERR_NOP != resp[3]))
 	{
-		printMsg(TC_CYAN, TC_RED, "Doing %s, cmd returned %02x %02x %02x %02x\n", what, resp[0], resp[1], resp[2], resp[3]);
+		if (cfg.debug)
+			printMsg(TC_CYAN, TC_RED, "Doing %s, cmd returned %02x %02x %02x %02x\n", what, resp[0], resp[1], resp[2], resp[3]);
 		return true;
 	}
 
@@ -735,20 +736,18 @@ bool CCC1200::Start()
 
 void CCC1200::Stop()
 {
-	printMsg(TC_CYAN, TC_DEFAULT, "Stopping tx/rx threads... ");
+	printMsg(TC_CYAN, TC_DEFAULT, "Stopping tx/rx threads...\n");
 	keep_running = false;
 	if (txFuture.valid())
 		txFuture.get();
 	if (rxFuture.valid())
 		rxFuture.get();
-	printMsg(nullptr, TC_GREEN, "done\n");
-	printMsg(TC_CYAN, TC_DEFAULT, "Stopping tx/rx on CC1200... ");
+	printMsg(TC_CYAN, TC_DEFAULT, "Stopping tx/rx on CC1200...\n");
 	while (stopTx())
 		usleep(40e3);
 	while (stopRx())
 		usleep(40e3);
-	printMsg(nullptr, TC_GREEN, "done\n");
-	printMsg(TC_CYAN, TC_DEFAULT, "Stopping CC1200 UART... ");
+	printMsg(TC_CYAN, TC_DEFAULT, "Stopping CC1200 UART...\n");
 	gpioCleanup();
 	if (fd >= 0)
 		close(fd);
