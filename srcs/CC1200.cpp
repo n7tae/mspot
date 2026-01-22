@@ -598,11 +598,16 @@ bool CCC1200::getFwVersion()
 	if (CMD_GET_IDENT == resp[0])
 	{
 		size_t size = 0x100u * resp[2] + resp[1];
-		std::vector<char> fwv;
-		if (readDev(fwv.data(), size))
-			return true;
-		printMsg(TC_CYAN, TC_GREEN, "CC1200 Firmware Version: ");
-		printMsg(nullptr, TC_DEFAULT, "%s\n", fwv.data());
+		if (size)
+		{
+			char fwv[size];
+			if (readDev(fwv, size))
+				return true;
+			printMsg(TC_CYAN, TC_GREEN, "CC1200 Firmware Version: ");
+			printMsg(nullptr, TC_DEFAULT, "%s\n", fwv);
+		}
+		else
+			printMsg(TC_CYAN, TC_YELLOW, "CC1200 Version string has size 0!\n");
 		return false;
 	}
 	printMsg(TC_CYAN, TC_RED, "Unexpected getFwVersion response: %02x %02x %02x\n", resp[0], resp[1], resp[2]);
