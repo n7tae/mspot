@@ -43,14 +43,13 @@ extern IPFrameFIFO Gate2Modem;
 
 static const std::string m17alphabet(" ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/.");
 
-static const std::string fnames[39]{
-	"ECHO", "alpha", "bravo"
-					 "charlie",
-	"delta", "echo", "foxtrot", "golf",
+static const std::string fnames[40]{
+	"ECHO", "alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf",
 	"hotel", "india", "juliette", "kilo", "lima", "mike", "november", "oscar",
 	"papa", "quebec", "romeo", "sierra", "tango", "uniform", "victor", "whiskey",
 	"x-ray", "yankee", "zulu", "zero", "one", "two", "three", "four",
-	"five", "six", "seven", "eight", "nine", "dash", "slash", "dot"};
+	"five", "six", "seven", "eight", "nine", "dash", "slash", "dot"
+};
 
 void CGateway::wait4end(std::unique_ptr<CPacket> &p)
 {

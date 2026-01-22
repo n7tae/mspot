@@ -949,7 +949,7 @@ void CCC1200::txProcess()
 				int8_t bsb_samples[SYM_PER_FRA*5];						//filtered baseband samples = symbols*sps
 				uint8_t bsb_chunk[963] = {CMD_TX_DATA, 0xC3, 0x03};		//baseband samples wrapped in a frame
 				
-				printMsg(TC_CYAN, TC_GREEN, " Packet TX start\n");
+				printMsg(TC_CYAN, TC_GREEN, "Packet TX start\n");
 
 				//stop RX, set PA_EN=1 and initialize TX
 				while (stopRx())
