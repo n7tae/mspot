@@ -603,6 +603,7 @@ bool CCC1200::getFwVersion()
 			char fwv[size-2] { 0 };
 			if (readDev(fwv, size-3))
 				return true;
+			for (int i=0; fwv[i]; i++) if ('\n' == fwv[i]) fwv[i] = ' ';
 			printMsg(TC_CYAN, TC_GREEN, "CC1200 Firmware Version: ");
 			printMsg(nullptr, TC_DEFAULT, "%s\n", fwv);
 		}
