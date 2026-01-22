@@ -598,10 +598,10 @@ bool CCC1200::getFwVersion()
 	if (CMD_GET_IDENT == resp[0])
 	{
 		size_t size = 0x100u * resp[2] + resp[1];
-		if (size)
+		if (size > 3)
 		{
-			char fwv[size];
-			if (readDev(fwv, size))
+			char fwv[size-2] { 0 };
+			if (readDev(fwv, size-3))
 				return true;
 			printMsg(TC_CYAN, TC_GREEN, "CC1200 Firmware Version: ");
 			printMsg(nullptr, TC_DEFAULT, "%s\n", fwv);
