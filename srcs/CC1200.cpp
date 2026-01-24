@@ -216,7 +216,7 @@ bool CCC1200::setAttributes(unsigned speed, int parity)
 
 	if (tcsetattr(fd, TCSANOW, &tty))
 	{		
-		printMsg(nullptr, TC_RED, " tcsetattr() error: %s\n", strerror(errno));
+		printMsg(nullptr, TC_RED, "tcsetattr() error: %s\n", strerror(errno));
 		return true; 
 	}
 	
@@ -553,30 +553,52 @@ bool CCC1200::setTxPower(float power) //powr in dBm
     return true;
 }
 
-bool CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
+void CCC1200::start_rx(void)
 {
-	uint8_t cmd[4] { cid, 4, 0, onoff };
-	uint8_t resp[4] = { 0 };
+	txrxControl(CMD_RX_START, 1, "start_rx");
+}
 
-	std::lock_guard<std::mutex> lg(mux);
-	tcflush(fd, TCIFLUSH);    //clear leftover bytes
+void CCC1200::stop_rx(void)
+{
+	txrxControl(CMD_RX_START, 0, "stop_rx");
+}
 
-	writeDev(cmd, 4, what);
+void CCC1200::start_tx(void)
+{
+	txrxControl(CMD_TX_START, 1, "start_tx");
+}
 
-	if (readDev(resp, sizeof(resp)))
+void CCC1200::stop_tx(void)
+{
+	txrxControl(CMD_TX_START, 0, "stop_tx");
+}
+
+void CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
+{
+	unsigned n = 0, decade = 1;
+	while (true)
 	{
-		return true;
-	}
+		uint8_t cmd[4] { cid, 4, 0, onoff };
+		uint8_t resp[4] = { 0 };
 
-	const uint8_t good[3] { cid, 4, 0 };
-	if (memcmp(resp, good, 3) or (ERR_OK != resp[3] and ERR_NOP != resp[3]))
-	{
-		if (cfg.debug)
-			printMsg(TC_CYAN, TC_RED, "Doing %s, cmd returned %02x %02x %02x %02x\n", what, resp[0], resp[1], resp[2], resp[3]);
-		return true;
-	}
+		std::lock_guard<std::mutex> lg(mux);
+		tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
-	return false;
+		writeDev(cmd, 4, what);
+
+		if (not readDev(resp, sizeof(resp)))
+		{
+			const uint8_t good[3] { cid, 4, 0 };
+			if ((0 == memcmp(resp, good, 3)) and (ERR_OK == resp[3] or ERR_NOP == resp[3]))
+				return;
+		}
+		if (++n == decade)
+		{
+			printMsg(TC_CYAN, TC_YELLOW, "%s unsuccessful\n", what);
+			decade *= 2u;
+		}
+		usleep(40e3);
+	}
 }
 
 bool CCC1200::getFwVersion()
@@ -613,26 +635,6 @@ bool CCC1200::getFwVersion()
 	}
 	printMsg(TC_CYAN, TC_RED, "Unexpected getFwVersion response: %02x %02x %02x\n", resp[0], resp[1], resp[2]);
 	return true;
-}
-
-bool CCC1200::startRx(void)
-{
-	return txrxControl(CMD_RX_START, 1, "startRx");
-}
-
-bool CCC1200::stopRx(void)
-{
-	return txrxControl(CMD_RX_START, 0, "stopRx");
-}
-
-bool CCC1200::startTx(void)
-{
-	return txrxControl(CMD_TX_START, 1, "startTx");
-}
-
-bool CCC1200::stopTx(void)
-{
-	return txrxControl(CMD_TX_START, 0, "stopTx");
 }
 
 //new, polyphase filter implementation
@@ -719,7 +721,7 @@ bool CCC1200::Start()
 	if (gpioSetValue(cfg.nrst, 1))
 		return true;
 	usleep(1000000U); //1s for device boot-up
-	printMsg(nullptr, TC_GREEN, " OK\n");
+	printMsg(nullptr, TC_GREEN, "OK\n");
 
 	//-----------------------------------device part-----------------------------------
 	printMsg(TC_CYAN, TC_DEFAULT, "UART init: %s at %d baud: ", (char*)cfg.uartDev.c_str(), cfg.baudRate);
@@ -751,11 +753,8 @@ bool CCC1200::Start()
 		return true;
 	}
 
-	//start RX
-	while (stopTx())
-		usleep(40e3);
-	while (startRx())
-		usleep(40e3);
+	stop_tx();
+	start_rx();
 	printMsg(TC_CYAN, TC_GREEN, "Device start - RX\n");
 
 	// start processes
@@ -784,10 +783,8 @@ void CCC1200::Stop()
 	if (rxFuture.valid())
 		rxFuture.get();
 	printMsg(TC_CYAN, TC_DEFAULT, "Stopping tx/rx on CC1200...\n");
-	while (stopTx())
-		usleep(40e3);
-	while (stopRx())
-		usleep(40e3);
+	stop_tx();
+	stop_rx();
 	printMsg(TC_CYAN, TC_DEFAULT, "Stopping CC1200 UART...\n");
 	gpioCleanup();
 	if (fd >= 0)
@@ -837,12 +834,8 @@ void CCC1200::txProcess()
 
 					printMsg(TC_CYAN, TC_GREEN, "Stream TX start\n");
 
-					//stop RX, set PA_EN=1 and initialize TX
-					while (stopRx())
-						usleep(40e3);
-					while (startTx())
-						usleep(40e3);
-					usleep(10e3);
+					stop_rx();
+					start_tx();
 
 					//flush the RRC baseband filter
 					filterSymbols(nullptr, nullptr, nullptr, 0);
@@ -916,11 +909,8 @@ void CCC1200::txProcess()
 					printMsg(TC_CYAN, TC_GREEN, "Stream TX end\n");
 					usleep(8*40e3); //wait 320ms (8 M17 frames) - let the transmitter consume all the buffered samples
 
-					//restart RX
-					while (stopTx())
-						usleep(40e3);
-					while (startRx())
-						usleep(40e3);
+					stop_tx();
+					start_rx();
 					printMsg(TC_CYAN, TC_GREEN, "RX start\n");
 					g_GateState.Set2IdleIfGateIn();
 
@@ -932,7 +922,7 @@ void CCC1200::txProcess()
 			//M17 packet data - "Packet Mode IP Packet"
 			else if (EPacketType::packet == p->GetType())
 			{
-				printMsg(TC_CYAN, TC_GREEN, " M17 Inet packet received\n");
+				printMsg(TC_CYAN, TC_GREEN, "M17 Inet packet received\n");
 
 				const CCallsign dst(p->GetCDstAddress());
 				const CCallsign src(p->GetCSrcAddress());
@@ -945,27 +935,27 @@ void CCC1200::txProcess()
 				const auto can = TYPE.GetCan();
 				const unsigned type = *(p->GetCPayload());
 				
-				printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
+				printMsg(TC_CYAN, TC_DEFAULT, "├ ");
 				printMsg(nullptr, TC_YELLOW, "DST: ");
 				printMsg(nullptr, TC_DEFAULT, "%s\n", dst.c_str());
-				printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
+				printMsg(TC_CYAN, TC_DEFAULT, "├ ");
 				printMsg(nullptr, TC_YELLOW, "SRC: ");
 				printMsg(nullptr, TC_DEFAULT, "%s\n", src.c_str());
-				printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
+				printMsg(TC_CYAN, TC_DEFAULT, "├ ");
 				printMsg(nullptr, TC_YELLOW, "CAN: ");
 				printMsg(nullptr, TC_DEFAULT, "%u\n", unsigned(can));
 				if (type != 5u or *(p->GetCPayload()+p->GetSize()-3)) //assuming 1-byte type specifier
 				{
-					printMsg(TC_CYAN, TC_DEFAULT, " └ ");
+					printMsg(TC_CYAN, TC_DEFAULT, "└ ");
 					printMsg(nullptr, TC_YELLOW, "TYPE: ");
 					printMsg(nullptr, TC_DEFAULT, "%u\n", unsigned(p->GetCPayload()[0]));
 				}
 				else
 				{
-					printMsg(TC_CYAN, TC_DEFAULT, " ├ ");
+					printMsg(TC_CYAN, TC_DEFAULT, "├ ");
 					printMsg(nullptr, TC_YELLOW, "TYPE: ");
 					printMsg(nullptr, TC_DEFAULT, "SMS\n");
-					printMsg(TC_CYAN, TC_DEFAULT, " └ ");
+					printMsg(TC_CYAN, TC_DEFAULT, "└ ");
 					printMsg(nullptr, TC_YELLOW, "MSG: ");
 					printMsg(nullptr, TC_DEFAULT, "%s\n", (char *)(p->GetPayload()+1));
 				}
@@ -977,14 +967,8 @@ void CCC1200::txProcess()
 				
 				printMsg(TC_CYAN, TC_GREEN, "Packet TX start\n");
 
-				//stop RX, set PA_EN=1 and initialize TX
-				while (stopRx())
-					usleep(40e3);
-				usleep(2e3);
-
-				while (startTx())
-					usleep(40e3);
-				usleep(10e3);
+				stop_rx();
+				start_tx();
 				
 				//flush the RRC baseband filter
 				filterSymbols(nullptr, nullptr, nullptr, 0);
@@ -1043,15 +1027,12 @@ void CCC1200::txProcess()
 				memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
 				writeDev(bsb_samples, sizeof(bsb_samples), "PM EOT");
 
-				printMsg(TC_CYAN, TC_GREEN, " PKT TX end\n");
+				printMsg(TC_CYAN, TC_GREEN, "PKT TX end\n");
 				usleep(3*40e3); //wait 120ms (3 M17 frames)
 
-				//restart RX
-				while (stopTx())
-					usleep(40e3);
-				while (startRx())
-					usleep(40e3);
-				printMsg(TC_CYAN, TC_GREEN, " RX start\n");
+				stop_tx();
+				start_rx();
+				printMsg(TC_CYAN, TC_GREEN, "RX start\n");
 
 				g_GateState.Set2IdleIfGateIn();
 				tx_timer = getMS();
@@ -1063,15 +1044,12 @@ void CCC1200::txProcess()
 		if ((tx_state == ETxState::active) and ((getMS()-tx_timer) > 240)) //240ms timeout
 		{
 			g_GateState.Set2IdleIfGateIn();
-			printMsg(TC_CYAN, TC_RED, " TX timeout\n");
+			printMsg(TC_CYAN, TC_RED, "TX timeout\n");
 			//usleep(10*40e3); //wait 400ms (10 M17 frames)
 
-			//restart RX
-			while (stopTx())
-				usleep(40e3);
-			while (startRx())
-				usleep(40e3);
-			printMsg(TC_CYAN, TC_GREEN, " RX start\n");
+			stop_tx();
+			start_rx();
+			printMsg(TC_CYAN, TC_GREEN, "RX start\n");
 
 			tx_state=ETxState::idle;
 		}

@@ -74,11 +74,11 @@ private:
 	bool setFreqCorr(int16_t corr);
 	bool setAfc(bool afc);
 	bool setTxPower(float pow);
-	bool txrxControl(uint8_t cid, uint8_t onoff, const char *what);
-	bool startTx(void);
-	bool startRx(void);
-	bool stopTx(void);
-	bool stopRx(void);
+	void txrxControl(uint8_t cid, uint8_t onoff, const char *what);
+	void start_tx(void);
+	void start_rx(void);
+	void stop_tx(void);
+	void stop_rx(void);
 	float sed(const float *v1, const int8_t *v2, const unsigned len) const;
 	void filterSymbols(int8_t* __restrict out, const int8_t* __restrict in, const float* __restrict flt, uint8_t phase_inv);
 
