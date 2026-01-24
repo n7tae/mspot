@@ -57,20 +57,22 @@ void CGateway::wait4end(std::unique_ptr<CPacket> &p)
 	if (p->IsLastPacket())
 		return;
 
-	CSteadyTimer ptime;
-
 	// we're only going to reset the packet timer if subsequent incoming packets have this SID
 	auto streamid = p->GetStreamId();
 
+	CSteadyTimer ptime; // the timeout timer
 	while (keep_running)
 	{
 		auto p = Modem2Gate.PopWaitFor(40);
-		p->Initialize(EPacketType::stream);
-		if (p->GetStreamId() == streamid)
+		if (p)
 		{
+			p->Initialize(EPacketType::stream);
+			if (p->GetStreamId() == streamid)
+			{
+				if (p->IsLastPacket())
+					break;
+			}
 			ptime.start();
-			if (p->IsLastPacket())
-				break;
 		}
 		if (ptime.time() > 0.5)
 			break; // a timeout!
