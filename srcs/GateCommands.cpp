@@ -106,7 +106,7 @@ void CGateway::doUnlink(std::unique_ptr<CPacket> &p)
 		memcpy(disc.magic, "DISC", 4);
 		thisCS.CodeOut(disc.cscode);
 		sendPacket(disc.magic, 10, mlink.addr);
-		printMsg(TC_MAGENTA, TC_GREEN, "DISConnect packet sent to %s", mlink.cs.c_str());
+		printMsg(TC_MAGENTA, TC_GREEN, "DISConnect packet sent to %s\n", mlink.cs.c_str());
 		// the gateway proccess loop will disconnect when is receives the confirming DISC packet.
 	}
 }

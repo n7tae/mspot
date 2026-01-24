@@ -246,7 +246,7 @@ void CGateway::ProcessGateway()
 		switch (mlink.state)
 		{
 		case ELinkState::linked:
-			if (mlink.receivePingTimer.time() > 30) // is the reflector okay?
+			if (mlink.receivePingTimer.time() > 30.0) // is the reflector okay?
 			{
 				// looks like we lost contact
 				addMessage("repeater was_disconnected_from destination");
@@ -257,14 +257,14 @@ void CGateway::ProcessGateway()
 			}
 			break;
 		case ELinkState::linking:
-			if (linkingTime.time() >= 30)
+			if (linkingTime.time() >= 30.0)
 			{
 				printMsg(TC_MAGENTA, TC_YELLOW, "Link request to %s timeout.\n", mlink.cs.c_str());
 				mlink.state = ELinkState::unlinked;
 			}
 			else
 			{
-				if (lastLinkSent.time() > 4)
+				if (lastLinkSent.time() > 5.0)
 					sendLinkRequest();
 			}
 			break;
@@ -273,8 +273,8 @@ void CGateway::ProcessGateway()
 			{
 				if (mlink.isReflector)
 				{
-					sendLinkRequest();
 					linkingTime.start();
+					sendLinkRequest();
 				}
 			}
 			break;
@@ -375,7 +375,6 @@ void CGateway::ProcessGateway()
 					}
 					else if (0 == memcmp(buf, "NACK", 4))
 					{
-						mlink.state = ELinkState::unlinked;
 						addMessage("link_refused");
 						printMsg(TC_MAGENTA, TC_YELLOW, "Connection request refused from %s\n", mlink.cs.c_str());
 						mlink.cs.Clear();
