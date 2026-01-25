@@ -293,34 +293,25 @@ void CGateway::ProcessGateway()
 				printMsg(TC_MAGENTA, TC_YELLOW, "Message task is done, but future task is invalid");
 			}
 			msgTask.reset();
-			g_GateState.Idle();
+			if (EGateState::bootup != g_GateState.GetState())
+				g_GateState.Idle();
 		}
 
 		// can we play an audio message?
-		if (not voiceQueue.empty())
-		{
-			if (g_GateState.TryState(EGateState::messagein))
+		if (voiceQueue.Empty()) {
+			g_GateState.SetStateToOnlyIfFrom(EGateState::idle, EGateState::bootup);
+		} else {
+			if ((EGateState::bootup == g_GateState.GetState()) or g_GateState.TryState(EGateState::messagein))
 			{
-				auto message = voiceQueue.front();
-				voiceQueue.pop();
-				if (msgTask)
+				if (not msgTask)
 				{
-					printMsg(TC_MAGENTA, TC_YELLOW, "Trying to initiate message play, the g_GateState was idle, but msgTask is not empty!\n");
-					printMsg(TC_MAGENTA, TC_YELLOW, "'%s' will not be played!\n", message.c_str());
-					g_GateState.Idle();
-				}
-				else
-				{
+					auto message = voiceQueue.Pop();
 					printMsg(TC_MAGENTA, TC_DEFAULT, "Playing message '%s'\n", message.c_str());
 					msgTask = std::make_unique<SMessageTask>();
 					msgTask->isDone = false;
 					msgTask->futTask = std::async(std::launch::async, &CGateway::PlayVoiceFiles, this, message);
 				}
 			}
-			// else
-			// {
-			// 	LogInfo("VoiceQueue not empty but state is %s", g_GateState.GetStateName());
-			// }
 		}
 
 		// any packets from IPv4 or 6?
@@ -466,7 +457,7 @@ void CGateway::ProcessModem()
 	{
 		auto p = Modem2Gate.PopWaitFor(40);
 		if (not p)
-			continue; // a serious error
+			continue; // Modem2Gate timeout
 		const CCallsign dst(p->GetCDstAddress());
 		if (EPacketType::packet == p->GetType()) { // process packet data
 			switch (mlink.state)
@@ -711,7 +702,7 @@ void CGateway::sendPacket2Dest(std::unique_ptr<CPacket> p)
 	}
 	else
 	{
-		if (not p->IsLastPacket()) // don't open a stream on a last packet
+		if (p->IsLastPacket()) // don't open a stream on a last packet
 		{
 			g_GateState.Idle();
 			return;
@@ -724,7 +715,8 @@ void CGateway::sendPacket2Dest(std::unique_ptr<CPacket> p)
 		}
 
 		// Open the Stream!!
-		modemStream.OpenStream(p->GetCSrcAddress(), p->GetStreamId(), "MSpot");
+		const CCallsign src(p->GetCSrcAddress());
+		modemStream.OpenStream(p->GetCSrcAddress(), p->GetStreamId(), src.c_str());
 		sendPacket(p->GetCData(), p->GetSize(), mlink.addr);
 		modemStream.CountnTouch();
 	}
@@ -787,7 +779,7 @@ bool CGateway::setDestination(const CCallsign &cs)
 
 void CGateway::addMessage(const std::string &message)
 {
-	voiceQueue.push(message);
+	voiceQueue.Push(message);
 }
 
 void CGateway::makeCSData(const CCallsign &cs, const std::string &ofileName)
@@ -927,7 +919,7 @@ unsigned CGateway::PlayVoiceFiles(std::string message)
 	CPacket master;
 	master.Initialize(EPacketType::stream, 54);
 	master.SetStreamId(g_RNG.Get());
-	memset(master.GetDstAddress(), 0xffu, 6); // set destination to Broadcast
+	memset(master.GetDstAddress(), 0xffu, 6); // set destination to BROADCAST
 	thisCS.CodeOut(master.GetSrcAddress());
 	master.SetFrameType(ft.GetFrameType(radioTypeIsV3 ? EVersionType::v3 : EVersionType::legacy));
 

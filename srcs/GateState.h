@@ -20,12 +20,12 @@
 
 #include <mutex>
 
-enum class EGateState { idle, gatestreamin, gatepacketin, messagein, modemin };
+enum class EGateState { idle, gatestreamin, gatepacketin, messagein, modemin, bootup };
 
 class CGateState
 {
 public:
-	CGateState() : currentState(EGateState::idle) {}
+	CGateState() : currentState(EGateState::bootup) {}
 	~CGateState() {}
 
 	const char *GetStateName()
@@ -34,15 +34,17 @@ public:
 		switch (currentState)
 		{
 			case EGateState::gatestreamin:
-			return "gatestreamin";
+				return "gatestreamin";
 			case EGateState::gatepacketin:
-			return "gatepacketin";
+				return "gatepacketin";
 			case EGateState::messagein:
-			return "messagein";
+				return "messagein";
 			case EGateState::modemin:
-			return "modemin";
+				return "modemin";
+			case EGateState::bootup:
+				return "bootup";
 			default:
-			return "idle";
+				return "idle";
 		}
 	}
 

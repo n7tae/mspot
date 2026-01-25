@@ -62,6 +62,36 @@ using SM17Link = struct sm17link_tag
 	bool isReflector;
 };
 
+class CSafeMessageQueue
+{
+	std::queue<std::string> q;
+	std::mutex m;
+public:
+	bool Empty()
+	{
+		std::lock_guard<std::mutex> lg(m);
+		return q.empty();
+	}
+
+	std::string Pop()
+	{
+		std::lock_guard<std::mutex> lg(m);
+		std::string s;
+		if (not q.empty())
+		{
+			s.assign(q.front());
+			q.pop();
+		}
+		return s;
+	}
+
+	void Push(const std::string &s)
+	{
+		std::lock_guard<std::mutex> lg(m);
+		q.push(s);
+	}
+};
+
 using SMessageTask = struct message_tag
 {
 	std::future<unsigned> futTask;
@@ -93,7 +123,7 @@ private:
 	CSockAddress from17k;
 	std::future<void> gateFuture, modemFuture;
 	CHostMap destMap;
-	std::queue<std::string> voiceQueue;
+	CSafeMessageQueue voiceQueue;
 	std::unique_ptr<SMessageTask> msgTask;
 	std::queue<CPayload> fifo;
 
