@@ -195,8 +195,8 @@ bool CGateway::Start()
 
 	mlink.state = ELinkState::unlinked;
 	keep_running = true;
-	gateStream.Initialize("Gateway");
-	modemStream.Initialize("Modem");
+	gateStream.Initialize(EStreamType::gate);
+	modemStream.Initialize(EStreamType::modem);
 	mlink.maintainLink = g_Cfg.GetBoolean(g_Keys.gateway.section, g_Keys.gateway.maintainLink);
 	printMsg(TC_MAGENTA, TC_DEFAULT, "Gateway will%s try to re-establish a dropped link\n", mlink.maintainLink ? "" : " NOT");
 	if (g_Cfg.IsString(g_Keys.gateway.section, g_Keys.gateway.startupLink))
@@ -716,7 +716,7 @@ void CGateway::sendPacket2Dest(std::unique_ptr<CPacket> p)
 
 		// Open the Stream!!
 		const CCallsign src(p->GetCSrcAddress());
-		modemStream.OpenStream(p->GetCSrcAddress(), p->GetStreamId(), src.c_str());
+		modemStream.OpenStream(p->GetCSrcAddress(), p->GetStreamId());
 		sendPacket(p->GetCData(), p->GetSize(), mlink.addr);
 		modemStream.CountnTouch();
 	}

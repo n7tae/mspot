@@ -25,13 +25,15 @@
 #include "Callsign.h"
 #include "Base.h"
 
+enum class EStreamType { gate, modem };
+
 class CStream : public CBase
 {
 public:
 	CStream() : streamid(0) {}
 	~CStream() {}
-	void Initialize(const std::string &n);
-	bool OpenStream(const uint8_t *src, uint16_t id, const std::string &from);
+	void Initialize(EStreamType t);
+	void OpenStream(const uint8_t *src, uint16_t id, const std::string &from = "");
 	void CloseStream(bool isTimeout);
 	bool IsOpen();
 	double GetLastTime();
@@ -41,7 +43,7 @@ public:
 
 private:
 	uint16_t streamid, previousid;
-	std::string name;
+	EStreamType type;
 	std::string from;
 	unsigned count;
 	CCallsign source;
