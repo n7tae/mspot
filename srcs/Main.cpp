@@ -105,17 +105,17 @@ int main(int argc, char** argv)
 		switch (caught_signal)
 		{
 			case 2:
-				printf("%s exited on receipt of SIGINT", pp.filename().c_str());
+				printf("%s exited on receipt of SIGINT\n", pp.filename().c_str());
 				break;
 			case 15:
-				printf("%s exited on receipt of SIGTERM", pp.filename().c_str());
+				printf("%s exited on receipt of SIGTERM\n", pp.filename().c_str());
 				break;
 			case 1:
 				printf("%s is restarting on receipt of SIGHUP", pp.filename().c_str());
 				std::this_thread::sleep_for(std::chrono::seconds(5));
 				break;
 			default:
-				printf("%s exited on receipt of an unknown signal", pp.filename().c_str());
+				printf("%s exited on receipt of an unknown signal\n", pp.filename().c_str());
 				break;
 		}
 	} while (caught_signal == SIGHUP);

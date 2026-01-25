@@ -695,7 +695,7 @@ void CGateway::sendPacket2Dest(std::unique_ptr<CPacket> p)
 			modemStream.CountnTouch();
 			if (islast)
 			{
-				gateStream.CloseStream(false);
+				modemStream.CloseStream(false);
 				g_GateState.Idle();
 			}
 		}
