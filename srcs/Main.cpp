@@ -42,7 +42,7 @@ static int  caught_signal = 0;
 static void sigHandler(int signum)
 {
 	caught_signal = signum;
-	printf("Caught signal %d", signum);
+	printf("Caught signal %d\n", signum);
 }
 
 static void usage(const std::string &exename)
