@@ -716,7 +716,7 @@ void CGateway::sendPacket2Dest(std::unique_ptr<CPacket> p)
 
 		// Open the Stream!!
 		const CCallsign src(p->GetCSrcAddress());
-		modemStream.OpenStream(p->GetCSrcAddress(), p->GetStreamId());
+		modemStream.OpenStream(p->GetCSrcAddress(), framesid);
 		sendPacket(p->GetCData(), p->GetSize(), mlink.addr);
 		modemStream.CountnTouch();
 	}
