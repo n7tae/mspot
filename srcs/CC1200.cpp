@@ -1216,23 +1216,26 @@ void CCC1200::rxProcess()
 					}
 					else
 					{
-						(void)g_GateState.TryState(EGateState::modemin);
-						got_lsf = true;
-						rxType.SetFrameType(rxlsf.GetFrameType());
-						rx_state = ((EPayloadType::packet == rxType.GetPayloadType()) ? ERxState::pkt : ERxState::str); // the LSF
-						sample_cnt = 0; // the LSF
-
-						const CCallsign dst(rxlsf.GetCDstAddress());
-						const CCallsign src(rxlsf.GetCSrcAddress());
-
-						printMsg(nullptr, TC_GREEN, "DST: %s SRC: %s TYPE: %04X (CAN=%d) ED^2: %5.2f MER: %4.1f%%\n", dst.c_str(), src.c_str(), rxType.GetOriginType(), rxType.GetCan(), sed_lsf, float(e)*escale);
-
-						if (EPayloadType::packet != rxType.GetPayloadType()) //if stream
+						if (g_GateState.TryState(EGateState::modemin))
 						{
-							// init values for stream mode
-							fn = 0;
-							sid = g_RNG.Get();
-						}
+							got_lsf = true;
+							rxType.SetFrameType(rxlsf.GetFrameType());
+							rx_state = ((EPayloadType::packet == rxType.GetPayloadType()) ? ERxState::pkt : ERxState::str);
+							sample_cnt = 0;
+
+							const CCallsign dst(rxlsf.GetCDstAddress());
+							const CCallsign src(rxlsf.GetCSrcAddress());
+
+							printMsg(nullptr, TC_GREEN, "DST: %s SRC: %s TYPE: %04X (CAN=%d) ED^2: %5.2f MER: %4.1f%%\n", dst.c_str(), src.c_str(), rxType.GetOriginType(), rxType.GetCan(), sed_lsf, float(e)*escale);
+
+							if (EPayloadType::packet != rxType.GetPayloadType()) //if stream
+							{
+								// init values for stream mode
+								fn = 0;
+								sid = g_RNG.Get();
+							}
+						} else if (cfg.debug)
+							printMsg(TC_CYAN, TC_YELLOW, "Could not obtain GateState modemin lock\n");
 					}
 				}
 
@@ -1281,7 +1284,7 @@ void CCC1200::rxProcess()
 						first_frame = false;
 					}
 					
-					if (((last_fn+1) & 0x7fffu) == frame_count)
+					if (((last_fn + 1u) & 0x7fffu) == frame_count)
 					{
 						if (got_lsf) // send this data frame to the gateway
 						{
