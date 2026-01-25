@@ -472,11 +472,10 @@ void CGateway::ProcessModem()
 			switch (mlink.state)
 			{
 			case ELinkState::linked:
-				if ((dst == mlink.cs) or (not dst.IsReflector())) // is the destination the linked reflector?
-				{
-					printMsg(TC_MAGENTA, TC_YELLOW, "Destination is %s but you are already linked to %s\n", dst.c_str(), mlink.cs.c_str());
-				} else {
+				if ((dst == mlink.cs) or (not dst.IsReflector())) { // is the destination the linked reflector?
 					sendPacket2Dest(std::move(p));
+				} else {
+					printMsg(TC_MAGENTA, TC_YELLOW, "Destination is %s but you are already linked to %s\n", dst.c_str(), mlink.cs.c_str());
 				}
 				break;
 			case ELinkState::linking:
@@ -537,14 +536,13 @@ void CGateway::ProcessModem()
 				switch (mlink.state)
 				{
 				case ELinkState::linked:
-					if ((dst == mlink.cs) or (not dst.IsReflector())) // is the destination the linked reflector?
-					{
+					if ((dst == mlink.cs) or (not dst.IsReflector())) { // is the destination the linked reflector?
+						sendPacket2Dest(std::move(p));
+					} else {
 						addMessage("repeater is_already_linked");
 						wait4end(p);
 						printMsg(TC_MAGENTA, TC_YELLOW, "Destination is %s but you are already linked to %s\n", dst.c_str(), mlink.cs.c_str());
 						g_GateState.Idle();
-					} else {
-						sendPacket2Dest(std::move(p));
 					}
 					break;
 				case ELinkState::linking:
