@@ -209,6 +209,7 @@ bool CGateway::Start()
 
 	makeCSData(thisCS, "repeater.dat");
 
+	addMessage("welcome repeater");
 	gateFuture = std::async(std::launch::async, &CGateway::ProcessGateway, this);
 	if (not gateFuture.valid())
 	{
@@ -226,7 +227,6 @@ bool CGateway::Start()
 	}
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-	addMessage("welcome repeater");
 	return false;
 }
 

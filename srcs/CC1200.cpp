@@ -594,7 +594,7 @@ void CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
 		}
 		if (++n == decade)
 		{
-			printMsg(TC_CYAN, TC_YELLOW, "%s unsuccessful\n", what);
+			if (cfg.debug or n > 255) printMsg(TC_CYAN, TC_YELLOW, "%s unsuccessful\n", what);
 			decade *= 2u;
 		}
 		usleep(40e3);
@@ -832,7 +832,7 @@ void CCC1200::txProcess()
 					memset(meta+12, 0, 2);                              // zero the last 2 bytes
 					txlsf.CalcCRC();                                    // this LSF is done!
 
-					printMsg(TC_CYAN, TC_GREEN, "Stream TX start\n");
+					if (cfg.debug) printMsg(TC_CYAN, TC_GREEN, "Stream TX start\n");
 
 					stop_rx();
 					start_tx();
@@ -911,7 +911,7 @@ void CCC1200::txProcess()
 
 					stop_tx();
 					start_rx();
-					printMsg(TC_CYAN, TC_GREEN, "RX start\n");
+					if (cfg.debug) printMsg(TC_CYAN, TC_GREEN, "RX start\n");
 					g_GateState.Set2IdleIfGateIn();
 
 					tx_state = ETxState::idle;
@@ -965,7 +965,7 @@ void CCC1200::txProcess()
 				int8_t bsb_samples[SYM_PER_FRA*5];						//filtered baseband samples = symbols*sps
 				uint8_t bsb_chunk[963] = {CMD_TX_DATA, 0xC3, 0x03};		//baseband samples wrapped in a frame
 				
-				printMsg(TC_CYAN, TC_GREEN, "Packet TX start\n");
+				if (cfg.debug) printMsg(TC_CYAN, TC_GREEN, "Packet TX start\n");
 
 				stop_rx();
 				start_tx();
@@ -1027,12 +1027,12 @@ void CCC1200::txProcess()
 				memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
 				writeDev(bsb_samples, sizeof(bsb_samples), "PM EOT");
 
-				printMsg(TC_CYAN, TC_GREEN, "PKT TX end\n");
+				if (cfg.debug) printMsg(TC_CYAN, TC_GREEN, "PKT TX end\n");
 				usleep(3*40e3); //wait 120ms (3 M17 frames)
 
 				stop_tx();
 				start_rx();
-				printMsg(TC_CYAN, TC_GREEN, "RX start\n");
+				if (cfg.debug) printMsg(TC_CYAN, TC_GREEN, "RX start\n");
 
 				g_GateState.Set2IdleIfGateIn();
 				tx_timer = getMS();
@@ -1044,12 +1044,12 @@ void CCC1200::txProcess()
 		if ((tx_state == ETxState::active) and ((getMS()-tx_timer) > 240)) //240ms timeout
 		{
 			g_GateState.Set2IdleIfGateIn();
-			printMsg(TC_CYAN, TC_RED, "TX timeout\n");
+			printMsg(TC_CYAN, TC_YELLOW, "TX timeout\n");
 			//usleep(10*40e3); //wait 400ms (10 M17 frames)
 
 			stop_tx();
 			start_rx();
-			printMsg(TC_CYAN, TC_GREEN, "RX start\n");
+			if (cfg.debug) printMsg(TC_CYAN, TC_GREEN, "RX start\n");
 
 			tx_state=ETxState::idle;
 		}
@@ -1164,20 +1164,6 @@ void CCC1200::rxProcess()
 				float sed_str = sed_sma + ((sed_smb < sed_eot) ? sed_smb : sed_eot);
 				float sed_pmb = sed(symbols, pkt_sync_symbols, 8);
 				float sed_pkt = sed_pma + ((sed_pmb < sed_eot) ? sed_pmb : sed_eot);
-				// if (sed_lsf < lmin) {
-				// 	lmin = sed_lsf;
-				// 	printMsg(TC_CYAN, TC_GREEN, "lmin=%6.2f smin=%6.2f pmin=%6.2f\n", lmin, smin, pmin);
-				// }
-				// if (sed_str < smin) {
-				// 	smin = sed_str;
-				// 	printMsg(TC_CYAN, TC_GREEN, "lmin=%6.2f smin=%6.2f pmin=%6.2f\n", lmin, smin, pmin);
-				// }
-				// if (sed_pkt < pmin) {
-				// 	pmin = sed_pkt;
-				// 	printMsg(TC_CYAN, TC_GREEN, "lmin=%6.2f smin=%6.2f pmin=%6.2f\n", lmin, smin, pmin);
-				// }
-
-				//printMsg(TC_YELLOW, "%.3u %6.2f %6.2f %6.2f\n", ii, sed_lsf, sed_pkt, sed_str);
 
 				//LSF received at idle state
 				if ((sed_lsf <= 22.25f) and (rx_state == ERxState::idle))
