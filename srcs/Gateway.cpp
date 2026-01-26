@@ -295,12 +295,12 @@ void CGateway::ProcessGateway()
 			msgTask.reset();
 			if (EGateState::bootup != g_GateState.GetState())
 				g_GateState.Idle();
+			else if (voiceQueue.Empty())
+				g_GateState.Idle();
 		}
 
 		// can we play an audio message?
-		if (voiceQueue.Empty()) {
-			g_GateState.SetStateToOnlyIfFrom(EGateState::idle, EGateState::bootup);
-		} else {
+		if (not voiceQueue.Empty()) {
 			if ((EGateState::bootup == g_GateState.GetState()) or g_GateState.TryState(EGateState::messagein))
 			{
 				if (not msgTask)
