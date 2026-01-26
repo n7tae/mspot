@@ -906,7 +906,7 @@ void CCC1200::txProcess()
 					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
 					writeDev(bsb_samples, sizeof(bsb_samples), "SM EOT");
 
-					printMsg(TC_CYAN, TC_GREEN, "Stream TX end\n");
+					if (cfg.debug) printMsg(TC_CYAN, TC_GREEN, "Stream TX end\n");
 					usleep(8*40e3); //wait 320ms (8 M17 frames) - let the transmitter consume all the buffered samples
 
 					stop_tx();

@@ -606,6 +606,11 @@ void CGateway::sendLinkRequest()
 // this also opens and closes the gateStream
 void CGateway::sendPacket2Modem(std::unique_ptr<CPacket> p)
 {
+	if (EGateState::bootup == g_GateState.GetState())
+	{
+		p.reset();
+		return; // drop the packet unit we're done booting up
+	}
 	if (EPacketType::packet == p->GetType())
 	{
 		if (g_GateState.TryState(EGateState::gatepacketin))
