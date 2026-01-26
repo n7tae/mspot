@@ -638,6 +638,7 @@ void CGateway::sendPacket2Modem(std::unique_ptr<CPacket> p)
 			Gate2Modem.Push(p);
 			if (islast)
 			{
+				std::this_thread::sleep_for(std::chrono::milliseconds(2));
 				gateStream.CloseStream(false); // close the stream
 			}
 		}
