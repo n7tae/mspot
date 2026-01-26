@@ -1052,7 +1052,7 @@ unsigned CGateway::PlayVoiceFiles(std::string message)
 		//LogDebug("pushing msg packet 0x%04x", pack->GetFrameNumber());
 		Gate2Modem.Push(p);
 	}
-
+	std::this_thread::sleep_for(std::chrono::milliseconds(200));
 	// this thread can be harvested
 	msgTask->isDone = true;
 	// return the number of packets sent
