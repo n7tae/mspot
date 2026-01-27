@@ -35,14 +35,14 @@ public:
 
 	void Push(T &t)
 	{
-		std::scoped_lock<std::mutex> lock(m);
+		std::lock_guard<std::mutex> lock(m);
 		q.push(std::move(t));
 		c.notify_one();
 	}
 
 	unsigned Size(void)
 	{
-		std::scoped_lock<std::mutex> lock(m);
+		std::lock_guard<std::mutex> lock(m);
 		return q.size();
 	}
 
@@ -61,7 +61,7 @@ public:
 
 	bool IsEmpty(void)
 	{
-		std::scoped_lock<std::mutex> lock(m);
+		std::lock_guard<std::mutex> lock(m);
 		return q.empty();
 	}
 
