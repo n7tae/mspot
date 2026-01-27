@@ -376,7 +376,7 @@ void CCC1200::writeDev(void *buf, int size, const char *where)
 	if (n < 0) {
 		printMsg(TC_CYAN, TC_YELLOW, "In %s, write() error: %s\n", where, strerror(errno));
 	} else if (n != size) {
-		printMsg(TC_CYAN, TC_YELLOW, "write() only wrote %d of %d in %s\n", n, size, where);
+		printMsg(TC_CYAN, TC_YELLOW, "In %s, write() only wrote %d of %d\n", where, n, size);
 	}
 	return;
 }
@@ -803,7 +803,7 @@ void CCC1200::txProcess()
 
 	while (keep_running)
 	{
-		auto p = Gate2Modem.PopWaitFor(100);
+		auto p = Gate2Modem.PopWaitFor(40);
 		if (p)
 		{
 			if (EPacketType::stream == p->GetType())
