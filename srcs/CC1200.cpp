@@ -826,8 +826,8 @@ void CCC1200::txProcess()
 					// the next line will set the frame TYPE according to the configured user's radio
 					txlsf.SetFrameType(txType.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
 					auto meta = txlsf.GetMetaData();                  // save the address to the meta array
-					g_Gateway.GetLink().CodeOut(meta);                // put the linked reflect into the 1st position
-					memcpy(meta+6, p->GetCSrcAddress(), 6);           // and the src c/s in the 2nd position
+					memcpy(meta, p->GetCSrcAddress(), 6);             // save the source address into slot 1
+					g_Gateway.GetLink().CodeOut(meta+6);              // put the linked reflect into slot 2
 					memset(meta+12, 0, 2);                            // zero the last 2 bytes
 					txlsf.CalcCRC();                                  // this LSF is done!
 
