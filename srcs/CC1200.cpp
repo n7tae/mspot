@@ -813,24 +813,23 @@ void CCC1200::txProcess()
 
 				if (tx_state == ETxState::idle) // first received frame
 				{
-					if (p->IsLastPacket())
-						return;
+					if (p->IsLastPacket() or (p->GetFrameNumber() % 6))
+						continue;	// start a transmission at the beginning of a superframe
 					tx_state = ETxState::active;
 
 					usleep(10e3);
-
 					frame_count = 0; // we'll renumber each frame starting from zero
 					// now we'll make the LSF
 					memcpy(txlsf.GetData(), p->GetCDstAddress(), 12); // copy the dst & src
 					txType.SetFrameType(p->GetFrameType());           // get the TYPE
+					txType.SetMetaDataType(EMetaDatType::ecd);        // set the META to extended c/s data
 					// the next line will set the frame TYPE according to the configured user's radio
 					txlsf.SetFrameType(txType.GetFrameType(cfg.isV3 ? EVersionType::v3 : EVersionType::legacy));
-					txType.SetMetaDataType(EMetaDatType::ecd);          // set the META to extended c/s data
-					auto meta = txlsf.GetMetaData();                    // save the address to the meta array
-					g_Gateway.GetLink().CodeOut(meta);                  // put the linked reflect into the 1st position
+					auto meta = txlsf.GetMetaData();                  // save the address to the meta array
+					g_Gateway.GetLink().CodeOut(meta);                // put the linked reflect into the 1st position
 					memcpy(meta+6, p->GetCSrcAddress(), 6);           // and the src c/s in the 2nd position
-					memset(meta+12, 0, 2);                              // zero the last 2 bytes
-					txlsf.CalcCRC();                                    // this LSF is done!
+					memset(meta+12, 0, 2);                            // zero the last 2 bytes
+					txlsf.CalcCRC();                                  // this LSF is done!
 
 					if (cfg.debug) printMsg(TC_CYAN, TC_GREEN, "Stream TX start\n");
 
