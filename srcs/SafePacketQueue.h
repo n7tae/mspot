@@ -35,36 +35,15 @@ public:
 
 	void Push(T &t)
 	{
-		std::lock_guard<std::mutex> lock(m);
+		std::scoped_lock<std::mutex> lock(m);
 		q.push(std::move(t));
 		c.notify_one();
 	}
 
-	T Pop(void)
+	unsigned Size(void)
 	{
-		std::unique_lock<std::mutex> lock(m);
-		if (q.empty())
-			return nullptr;
-		else
-		{
-			T val = std::move(q.front());
-			q.pop();
-			return val;
-		}
-	}
-
-	// If the queue is empty, wait until an element is available.
-	T PopWait(void)
-	{
-		std::unique_lock<std::mutex> lock(m);
-		while(q.empty())
-		{
-			// release lock as long as the wait and reacquire it afterwards.
-			c.wait(lock);
-		}
-		T val = std::move(q.front());
-		q.pop();
-		return val;
+		std::scoped_lock<std::mutex> lock(m);
+		return q.size();
 	}
 
 	// wait for some time, or until an element is available.
@@ -82,7 +61,7 @@ public:
 
 	bool IsEmpty(void)
 	{
-		std::unique_lock<std::mutex> lock(m);
+		std::scoped_lock<std::mutex> lock(m);
 		return q.empty();
 	}
 
