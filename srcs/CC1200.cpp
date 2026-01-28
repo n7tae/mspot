@@ -799,6 +799,7 @@ void CCC1200::txProcess()
 	SLSF txlsf;
 	CFrameType txType;
 	uint16_t frame_count;
+	uint16_t pfn;
 	std::unique_ptr<CPacket> p;
 
 	while (keep_running)
@@ -813,10 +814,10 @@ void CCC1200::txProcess()
 
 				if (tx_state == ETxState::idle) // first received frame
 				{
-					if (p->IsLastPacket() or (p->GetFrameNumber() % 6))
+					pfn = p->GetFrameNumber();
+					if (p->IsLastPacket() or (pfn % 6))
 						continue;	// start a transmission at the beginning of a superframe
 					tx_state = ETxState::active;
-
 					usleep(10e3);
 					frame_count = 0; // we'll renumber each frame starting from zero
 					// now we'll make the LSF
@@ -861,11 +862,13 @@ void CCC1200::txProcess()
 					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
 					writeDev(bsb_samples, sizeof(bsb_samples), "SM first Frame");
 
-					if (cfg.debug)
+					auto thisfn = p->GetFrameNumber();
+					if (cfg.debug and (++pfn != thisfn))
 					{
 						const CCallsign dst(txlsf.GetCDstAddress());
 						const CCallsign src(txlsf.GetCSrcAddress());
-						printMsg(TC_CYAN, TC_GREEN, "GWY STR - DST: %s SRC: %s, TYPE: 0x%04x FN: 0x%04x\n", dst.c_str(), src.c_str(), txlsf.GetFrameType(), p->GetFrameNumber());
+						printMsg(TC_CYAN, TC_GREEN, "GWY STR - DST: %s SRC: %s, TYPE: 0x%04x FN: 0x%04x\n", dst.c_str(), src.c_str(), txlsf.GetFrameType(), thisfn);
+						pfn = thisfn;
 					}
 				}
 				else
