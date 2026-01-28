@@ -861,14 +861,11 @@ void CCC1200::txProcess()
 					//filter and send out to the device
 					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
 					writeDev(bsb_samples, sizeof(bsb_samples), "SM first Frame");
-
-					auto thisfn = p->GetFrameNumber();
-					if (cfg.debug and (++pfn != thisfn))
+					if (cfg.debug)
 					{
 						const CCallsign dst(txlsf.GetCDstAddress());
 						const CCallsign src(txlsf.GetCSrcAddress());
-						printMsg(TC_CYAN, TC_GREEN, "GWY STR - DST: %s SRC: %s, TYPE: 0x%04x FN: 0x%04x\n", dst.c_str(), src.c_str(), txlsf.GetFrameType(), thisfn);
-						pfn = thisfn;
+						printMsg(TC_CYAN, TC_GREEN, "GWY STR - DST: %s SRC: %s, TYPE: 0x%04x FN: 0x%04x\n", dst.c_str(), src.c_str(), txlsf.GetFrameType(), p->GetFrameNumber());
 					}
 				}
 				else
@@ -892,8 +889,12 @@ void CCC1200::txProcess()
 					//filter and send out to the device
 					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
 					writeDev(bsb_samples, sizeof(bsb_samples), "SM Frame");
-					if (cfg.debug)
-						printMsg(TC_CYAN, TC_GREEN, "GWY STR FN: 0x%04x\n", p->GetFrameNumber());
+					auto nextfn = p->GetFrameNumber();
+					if (cfg.debug and (++pfn != nextfn))
+					{
+						printMsg(TC_CYAN, TC_GREEN, "GWY STR FN: 0x%04x\n", nextfn);
+						pfn = nextfn;
+					}
 				}
 
 				if (p->IsLastPacket()) //last stream frame
