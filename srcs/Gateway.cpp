@@ -1004,7 +1004,6 @@ unsigned CGateway::PlayVoiceFiles(std::string message)
 				p->Initialize(EPacketType::stream, master.GetCData());
 				clock = clock + std::chrono::milliseconds(40);
 				std::this_thread::sleep_until(clock); // the frames will go out every 40 milliseconds
-				//LogDebug("pushing msg packet 0x%04x", pack->GetFrameNumber());
 				Gate2Modem.Push(p);
 			}
 			else
@@ -1029,7 +1028,6 @@ unsigned CGateway::PlayVoiceFiles(std::string message)
 					p->Initialize(EPacketType::stream, master.GetCData());
 					clock = clock + std::chrono::milliseconds(40);
 					std::this_thread::sleep_until(clock);
-					//LogDebug("pushing msg packet 0x%04x", pack->GetFrameNumber());
 					Gate2Modem.Push(p);
 				}
 				else
@@ -1050,7 +1048,6 @@ unsigned CGateway::PlayVoiceFiles(std::string message)
 		p->Initialize(EPacketType::stream, master.GetCData());
 		clock = clock + std::chrono::milliseconds(40);
 		std::this_thread::sleep_until(clock);
-		//LogDebug("pushing msg packet 0x%04x", pack->GetFrameNumber());
 		Gate2Modem.Push(p);
 	}
 	std::this_thread::sleep_for(std::chrono::milliseconds(200));

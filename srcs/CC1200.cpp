@@ -407,7 +407,7 @@ bool CCC1200::pingDev()
 
 	uint32_t dev_err;
 	memcpy((uint8_t*)&dev_err, &resp[3], sizeof(uint32_t));
-    printMsg(nullptr, TC_RED, "%02x %02x %02x PONG error code: 0x%04X\n", resp[0], resp[1], resp[2], dev_err);
+    printMsg(nullptr, TC_RED, "%02x %02x %02x PONG error code: %04X\n", resp[0], resp[1], resp[2], dev_err);
     return true;
 }
 
@@ -865,7 +865,7 @@ void CCC1200::txProcess()
 					{
 						const CCallsign dst(txlsf.GetCDstAddress());
 						const CCallsign src(txlsf.GetCSrcAddress());
-						printMsg(TC_CYAN, TC_GREEN, "GWY STR - DST: %s SRC: %s, TYPE: 0x%04x FN: 0x%04x\n", dst.c_str(), src.c_str(), txlsf.GetFrameType(), p->GetFrameNumber());
+						printMsg(TC_CYAN, TC_GREEN, "GWY STR - DST: %s SRC: %s, TYPE: %04x FN: %04x\n", dst.c_str(), src.c_str(), txlsf.GetFrameType(), p->GetFrameNumber());
 					}
 				}
 				else
@@ -892,7 +892,7 @@ void CCC1200::txProcess()
 					auto nextfn = p->GetFrameNumber();
 					if (cfg.debug and (++pfn != nextfn))
 					{
-						printMsg(TC_CYAN, TC_GREEN, "GWY STR FN: 0x%04x\n", nextfn);
+						printMsg(TC_CYAN, TC_GREEN, "GWY STR FN: %04x\n", nextfn);
 						pfn = nextfn;
 					}
 				}
@@ -1316,7 +1316,7 @@ void CCC1200::rxProcess()
 										if (cfg.debug)
 										{
 											printMsg(TC_CYAN, TC_MAGENTA, "LICH LSF: ");
-											printMsg(nullptr, TC_GREEN, "DST: %s SRC: %s TYPE: 0x%04X (CAN=%d)\n", dst.c_str(), src.c_str(), rxlsf.GetFrameType(), rxType.GetCan());
+											printMsg(nullptr, TC_GREEN, "DST: %s SRC: %s TYPE: %04X (CAN=%d)\n", dst.c_str(), src.c_str(), rxlsf.GetFrameType(), rxType.GetCan());
 										}
 									}
 								}
