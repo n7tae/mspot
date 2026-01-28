@@ -831,8 +831,6 @@ void CCC1200::txProcess()
 					memset(meta+12, 0, 2);                            // zero the last 2 bytes
 					txlsf.CalcCRC();                                  // this LSF is done!
 
-					if (cfg.debug) printMsg(TC_CYAN, TC_GREEN, "Stream TX start\n");
-
 					stop_rx();
 					start_tx();
 
@@ -867,7 +865,7 @@ void CCC1200::txProcess()
 					{
 						const CCallsign dst(txlsf.GetCDstAddress());
 						const CCallsign src(txlsf.GetCSrcAddress());
-						printMsg(TC_CYAN, TC_GREEN, "GWY STR - DST: %s SRC: %s, TYPE: 0x%04x FN: 0x%04x\n", dst.c_str(), src.c_str(), txlsf.GetFrameType(), frame_count);
+						printMsg(TC_CYAN, TC_GREEN, "GWY STR - DST: %s SRC: %s, TYPE: 0x%04x FN: 0x%04x\n", dst.c_str(), src.c_str(), txlsf.GetFrameType(), p->GetFrameNumber());
 					}
 				}
 				else
@@ -892,7 +890,7 @@ void CCC1200::txProcess()
 					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
 					writeDev(bsb_samples, sizeof(bsb_samples), "SM Frame");
 					if (cfg.debug)
-						printMsg(TC_CYAN, TC_GREEN, "GWY STR FN: 0x%04x\n", frame_count);
+						printMsg(TC_CYAN, TC_GREEN, "GWY STR FN: 0x%04x\n", p->GetFrameNumber());
 				}
 
 				if (p->IsLastPacket()) //last stream frame
@@ -905,12 +903,11 @@ void CCC1200::txProcess()
 					filterSymbols(bsb_samples+3, frame_symbols, rrc_taps_5_poly, 0);
 					writeDev(bsb_samples, sizeof(bsb_samples), "SM EOT");
 
-					if (cfg.debug) printMsg(TC_CYAN, TC_GREEN, "Stream TX end\n");
 					usleep(8*40e3); //wait 320ms (8 M17 frames) - let the transmitter consume all the buffered samples
 
 					stop_tx();
 					start_rx();
-					if (cfg.debug) printMsg(TC_CYAN, TC_GREEN, "RX start\n");
+
 					g_GateState.Set2IdleIfGateIn();
 
 					tx_state = ETxState::idle;
@@ -963,8 +960,6 @@ void CCC1200::txProcess()
 				int8_t frame_symbols[SYM_PER_FRA];						//raw frame symbols
 				int8_t bsb_samples[SYM_PER_FRA*5];						//filtered baseband samples = symbols*sps
 				uint8_t bsb_chunk[963] = {CMD_TX_DATA, 0xC3, 0x03};		//baseband samples wrapped in a frame
-				
-				if (cfg.debug) printMsg(TC_CYAN, TC_GREEN, "Packet TX start\n");
 
 				stop_rx();
 				start_tx();
@@ -1026,12 +1021,10 @@ void CCC1200::txProcess()
 				memcpy(&bsb_chunk[3], bsb_samples, sizeof(bsb_samples));
 				writeDev(bsb_samples, sizeof(bsb_samples), "PM EOT");
 
-				if (cfg.debug) printMsg(TC_CYAN, TC_GREEN, "PKT TX end\n");
 				usleep(3*40e3); //wait 120ms (3 M17 frames)
 
 				stop_tx();
 				start_rx();
-				if (cfg.debug) printMsg(TC_CYAN, TC_GREEN, "RX start\n");
 
 				g_GateState.Set2IdleIfGateIn();
 				tx_timer = getMS();
@@ -1418,7 +1411,7 @@ void CCC1200::rxProcess()
 					sample_cnt++;
 					if (960*2 <= sample_cnt) // 80 ms without detecting anything in the sync'ed state
 					{
-						printMsg(TC_CYAN, TC_RED, "RF Timeout\n");
+						printMsg(TC_CYAN, TC_YELLOW, "RF Timeout\n");
 						rx_state = ERxState::idle; // timeout
 						got_lsf = false;
 						sample_cnt = 0;
