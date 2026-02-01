@@ -36,6 +36,7 @@ CVersion   g_Version(1, 0, 0);
 CConfigure g_Cfg;
 CCRC       g_Crc;
 CGateway   g_Gateway;
+CCC1200    g_Modem;
 
 static int  caught_signal = 0;
 
@@ -83,24 +84,23 @@ int main(int argc, char** argv)
 	printf("%s-%s is starting  \n\n", pp.filename().c_str(), g_Version.c_str());
 
 	g_Gateway.SetName(pp.filename());
-	CCC1200 modem;
 	
 	do
 	{
 		caught_signal = 0;
 
-		if (modem.Start())
+		if (g_Modem.Start())
 			return EXIT_FAILURE;
 		if (g_Gateway.Start())
 		{
-			modem.Stop();
+			g_Modem.Stop();
 			return EXIT_FAILURE;
 		}
 		
 		pause();	// wait for a signal
 
 		g_Gateway.Stop();
-		modem.Stop();
+		g_Modem.Stop();
 
 		switch (caught_signal)
 		{

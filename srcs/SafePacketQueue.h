@@ -22,6 +22,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <memory>
+#include <thread>
 
 #include "Packet.h"
 
@@ -40,10 +41,18 @@ public:
 		c.notify_one();
 	}
 
-	unsigned Size(void)
+	// If the queue is empty, wait until an element is available.
+	T PopWait(void)
 	{
-		std::lock_guard<std::mutex> lock(m);
-		return q.size();
+		std::unique_lock<std::mutex> lock(m);
+		while (q.empty())
+		{
+			// release lock as long as the wait and reacquire it afterwards.
+			c.wait(lock);
+		}
+		T val = std::move(q.front());
+		q.pop();
+		return val;
 	}
 
 	// wait for some time, or until an element is available.
@@ -52,6 +61,19 @@ public:
 		std::unique_lock<std::mutex> lock(m);
 		T val;
 		if (c.wait_for(lock, std::chrono::milliseconds(ms), [this] { return not q.empty(); }))
+		{
+			val = std::move(q.front());
+			q.pop();
+		}
+		return val;
+	}
+
+	// wait until some time, then get the oldest item or if the queue is empty, a nullptr.
+	T PopWaitUntil(std::chrono::steady_clock time)
+	{
+		std::unique_lock<std::mutex> lock(m);
+		T val;
+		if (c.wait_until(lock, time, [this] { return not q.empty(); }))
 		{
 			val = std::move(q.front());
 			q.pop();

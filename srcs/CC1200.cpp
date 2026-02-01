@@ -1056,7 +1056,7 @@ void CCC1200::rxProcess()
 {
 	bool uart_rx_data_valid = false;
 	bool got_lsf = false;
-	int8_t rx_bsb_sample = 0;
+	uint8_t rx_bsb_sample = 0;
 	int8_t raw_bsb_rx[960];
 	uint8_t lsf_b[30];
 	bool first_frame = true;
@@ -1095,7 +1095,8 @@ void CCC1200::rxProcess()
 				printMsg(TC_CYAN, TC_DEFAULT, "Rx thread poll() interrupted, exiting\n");
 			else
 				printMsg(TC_CYAN, TC_RED, "Rx thread poll() error: %s\n", strerror(errno));
-			break;
+			raise(SIGINT);
+			return;
 		}
 		else if (rv == 0)
 			continue;
@@ -1103,31 +1104,28 @@ void CCC1200::rxProcess()
 		if (pfd.revents != POLLIN)
 		{
 			printMsg(TC_CYAN, TC_RED, "Rx process thread poll() returned revents containing error: %d\n", pfd.revents);
-			keep_running = false;
-			break;
-		}
-
-		if (not mux.try_lock())
-			continue;
-
-		if (readDev(&rx_bsb_sample, 1))
-		{
-			mux.unlock();
-			break;
-		}
-
-		rx_header.Push(rx_bsb_sample);
-
-		if (rx_header[0]==CMD_RX_DATA and rx_header[1]==0xC3 and rx_header[2]==0x03)
-		{
-			if (readDev(raw_bsb_rx, 960))
+			raise(SIGINT);
+			return;
+		} else {
+			std::lock_guard<std::mutex> lg(mux);
+			if (readDev(&rx_bsb_sample, 1))
 			{
-				mux.unlock();
-				break;
+				raise(SIGINT);
+				return;
 			}
-			uart_rx_data_valid = true;
+
+			rx_header.Push(rx_bsb_sample);
+
+			if (rx_header[0]==CMD_RX_DATA and rx_header[1]==0xC3 and rx_header[2]==0x03)
+			{
+				if (readDev(raw_bsb_rx, 960))
+				{
+					raise(SIGINT);
+					return;
+				}
+				uart_rx_data_valid = true;
+			}
 		}
-		mux.unlock();
 
 		if (uart_rx_data_valid)
 		{

@@ -154,6 +154,7 @@ bool CPacket::IsLastPacket() const
 	return true;
 }
 
+// returns true if a crc is bad
 bool CPacket::CheckCRC() const
 {
 	if ((EPacketType::stream == ptype))
