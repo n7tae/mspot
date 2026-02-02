@@ -1119,6 +1119,7 @@ void CCC1200::rxProcess()
 					raise(SIGINT);
 					return;
 				}
+				rx_header.Clear();
 				uart_rx_data_valid = true;
 			}
 		}

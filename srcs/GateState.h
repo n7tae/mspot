@@ -28,95 +28,16 @@ public:
 	CGateState() : currentState(EGateState::bootup) {}
 	~CGateState() {}
 
-	const char *GetStateName()
-	{
-		std::lock_guard<std::mutex> lg(mtx);
-		switch (currentState)
-		{
-			case EGateState::gatestreamin:
-				return "gatestreamin";
-			case EGateState::gatepacketin:
-				return "gatepacketin";
-			case EGateState::messagein:
-				return "messagein";
-			case EGateState::modemin:
-				return "modemin";
-			case EGateState::bootup:
-				return "bootup";
-			default:
-				return "idle";
-		}
-	}
-
-	EGateState GetState()
-	{
-		std::lock_guard<std::mutex> lg(mtx);
-		return currentState;
-	}
-
-	void Set2IdleIfGateIn(void)
-	{
-		std::lock_guard<std::mutex> lg(mtx);
-		if (EGateState::messagein==currentState or EGateState::gatestreamin==currentState or EGateState::gatepacketin==currentState)
-			currentState = EGateState::idle;
-	}
-
-	void Idle()
-	{
-		std::lock_guard<std::mutex> lg(mtx);
-		currentState = EGateState::idle;
-	}
-
+	const char *GetStateName();
+	EGateState GetState();
+	void Set2IdleIfGateIn(void);
+	void Idle();
 	// return true if sucessful
-	bool SetStateToOnlyIfFrom(EGateState tostate, EGateState fromstate)
-	{
-		std::lock_guard<std::mutex> lg(mtx);
-		if (fromstate == currentState)
-		{
-			currentState = tostate;
-			return true;
-		}
-		return false;
-	}
-
-	bool IsRxReady(void)
-	{
-		std::lock_guard<std::mutex> lg(mtx);
-		switch (currentState)
-		{
-			case EGateState::modemin:
-			case EGateState::idle:
-				return true;
-			default:
-				return false;
-		}
-	}
-
-	bool IsTxReady(void)
-	{
-		std::lock_guard<std::mutex> lg(mtx);
-		switch (currentState)
-		{
-			case EGateState::modemin:
-				return false;
-			default:
-				return true;
-		}
-	}
-
+	bool SetStateToOnlyIfFrom(EGateState tostate, EGateState fromstate);
+	bool IsRxReady(void);
+	bool IsTxReady(void);
 	// returns true if successful
-	bool TryState(EGateState newstate)
-	{
-		std::lock_guard<std::mutex> lg(mtx);
-		if (newstate == currentState)
-			return true;
-		if (EGateState::idle == currentState)
-		{
-			currentState = newstate;
-			return true;
-		}
-		return false;
-	}
+	bool TryState(EGateState newstate);
 
 private:
 	std::mutex mtx;
