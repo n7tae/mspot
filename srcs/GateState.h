@@ -79,6 +79,31 @@ public:
 		return false;
 	}
 
+	bool IsRxReady(void)
+	{
+		std::lock_guard<std::mutex> lg(mtx);
+		switch (currentState)
+		{
+			case EGateState::modemin:
+			case EGateState::idle:
+				return true;
+			default:
+				return false;
+		}
+	}
+
+	bool IsTxReady(void)
+	{
+		std::lock_guard<std::mutex> lg(mtx);
+		switch (currentState)
+		{
+			case EGateState::modemin:
+				return false;
+			default:
+				return true;
+		}
+	}
+
 	// returns true if successful
 	bool TryState(EGateState newstate)
 	{

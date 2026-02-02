@@ -388,7 +388,6 @@ bool CCC1200::pingDev()
 	uint8_t cmd[3] = { cid, 3, 0 };
 	uint8_t resp[7] = { 0 };
 
-	std::lock_guard<std::mutex> lg(mux);
     tcflush(fd, TCIFLUSH); // clear leftover bytes
 
     writeDev(cmd, 3, "pingDev");
@@ -418,7 +417,6 @@ bool CCC1200::setRxFreq(uint32_t freq)
 	memcpy(&cmd[3], (uint8_t*)&freq, sizeof(freq));
 	uint8_t resp[4] = { 0 };
 
-	std::lock_guard<std::mutex> lg(mux);
     tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
     writeDev(cmd, 7, "setRxFreq");
@@ -447,7 +445,6 @@ bool CCC1200::setTxFreq(uint32_t freq)
 	memcpy(&cmd[3], (uint8_t*)&freq, sizeof(freq));
 	uint8_t resp[4] = { 0 };
 
-	std::lock_guard<std::mutex> lg(mux);
     tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
     writeDev(cmd, 7, "setTxFreq");
@@ -475,7 +472,6 @@ bool CCC1200::setFreqCorr(int16_t corr)
 	uint8_t cmd[5] = {cid, 5, 0, uint8_t(corr&0xffu), uint8_t((corr>>8)&0xffu)};
 	uint8_t resp[4] = { 0 };
 
-	std::lock_guard<std::mutex> lg(mux);
     tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
     writeDev(cmd, 5, "setFreqCorr");
@@ -503,7 +499,6 @@ bool CCC1200::setAfc(bool en)
 	uint8_t cmd[3+1] = { cid, 4, 0, uint8_t(en ? 0 : 1) };
 	uint8_t resp[4] = { 0 };
 
-	std::lock_guard<std::mutex> lg(mux);
     tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
     writeDev(cmd, 4, "setAfc");
@@ -531,7 +526,6 @@ bool CCC1200::setTxPower(float power) //powr in dBm
 	uint8_t cmd[4] = { cid, 4, 0, uint8_t(roundf(power*4.0f)) };
 	uint8_t resp[4] = { 0 };
 
-	std::lock_guard<std::mutex> lg(mux);
     tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
     writeDev(cmd, 4, "setTxPower");
@@ -581,7 +575,6 @@ void CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
 		uint8_t cmd[4] { cid, 4, 0, onoff };
 		uint8_t resp[4] = { 0 };
 
-		std::lock_guard<std::mutex> lg(mux);
 		tcflush(fd, TCIFLUSH);    //clear leftover bytes
 
 		writeDev(cmd, 4, what);
@@ -607,7 +600,6 @@ bool CCC1200::getFwVersion()
 	uint8_t cmd[3] { cid, 3, 0 };
 	uint8_t resp[3] { 0 };
 
-	std::lock_guard<std::mutex> lg(mux);
 	tcflush(fd, TCIFLUSH);
 
 	writeDev(cmd, 3, "getFWVersion");
@@ -807,6 +799,11 @@ void CCC1200::txProcess()
 		auto p = Gate2Modem.PopWaitFor(40);
 		if (p)
 		{
+			if (not g_GateState.IsTxReady())
+			{
+				p.reset();
+				continue;
+			}
 			if (EPacketType::stream == p->GetType())
 			{
 				int8_t frame_symbols[SYM_PER_FRA];					// raw frame symbols
@@ -1106,8 +1103,7 @@ void CCC1200::rxProcess()
 			printMsg(TC_CYAN, TC_RED, "Rx process thread poll() returned revents containing error: %d\n", pfd.revents);
 			raise(SIGINT);
 			return;
-		} else {
-			std::lock_guard<std::mutex> lg(mux);
+		} else if (g_GateState.IsRxReady()) {
 			if (readDev(&rx_bsb_sample, 1))
 			{
 				raise(SIGINT);

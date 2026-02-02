@@ -18,7 +18,7 @@
 
 #pragma once
 
-template <typename T, unsigned int size>
+template <typename T, size_t size>
 class RingBuffer
 {
 public:
@@ -34,13 +34,20 @@ public:
 		return buffer[(index + position) % capacity];
 	}
 
-	std::size_t Size(void) const
+	size_t Size(void) const
 	{
 		return capacity;
 	}
 
+	void Clear(void)
+	{
+		for (size_t i = 0; i<size; i++)
+			buffer[i] = 0;
+		position = 0;
+	}
+
 private:
 	T buffer[size] { 0 };
-	const std::size_t capacity { size };
-	std::size_t position = 0; // current position
+	const size_t capacity { size };
+	size_t position = 0; // current position
 };
