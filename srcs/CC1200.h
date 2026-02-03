@@ -74,15 +74,13 @@ private:
 	bool setAfc(bool afc);
 	bool setTxPower(float pow);
 	void txrxControl(uint8_t cid, uint8_t onoff, const char *what);
-	void start_tx(void);
-	void start_rx(void);
-	void stop_tx(void);
-	void stop_rx(void);
+	void startTx(void);
+	void startRx(void);
+	void reset_rx(void);
 	float sed(const float *v1, const int8_t *v2, const unsigned len) const;
 	void filterSymbols(int8_t* __restrict out, const int8_t* __restrict in, const float* __restrict flt, uint8_t phase_inv);
 
-	int fd = -1; // the handle to the CC1200
-	int ud = -1; // the handle to the unix read socket
+	int fd = -1; // the handle to the CC1200 uart
 
 	SConfig cfg;
 
@@ -91,6 +89,10 @@ private:
 	struct gpiod_line_request *boot0_line = nullptr;
 	struct gpiod_line_request *nrst_line = nullptr;
 
-	std::atomic<bool> keep_running;
+	std::atomic<bool> keep_running, uart_lock;
+	bool uart_rx_data_valid = false;
+	uint16_t rx_buff_cnt = 0;
+	bool uart_sync = false;
+	RingBuffer<uint8_t, 3> rx_header;
 	std::future<void> txFuture, rxFuture;
 };

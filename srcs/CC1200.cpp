@@ -547,28 +547,23 @@ bool CCC1200::setTxPower(float power) //powr in dBm
     return true;
 }
 
-void CCC1200::start_rx(void)
-{
-	txrxControl(CMD_RX_START, 1, "start_rx");
-}
-
-void CCC1200::stop_rx(void)
-{
-	txrxControl(CMD_RX_START, 0, "stop_rx");
-}
-
-void CCC1200::start_tx(void)
-{
-	txrxControl(CMD_TX_START, 1, "start_tx");
-}
-
-void CCC1200::stop_tx(void)
+void CCC1200::startRx(void)
 {
 	txrxControl(CMD_TX_START, 0, "stop_tx");
+	txrxControl(CMD_RX_START, 1, "start_rx");
+	reset_rx();
+}
+
+void CCC1200::startTx(void)
+{
+	txrxControl(CMD_RX_START, 0, "stop_rx");
+	txrxControl(CMD_TX_START, 1, "start_tx");
+	reset_rx();
 }
 
 void CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
 {
+	uart_lock = true;
 	unsigned n = 0, decade = 1;
 	while (true)
 	{
@@ -583,15 +578,26 @@ void CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
 		{
 			const uint8_t good[3] { cid, 4, 0 };
 			if ((0 == memcmp(resp, good, 3)) and (ERR_OK == resp[3] or ERR_NOP == resp[3]))
+			{
+				uart_lock = false;
 				return;
+			}
 		}
 		if (++n == decade)
 		{
-			if (cfg.debug or n > 255) printMsg(TC_CYAN, TC_YELLOW, "%s unsuccessful\n", what);
+			if (cfg.debug or n > 255) printMsg(TC_CYAN, TC_YELLOW, "%s unsuccessful after %u tr%s\n", what, n, ((n==1) ? "y" : "ies"));
 			decade *= 2u;
 		}
 		usleep(40e3);
 	}
+}
+
+void CCC1200::reset_rx()
+{
+	rx_header.Clear();
+	uart_rx_data_valid = false;
+	rx_buff_cnt = 0;
+	uart_sync = false;
 }
 
 bool CCC1200::getFwVersion()
@@ -745,11 +751,12 @@ bool CCC1200::Start()
 		return true;
 	}
 
-	stop_tx();
-	start_rx();
+	startRx();
+
 	printMsg(TC_CYAN, TC_GREEN, "Device start - RX\n");
 
 	// start processes
+	uart_lock = false;
 	keep_running = true;
 	txFuture = std::async(std::launch::async, &CCC1200::txProcess, this);
 	if (txFuture.valid())
@@ -769,14 +776,14 @@ bool CCC1200::Start()
 void CCC1200::Stop()
 {
 	printMsg(TC_CYAN, TC_DEFAULT, "Stopping tx/rx threads...\n");
-	keep_running = false;
+	keep_running = uart_lock = false;
 	if (txFuture.valid())
 		txFuture.get();
 	if (rxFuture.valid())
 		rxFuture.get();
 	printMsg(TC_CYAN, TC_DEFAULT, "Stopping tx/rx on CC1200...\n");
-	stop_tx();
-	stop_rx();
+	txrxControl(CMD_TX_START, 0, "stop tx");
+	txrxControl(CMD_RX_START, 0, "stop rx");
 	printMsg(TC_CYAN, TC_DEFAULT, "Stopping CC1200 UART...\n");
 	gpioCleanup();
 	if (fd >= 0)
@@ -829,8 +836,7 @@ void CCC1200::txProcess()
 					memset(meta+12, 0, 2);                            // zero the last 2 bytes
 					txlsf.CalcCRC();                                  // this LSF is done!
 
-					stop_rx();
-					start_tx();
+					startTx();
 
 					//flush the RRC baseband filter
 					filterSymbols(nullptr, nullptr, nullptr, 0);
@@ -906,8 +912,7 @@ void CCC1200::txProcess()
 
 					usleep(8*40e3); //wait 320ms (8 M17 frames) - let the transmitter consume all the buffered samples
 
-					stop_tx();
-					start_rx();
+					startRx();
 
 					g_GateState.Set2IdleIfGateIn();
 
@@ -962,8 +967,7 @@ void CCC1200::txProcess()
 				int8_t bsb_samples[SYM_PER_FRA*5];						//filtered baseband samples = symbols*sps
 				uint8_t bsb_chunk[963] = {CMD_TX_DATA, 0xC3, 0x03};		//baseband samples wrapped in a frame
 
-				stop_rx();
-				start_tx();
+				startTx();
 				
 				//flush the RRC baseband filter
 				filterSymbols(nullptr, nullptr, nullptr, 0);
@@ -1024,8 +1028,7 @@ void CCC1200::txProcess()
 
 				usleep(3*40e3); //wait 120ms (3 M17 frames)
 
-				stop_tx();
-				start_rx();
+				startRx();
 
 				g_GateState.Set2IdleIfGateIn();
 				tx_timer = getMS();
@@ -1040,8 +1043,8 @@ void CCC1200::txProcess()
 			printMsg(TC_CYAN, TC_YELLOW, "TX timeout\n");
 			//usleep(10*40e3); //wait 400ms (10 M17 frames)
 
-			stop_tx();
-			start_rx();
+			startRx();
+
 			if (cfg.debug) printMsg(TC_CYAN, TC_GREEN, "RX start\n");
 
 			tx_state=ETxState::idle;
@@ -1051,7 +1054,6 @@ void CCC1200::txProcess()
 
 void CCC1200::rxProcess()
 {
-	bool uart_rx_data_valid = false;
 	bool got_lsf = false;
 	uint8_t rx_bsb_sample = 0;
 	int8_t raw_bsb_rx[960];
@@ -1061,7 +1063,6 @@ void CCC1200::rxProcess()
 	uint16_t last_fn = 0xffffu;
 	uint16_t sid;
 	uint16_t sample_cnt = 0;
-	RingBuffer<uint8_t, 3> rx_header;
 	RingBuffer<int8_t, 41> flt_buff;
 	RingBuffer<float, 2042> f_flt_buff;
 	// why 2042? 8*5+2*(8*5+4800/25*5)+2 = 2042
@@ -1103,24 +1104,29 @@ void CCC1200::rxProcess()
 			printMsg(TC_CYAN, TC_RED, "Rx process thread poll() returned revents containing error: %d\n", pfd.revents);
 			raise(SIGINT);
 			return;
-		} else if (g_GateState.IsRxReady()) {
+		} else if ((not uart_lock) and g_GateState.IsRxReady()) {
 			if (readDev(&rx_bsb_sample, 1))
 			{
 				raise(SIGINT);
 				return;
 			}
 
-			rx_header.Push(rx_bsb_sample);
-
-			if (rx_header[0]==CMD_RX_DATA and rx_header[1]==0xC3 and rx_header[2]==0x03)
-			{
-				if (readDev(raw_bsb_rx, 960))
+			if (uart_sync) {
+				raw_bsb_rx[rx_buff_cnt++] = rx_bsb_sample;
+			} else {
+				rx_header.Push(rx_bsb_sample);
+				if (rx_header[0]==CMD_RX_DATA and rx_header[1]==0xC3 and rx_header[2]==0x03)
 				{
-					raise(SIGINT);
-					return;
+					uart_sync = true;
+					rx_buff_cnt = 0;
+					rx_header.Clear();
 				}
-				rx_header.Clear();
+			}
+			if (uart_sync and (rx_buff_cnt >= 960))
+			{
 				uart_rx_data_valid = true;
+				uart_sync = false;
+				rx_buff_cnt = 0;
 			}
 		}
 
