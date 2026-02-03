@@ -895,7 +895,7 @@ void CCC1200::txProcess()
 					auto nextfn = p->GetFrameNumber();
 					if (cfg.debug and (++pfn != nextfn))
 					{
-						printMsg(TC_CYAN, TC_YELLOW, "GWY STR Unexpected FN: %04x\n", nextfn);
+						printMsg(TC_CYAN, (nextfn & 0x8000u) ? TC_GREEN : TC_YELLOW, "GWY STR FN: %04x\n", nextfn);
 						pfn = nextfn;
 					}
 				}
