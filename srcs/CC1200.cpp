@@ -585,7 +585,7 @@ void CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
 		}
 		if (++n == decade)
 		{
-			if (cfg.debug or n > 255) printMsg(TC_CYAN, TC_YELLOW, "%s unsuccessful after %u tr%s\n", what, n, ((n==1) ? "y" : "ies"));
+			if (cfg.debug or n > 7) printMsg(TC_CYAN, TC_YELLOW, "%s unsuccessful try %u\n", what, n);
 			decade *= 2u;
 		}
 		usleep(40e3);
@@ -895,7 +895,7 @@ void CCC1200::txProcess()
 					auto nextfn = p->GetFrameNumber();
 					if (cfg.debug and (++pfn != nextfn))
 					{
-						printMsg(TC_CYAN, TC_GREEN, "GWY STR FN: %04x\n", nextfn);
+						printMsg(TC_CYAN, TC_YELLOW, "GWY STR Unexpected FN: %04x\n", nextfn);
 						pfn = nextfn;
 					}
 				}
@@ -1044,8 +1044,6 @@ void CCC1200::txProcess()
 			//usleep(10*40e3); //wait 400ms (10 M17 frames)
 
 			startRx();
-
-			if (cfg.debug) printMsg(TC_CYAN, TC_GREEN, "RX start\n");
 
 			tx_state=ETxState::idle;
 		}
