@@ -100,19 +100,6 @@ enum cmd_t
 // 40.0e3 is F_TCXO in kHz
 // 64 is `CFM_TX_DATA_IN` register value for max. F_DEV
 
-enum err_t
-{
-	ERR_OK,					//all good
-	ERR_TRX_PLL,			//TRX PLL lock error
-	ERR_TRX_SPI,			//TRX SPI comms error
-	ERR_RANGE,				//value out of range
-	ERR_CMD_MALFORM,		//malformed command
-	ERR_BUSY,				//busy!
-	ERR_BUFF_FULL,			//buffer full
-	ERR_NOP,				//nothing to do
-	ERR_OTHER
-};
-
 //debug printf
 
 uint32_t CCC1200::getMS(void)
@@ -549,47 +536,47 @@ bool CCC1200::setTxPower(float power) //powr in dBm
 
 void CCC1200::startRx(void)
 {
-	txrxControl(CMD_TX_START, 0, "stop_tx");
-	txrxControl(CMD_RX_START, 1, "start_rx");
+	std::lock_guard<std::mutex> lg(uart_lock);
+	while (txrxControl(CMD_TX_START, 0, "stop_tx"))
+		usleep(40000);
 	reset_rx();
+	while(txrxControl(CMD_RX_START, 1, "start_rx"))
+		usleep(40000);
 }
 
 void CCC1200::startTx(void)
 {
-	txrxControl(CMD_RX_START, 0, "stop_rx");
-	txrxControl(CMD_TX_START, 1, "start_tx");
+	std::lock_guard<std::mutex> lg(uart_lock);
+	while (txrxControl(CMD_RX_START, 0, "stop_rx"))
+		usleep(40000);
 	reset_rx();
+	while (txrxControl(CMD_TX_START, 1, "start_tx"))
+		usleep(40000);
 }
 
-void CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
+err_t CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
 {
-	uart_lock = true;
-	unsigned n = 0, decade = 1;
-	while (true)
+	uint8_t cmd[4] { cid, 4, 0, onoff };
+	uint8_t resp[4] = { 0 };
+
+	tcflush(fd, TCIFLUSH);    //clear leftover bytes
+
+	writeDev(cmd, 4, what);
+
+	err_t rval = ERR_OTHER;
+	if (not readDev(resp, sizeof(resp)))
 	{
-		uint8_t cmd[4] { cid, 4, 0, onoff };
-		uint8_t resp[4] = { 0 };
-
-		tcflush(fd, TCIFLUSH);    //clear leftover bytes
-
-		writeDev(cmd, 4, what);
-
-		if (not readDev(resp, sizeof(resp)))
-		{
-			const uint8_t good[3] { cid, 4, 0 };
-			if ((0 == memcmp(resp, good, 3)) and (ERR_OK == resp[3] or ERR_NOP == resp[3]))
+		const uint8_t good[3] { cid, 4, 0 };
+		if (0 == memcmp(resp, good, 3)) {
+			if (ERR_OK == resp[3] or ERR_NOP == resp[3])
+				rval = ERR_OK;
+			else
 			{
-				uart_lock = false;
-				return;
+				printMsg(TC_CYAN, TC_RED, "%s returned error value %d\n", what, int(resp[3]));
 			}
 		}
-		if (++n == decade)
-		{
-			if (cfg.debug or n > 7) printMsg(TC_CYAN, TC_YELLOW, "%s unsuccessful try %u\n", what, n);
-			decade *= 2u;
-		}
-		usleep(40e3);
 	}
+	return rval;
 }
 
 void CCC1200::reset_rx()
@@ -756,7 +743,6 @@ bool CCC1200::Start()
 	printMsg(TC_CYAN, TC_GREEN, "Device start - RX\n");
 
 	// start processes
-	uart_lock = false;
 	keep_running = true;
 	txFuture = std::async(std::launch::async, &CCC1200::txProcess, this);
 	if (txFuture.valid())
@@ -776,14 +762,16 @@ bool CCC1200::Start()
 void CCC1200::Stop()
 {
 	printMsg(TC_CYAN, TC_DEFAULT, "Stopping tx/rx threads...\n");
-	keep_running = uart_lock = false;
+	keep_running = false;
 	if (txFuture.valid())
 		txFuture.get();
 	if (rxFuture.valid())
 		rxFuture.get();
 	printMsg(TC_CYAN, TC_DEFAULT, "Stopping tx/rx on CC1200...\n");
-	txrxControl(CMD_TX_START, 0, "stop tx");
-	txrxControl(CMD_RX_START, 0, "stop rx");
+	while(txrxControl(CMD_TX_START, 0, "stop tx"))
+		usleep(40000);
+	while(txrxControl(CMD_RX_START, 0, "stop rx"))
+		usleep(40000);
 	printMsg(TC_CYAN, TC_DEFAULT, "Stopping CC1200 UART...\n");
 	gpioCleanup();
 	if (fd >= 0)
@@ -1097,14 +1085,14 @@ void CCC1200::rxProcess()
 		else if (rv == 0)
 			continue;
 		
-		if (pfd.revents != POLLIN)
-		{
+		if (pfd.revents != POLLIN) {
 			printMsg(TC_CYAN, TC_RED, "Rx process thread poll() returned revents containing error: %d\n", pfd.revents);
 			raise(SIGINT);
 			return;
-		} else if ((not uart_lock) and g_GateState.IsRxReady()) {
+		} else if ((uart_lock.try_lock()) and g_GateState.IsRxReady()) {
 			if (readDev(&rx_bsb_sample, 1))
 			{
+				uart_lock.unlock();
 				raise(SIGINT);
 				return;
 			}
@@ -1126,6 +1114,7 @@ void CCC1200::rxProcess()
 				uart_sync = false;
 				rx_buff_cnt = 0;
 			}
+			uart_lock.unlock();
 		}
 
 		if (uart_rx_data_valid)

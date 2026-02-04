@@ -24,6 +24,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <gpiod.h>
+#include <mutex>
 
 #include "RingBuffer.h"
 #include "FrameType.h"
@@ -45,6 +46,19 @@ using SConfig = struct config_tag
 	int freqCorr;
 	float power;
 	bool afc, isV3, debug;
+};
+
+enum err_t
+{
+	ERR_OK,					//all good
+	ERR_TRX_PLL,			//TRX PLL lock error
+	ERR_TRX_SPI,			//TRX SPI comms error
+	ERR_RANGE,				//value out of range
+	ERR_CMD_MALFORM,		//malformed command
+	ERR_BUSY,				//busy!
+	ERR_BUFF_FULL,			//buffer full
+	ERR_NOP,				//nothing to do
+	ERR_OTHER
 };
 
 class CCC1200 : public CBase
@@ -73,7 +87,7 @@ private:
 	bool setFreqCorr(int16_t corr);
 	bool setAfc(bool afc);
 	bool setTxPower(float pow);
-	void txrxControl(uint8_t cid, uint8_t onoff, const char *what);
+	err_t txrxControl(uint8_t cid, uint8_t onoff, const char *what);
 	void startTx(void);
 	void startRx(void);
 	void reset_rx(void);
@@ -89,7 +103,8 @@ private:
 	struct gpiod_line_request *boot0_line = nullptr;
 	struct gpiod_line_request *nrst_line = nullptr;
 
-	std::atomic<bool> keep_running, uart_lock;
+	std::atomic<bool> keep_running;
+	std::mutex uart_lock;
 	bool uart_rx_data_valid = false;
 	uint16_t rx_buff_cnt = 0;
 	bool uart_sync = false;
