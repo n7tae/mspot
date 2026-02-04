@@ -24,7 +24,6 @@
 #include <termios.h>
 #include <unistd.h>
 #include <gpiod.h>
-#include <mutex>
 
 #include "RingBuffer.h"
 #include "FrameType.h"
@@ -104,7 +103,7 @@ private:
 	struct gpiod_line_request *nrst_line = nullptr;
 
 	std::atomic<bool> keep_running;
-	std::mutex uart_lock;
+	std::atomic<bool> uart_lock = false;
 	bool uart_rx_data_valid = false;
 	uint16_t rx_buff_cnt = 0;
 	bool uart_sync = false;

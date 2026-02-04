@@ -536,22 +536,24 @@ bool CCC1200::setTxPower(float power) //powr in dBm
 
 void CCC1200::startRx(void)
 {
-	std::lock_guard<std::mutex> lg(uart_lock);
+	uart_lock = true;
 	while (txrxControl(CMD_TX_START, 0, "stop_tx"))
 		usleep(40000);
 	reset_rx();
 	while(txrxControl(CMD_RX_START, 1, "start_rx"))
 		usleep(40000);
+	uart_lock = false;
 }
 
 void CCC1200::startTx(void)
 {
-	std::lock_guard<std::mutex> lg(uart_lock);
+	uart_lock = true;
 	while (txrxControl(CMD_RX_START, 0, "stop_rx"))
 		usleep(40000);
 	reset_rx();
 	while (txrxControl(CMD_TX_START, 1, "start_tx"))
 		usleep(40000);
+	uart_lock = false;
 }
 
 err_t CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
@@ -1089,10 +1091,9 @@ void CCC1200::rxProcess()
 			printMsg(TC_CYAN, TC_RED, "Rx process thread poll() returned revents containing error: %d\n", pfd.revents);
 			raise(SIGINT);
 			return;
-		} else if ((uart_lock.try_lock()) and g_GateState.IsRxReady()) {
+		} else if ((not uart_lock) and g_GateState.IsRxReady()) {
 			if (readDev(&rx_bsb_sample, 1))
 			{
-				uart_lock.unlock();
 				raise(SIGINT);
 				return;
 			}
@@ -1114,7 +1115,6 @@ void CCC1200::rxProcess()
 				uart_sync = false;
 				rx_buff_cnt = 0;
 			}
-			uart_lock.unlock();
 		}
 
 		if (uart_rx_data_valid)
