@@ -755,6 +755,7 @@ bool CGateway::setDestination(const CCallsign &cs)
 		{
 			mlink.addr.Initialize(phost->ipv6address, phost->port);
 			mlink.cs = cs;
+			mlink.isReflector = cs.IsReflector();
 			return false;
 		}
 

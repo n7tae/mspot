@@ -11,14 +11,13 @@ This open-source project will build an M17-only hot-spot for amateur radio. The 
 - **Minimum executable size**: *mspot* is tiny, especially when you compare it to the multi-mode alternatives.
 - **Excellent reliability**: You'll be the judge of that. Try it and find out.
 
-This version of *mspot* only works with the [M17 CC1200 Raspberry Pi hat](https://m17project.org/cc1200-rpi-shield/). It is planned to also support the [M17 SX1255 Raspberry Pi hat](https://m17project.org/sx1255-rpi-shield/) in the future. 
+This version of *mspot* only works with the [M17 CC1200 Raspberry Pi hat](https://m17project.org/cc1200-rpi-shield/). It is planned to also support the [M17 SX1255 Raspberry Pi hat](https://m17project.org/sx1255-rpi-shield/) in the future. Support for version 1.6.1 MMDVM modems is available in the `MMDVM` branch.
 
 ## Building *mspot*
 
 These instructions are for Debian-based operating system.
 
 After making sure your system is up to date: `sudo apt update && sudo apt upgrade`
-
 
 There are a few things you need: `sudo apt install git build-essential nlohmann-json3-dev`
 
