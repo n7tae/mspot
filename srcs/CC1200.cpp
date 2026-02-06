@@ -1270,8 +1270,11 @@ void CCC1200::rxProcess()
 
 							if (cfg.debug)
 							{
-								printMsg(TC_CYAN, TC_YELLOW, "RF Stream Frame: ");
-								printMsg(nullptr, TC_GREEN, "FN:%04X LICH_CNT:%d ED^2:%5.2f MER:%4.1f%%\n", fn, lich_cnt, sed_str, float(e)*escale);
+								if ((fn%12u==11u) or (fn>>15))
+								{
+									printMsg(TC_CYAN, TC_YELLOW, "RF Stream Frame: ");
+									printMsg(nullptr, TC_GREEN, "FN:%04X ED^2:%5.2f MER:%4.1f%%\n", fn, sed_str, float(e)*escale);
+								}
 							}
 						}
 
