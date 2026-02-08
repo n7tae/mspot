@@ -43,7 +43,7 @@ There are a few things you need: `sudo apt install git build-essential nlohmann-
 
 Then copy this repo: `git clone https://github.com/n7tae/mspot.git`
 
-Within the *mspot* folder, copy a few files to this folder (don't forget the period at the end!): `cp config/{mspot.*,*.txt} .`
+Within the *mspot* folder, copy a few files to this folder (don't forget the period at the end!): `cp config/* .`
 
 Then you can use your favorite text editor to modify some of these files to your needs. Comments within these files will help you decide what you need to do:
 
@@ -71,7 +71,7 @@ The user that executes *mspot* needs to be in the `dialout` group! Do a `getent 
 
 To start *mspot*, go to its repo folder and type `./mspot mspot.ini`. Then log messages will be printed in the terminal window. Timestamp colors indicate where the message is being generated. Extra messages from the CC1200 modem class will be printed if the `[Modem]Debug` value is `true`.
 
-If you know how, you can build a service file and install it with `sudo make install`, but you'll lose the color coding in the messages.
+If you know how, you can build a service file and install it with `sudo make install`, but you'll lose the color coding in the messages that *mspot* produces.
 
 ## Connecting to a reflector
 
@@ -87,9 +87,11 @@ Finally a quick word about reflector. For legacy reflectors, *i.e.*, all URF ref
 
 ## Direct calls
 
-Direct calls to another destination are supported, but you have to set up you home router to forward UDP port 17000 to the local network address of your Pi.
+Direct calls to another destination are supported, but in order for you to hear direct calls, you have to set up you home router to forward UDP port 17000 to the local network address of your Pi.
 
-To place a direct call, you first need to setup the callsign and address in the MyHosts.txt file. After that, you put that callsign in the destination of your radio and key up once. You should see a message that your destination was found. The next time you key up, your voice packets will be routed to the specified IP address.
+To place a direct call, you first need to setup the callsign and address of your destination in the MyHosts.txt file. After that, you put that callsign in the destination of your radio and key up once. You should see a message that your destination was found. The next time you key up, your voice packets will be routed to the specified IP address.
+
+If you subsequently link to a reflector, you'll still possible hear incoming direct calls, if *mspot* is idle. If you want to place or return a direct call, you'll have to unlink from the reflector to which you are currently linked, and then set the proper destination in your radio and quick-key before you can reply.
 
 ## Using *mspot*
 
@@ -115,19 +117,19 @@ The robotic voice prompts currently being used are generated from a rather old o
 
 ## Packet mode
 
-I don't have a radio that can send or receive PM transmissions yet. The code is there, but it hasn't yet been debugged!
+I don't have a radio that can send or receive PM transmissions yet. The code is there, but it hasn't yet been debugged! *Caveat emptor!*
 
 ## License
 
-This software is published using the GNU GPU, Version 2. Please see the enclosed `LICENSE` file for details.
+This software is published using the GNU GPU, Version 3. Please see the enclosed `LICENSE` file for details.
 
 ## Finally
 
 There is still a lot of work to do before *mspot* will be really useful and catch up with Jim N1ADJ's excellent go-based m17-gateway.
 I am working on:
 - A fully functional dashboard.
-- Packet mode.
-- systemd support.
-- better and more voice prompts.
+- Packet mode. I am waiting for OpenRTX to release firmware for my CS7000-M17 radio.
+- Systemd support. I have some things to fix in *mspot's* output before I am ready for that.
+- Better voices and more voice prompts. See the new generation of voices available in [*mat*](https://github.com/n7tae/mat).
 
 73 de N7TAE

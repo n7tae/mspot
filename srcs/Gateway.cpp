@@ -435,6 +435,8 @@ void CGateway::ProcessGateway()
 						printMsg(TC_MAGENTA, TC_RED, "Incoming Gateway Packet failed CRC check:\n");
 						Dump(nullptr, buf, length);
 					} else {
+						memset(p->GetDstAddress(), 0xffu, 6);
+						p->CalcCRC();
 						sendPacket2Modem(std::move(p));
 					}
 				}
