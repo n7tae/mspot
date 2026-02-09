@@ -10,6 +10,7 @@
 # executables
 mspot
 inicheck
+cc1200-reset
 
 # local configs
 /mspot.*
