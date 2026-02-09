@@ -26,13 +26,16 @@ SRCS = $(wildcard srcs/*.cpp)
 OBJS = $(SRCS:.cpp=.o)
 DEPS = $(SRCS:.cpp=.d)
 
-all : mspot inicheck
+all : mspot inicheck cc1200-reset
 
 mspot : $(OBJS)
 	$(CXX) $(CPPFLAGS) $(OBJS) /usr/local/lib/libm17.a $(LIBS) -o $@
 
 inicheck : srcs/Configure.h srcs/Configure.cpp srcs/JsonKeys.h
 	$(CXX) $(CPPFLAGS) -DINICHECK srcs/Configure.cpp -o $@
+
+cc1200-reset : tools/cc1200-reset.c
+	gcc -o $@ tools/cc1200-reset.c -lgpiod
 
 -include $(DEPS)
 
