@@ -18,22 +18,25 @@
 
 #pragma once
 
+enum class EUnit { null, call, cc12, gate, host, sock, str, udp };
+
 class CBase
 {
 public:
 	CBase(void) {}
 	virtual ~CBase(void) {}
 protected:
-	void printMsg(const char *tsColor, const char *txColor, const char *fmt, ...) const;
+	void Log(EUnit unit, const char *fmt, ...) const;
 	void Dump(const char *title, const void *data, unsigned length) const;
-	const char *TC_BLACK   {"\033[30m"};
-	const char *TC_RED     {"\033[31m"};
-	const char *TC_GREEN   {"\033[32m"};
-	const char *TC_YELLOW  {"\033[33m"};
-	const char *TC_BLUE    {"\033[34m"};
-	const char *TC_MAGENTA {"\033[35m"};
-	const char *TC_CYAN    {"\033[36m"};
-	const char *TC_WHITE   {"\033[37m"};
+/* 	const char *TC_BLACK     {"\033[30m"};
+	const char *TC_RED       {"\033[31m"};
+	const char *TC_GREEN     {"\033[32m"};
+	const char *TC_YELLOW    {"\033[33m"};
+	const char *TC_BLUE      {"\033[34m"};
+	const char *TC_MAGENTA   {"\033[35m"};
+	const char *TC_CYAN      {"\033[36m"};
+	const char *TC_WHITE     {"\033[37m"};
+	const char *TC_DEFAULT   {"\033[39m"};
 	const char *TC_B_BLACK   {"\033[90m"};
 	const char *TC_B_RED     {"\033[91m"};
 	const char *TC_B_GREEN   {"\033[92m"};
@@ -42,7 +45,10 @@ protected:
 	const char *TC_B_MAGENTA {"\033[95m"};
 	const char *TC_B_CYAN    {"\033[96m"};
 	const char *TC_B_WHITE   {"\033[97m"};
-	const char *TC_DEFAULT   {"\033[39m"};
+ */
+
 private:
-	void timeStamp(const char *color_esc) const;
+#ifndef NO_TS
+	void timeStamp() const;
+#endif
 };

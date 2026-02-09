@@ -97,7 +97,7 @@ void CGateway::doUnlink(std::unique_ptr<CPacket> &p)
 	if (ELinkState::unlinked == mlink.state)
 	{
 		addMessage("repeater is_already_unlinked");
-		printMsg(TC_MAGENTA, TC_YELLOW, "%s is already unlinked\n", thisCS.c_str());
+		Log(EUnit::gate, "%s is already unlinked\n", thisCS.c_str());
 	}
 	else
 	{
@@ -106,7 +106,7 @@ void CGateway::doUnlink(std::unique_ptr<CPacket> &p)
 		memcpy(disc.magic, "DISC", 4);
 		thisCS.CodeOut(disc.cscode);
 		sendPacket(disc.magic, 10, mlink.addr);
-		printMsg(TC_MAGENTA, TC_GREEN, "DISConnect packet sent to %s\n", mlink.cs.c_str());
+		Log(EUnit::gate, "DISConnect packet sent to %s\n", mlink.cs.c_str());
 		// the gateway proccess loop will disconnect when is receives the confirming DISC packet.
 	}
 }
@@ -145,7 +145,7 @@ void CGateway::doRecord(char c, uint16_t streamID)
 			continue;
 		if (timer.time() > 2.0)
 		{
-			printMsg(TC_MAGENTA, TC_RED, "Voice Recorder timeout!\n");
+			Log(EUnit::gate, "Voice Recorder timeout!\n");
 			break;
 		}
 		if (EPacketType::stream != p->GetType())
@@ -162,13 +162,13 @@ void CGateway::doRecord(char c, uint16_t streamID)
 	}
 	if (fn > 3000)
 	{
-		printMsg(TC_MAGENTA, TC_YELLOW, "Too long, did not save the last %.2f seconds of the transmission\n", 0.04f * (fn - 3000));
+		Log(EUnit::gate, "Too long, did not save the last %.2f seconds of the transmission\n", 0.04f * (fn - 3000));
 	}
 	if (fn < 25)
 	{
 		while (not fifo.empty())
 			fifo.pop();
-		printMsg(TC_MAGENTA, TC_RED, "Only recorded %d milliseconds, not saved\n", 40 * fn);
+		Log(EUnit::gate, "Only recorded %d milliseconds, not saved\n", 40 * fn);
 		return;
 	}
 
@@ -179,10 +179,10 @@ void CGateway::doRecord(char c, uint16_t streamID)
 	if (std::string::npos == pos)
 	{
 		if (isprint(c))
-			printMsg(TC_MAGENTA, TC_RED, "'%c' is not a valid M17 character\n", c);
+			Log(EUnit::gate, "'%c' is not a valid M17 character\n", c);
 		else
-			printMsg(TC_MAGENTA, TC_RED, "0x%02x is not a valid M17 character\n", unsigned(c));
-		printMsg(TC_MAGENTA, TC_DEFAULT, "Invalid character will be replaced with ' '\n");
+			Log(EUnit::gate, "0x%02x is not a valid M17 character\n", unsigned(c));
+		Log(EUnit::gate, "Invalid character will be replaced with ' '\n");
 		pos = 0;
 	}
 	std::filesystem::path pathname(audioPath);
@@ -201,7 +201,7 @@ void CGateway::doRecord(char c, uint16_t streamID)
 	}
 	else
 	{
-		printMsg(TC_MAGENTA, TC_RED, "Could not open %s for writing\n", pathname.c_str());
+		Log(EUnit::gate, "Could not open %s for writing\n", pathname.c_str());
 	}
 
 	// after a short wait
@@ -209,7 +209,7 @@ void CGateway::doRecord(char c, uint16_t streamID)
 	if (g_GateState.SetStateToOnlyIfFrom(EGateState::gatestreamin, EGateState::modemin))
 		doPlay(c);
 	else
-		printMsg(TC_MAGENTA, TC_RED, "Could not set state from ModemIn to GateStreamIn\n");
+		Log(EUnit::gate, "Could not set state from ModemIn to GateStreamIn\n");
 }
 
 void CGateway::doPlay(std::unique_ptr<CPacket> &p)
@@ -220,7 +220,7 @@ void CGateway::doPlay(std::unique_ptr<CPacket> &p)
 		CCallsign dst(p->GetCDstAddress());
 		doPlay(dst.GetModule());
 	} else {
-		printMsg(TC_MAGENTA, TC_RED, "Could not change state from ModemIn to GateStreamIn\n");
+		Log(EUnit::gate, "Could not change state from ModemIn to GateStreamIn\n");
 	}
 }
 
@@ -232,9 +232,9 @@ void CGateway::doPlay(char c)
 	if (std::string::npos == pos)
 	{
 		if (isprint(c))
-			printMsg(TC_MAGENTA, TC_RED, "'%c' is not a valid M17 character\n", c);
+			Log(EUnit::gate, "'%c' is not a valid M17 character\n", c);
 		else
-			printMsg(TC_MAGENTA, TC_RED, "0x%02x is not a valid M17 character\n", unsigned(c));
+			Log(EUnit::gate, "0x%02x is not a valid M17 character\n", unsigned(c));
 		return;
 	}
 	pathname /= fnames[pos];
@@ -248,7 +248,7 @@ void CGateway::doPlay(char c)
 		// no partial payloads or less than 1 sec duration or more than 2 minute
 		if ((size % 16) or (size / 16 < 25) or (size / 16 > 3000))
 		{
-			printMsg(TC_MAGENTA, TC_RED, "'%s' has an unexpected file size of %u\n", pathname.c_str(), size);
+			Log(EUnit::gate, "'%s' has an unexpected file size of %u\n", pathname.c_str(), size);
 			return;
 		}
 		fc = uint16_t(size / 16) - 1u; // this is the last frame number
@@ -288,5 +288,5 @@ void CGateway::doPlay(char c)
 		ifs.close();
 	}
 	else
-		printMsg(TC_MAGENTA, TC_RED, "Could not open file '%s'\n", pathname.c_str());
+		Log(EUnit::gate, "Could not open file '%s'\n", pathname.c_str());
 }

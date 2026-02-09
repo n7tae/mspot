@@ -79,7 +79,7 @@ bool CHostMap::getBase(const std::string &cs, std::string &base) const
 	auto pos = cs.find_first_of(" /.");
 	if (pos < 3)
 	{
-		printMsg(TC_BLUE, TC_YELLOW, "'%s' is not a callsign!\n", cs.c_str());
+		Log(EUnit::host, "'%s' is not a callsign!\n", cs.c_str());
 		return true;
 	}
 	if (pos > 8)
@@ -113,12 +113,12 @@ void CHostMap::Add(const std::string &cs, const std::string &version, const std:
 	// make sure there is an IP path
 	if (host->ipv4address.empty() and host->ipv6address.empty())
 	{
-		printMsg(TC_BLUE, TC_RED, "Host %s doesn't have a compatible IP address\n", cs.c_str());
+		Log(EUnit::host, "Host %s doesn't have a compatible IP address\n", cs.c_str());
 		return;
 	}
 	if (baseMap.end() != baseMap.find(base))
 	{
-		printMsg(TC_BLUE, TC_YELLOW, "Host %s is being redefined\n", cs.c_str());
+		Log(EUnit::host, "Host %s is being redefined\n", cs.c_str());
 	}
 	baseMap[base] = host;
 }
@@ -130,7 +130,7 @@ void CHostMap::ReadAll()
 	hasIPv6 = g_Cfg.GetBoolean(g_Keys.gateway.section, g_Keys.gateway.ipv6);
 	Read(g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.hostPath));
 	Read(g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.myHostPath));
-	printMsg(TC_BLUE, TC_GREEN, "Read %u Hosts\n", baseMap.size());
+	Log(EUnit::host, "Read %u Hosts\n", baseMap.size());
 }
 
 void CHostMap::Read(const std::string &path)
@@ -153,11 +153,11 @@ void CHostMap::Read(const std::string &path)
 			if (elem.size() == 10)
 				Add(elem[0], elem[1], elem[2], elem[3], elem[4], elem[5], elem[6], std::stoul(elem[7]), elem[8], elem[9]);
 			else
-				printMsg(TC_BLUE, TC_YELLOW, "Line #%u of %s has %u elements, needs 10 item\n", count, path.c_str(), elem.size());
+				Log(EUnit::host, "Line #%u of %s has %u elements, needs 10 item\n", count, path.c_str(), elem.size());
 
 		}
 		file.close();
 	}
 	else
-		printMsg(TC_BLUE, TC_RED, "Could not open file '%s'\n", path.c_str());
+		Log(EUnit::host, "Could not open file '%s'\n", path.c_str());
 }

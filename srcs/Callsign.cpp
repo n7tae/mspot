@@ -117,7 +117,7 @@ void CCallsign::CodeIn(const uint8_t *in)
 
 	if (coded > 0xee6b27ffffffu)
 	{
-		printMsg(TC_BLUE, TC_RED, "Callsign code is too large, 0x%x\n", coded);
+		Log(EUnit::call, "encoded value is too large, 0x%x\n", coded);
 		coded = 0;
 		return;
 	}
@@ -178,9 +178,9 @@ void CCallsign::SetModule(char m)
 	if (not isupper(m))
 	{
 		if (isprint(m))
-			printMsg(TC_BLUE, TC_RED, "'%c' is not a vaild module\n", m);
+			Log(EUnit::call, "'%c' is not a vaild module\n", m);
 		else
-			printMsg(TC_BLUE, TC_RED, "0x%02x is not a valid module character\n", unsigned(m));
+			Log(EUnit::call, "0x%02x is not a valid module character\n", unsigned(m));
 		return;
 	}
 	std::string call(cs);

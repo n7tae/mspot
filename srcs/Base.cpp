@@ -25,11 +25,7 @@
 
 #include "Base.h"
 
-#ifndef NO_TS
-void CBase::printMsg(const char *tsColor, const char *txColor, const char* fmt, ...) const
-#else
-void CBase::printMsg(const char */*tsColor*/, const char *txColor, const char *fmt, ...) const
-#endif
+void CBase::Log(EUnit unit, const char* fmt, ...) const
 {
 	if (nullptr == fmt)
 		return;	// this should never happen
@@ -41,9 +37,20 @@ void CBase::printMsg(const char */*tsColor*/, const char *txColor, const char *f
 
 #ifndef NO_TS
 	// print a timeStame if a color esc sequence was provided
-	if (tsColor)
-		timeStamp(tsColor);
+	timeStamp();
 #endif
+
+	switch (unit)
+	{
+		case EUnit::call: printf("Callsign, "); break;
+		case EUnit::cc12: printf("Modem, ");    break;
+		case EUnit::gate: printf("Gateway, ");  break;
+		case EUnit::host: printf("HostMap, ");  break;
+		case EUnit::sock: printf("SockAddr, "); break;
+		case EUnit::str:  printf("StreamGW, "); break;
+		case EUnit::udp:  printf("UDP, ");      break;
+		case EUnit::null: default:              break;
+	}
 
 	// now print a variable list of things
 	char str[1000];	// plenty of room
@@ -53,29 +60,21 @@ void CBase::printMsg(const char */*tsColor*/, const char *txColor, const char *f
 	vsprintf(str, fmt, ap);
 	va_end(ap);
 
-	if(txColor != nullptr)
-	{
-		fputs(txColor, stdout);
-		fputs(str, stdout);
-		fputs(TC_DEFAULT, stdout);
-	}
-	else
-	{
-		fputs(str, stdout);
-	}
+	fputs(str, stdout);
 	// flush the buffer if the last character is a newline
 	if ('\n' == *endc)
 		fflush(stdout);
 }
 
-void CBase::timeStamp(const char *color_esc) const
+#ifndef NO_TS
+void CBase::timeStamp() const
 {
 	struct timeval now;
 	gettimeofday(&now, nullptr);
 	struct tm *tms = localtime(&now.tv_sec);
-	printf("%s[%02d/%02d %02d:%02d:%02d.%03ld] ", color_esc, tms->tm_mon + 1, tms->tm_mday, tms->tm_hour, tms->tm_min, tms->tm_sec, now.tv_usec / 1000u);
+	printf("[%02d/%02d %02d:%02d:%02d.%03ld] ", tms->tm_mon + 1, tms->tm_mday, tms->tm_hour, tms->tm_min, tms->tm_sec, now.tv_usec / 1000u);
 }
-
+#endif
 
 void CBase::Dump(const char *title, const void *pointer, unsigned length) const
 {

@@ -58,7 +58,7 @@ public:
 		}
 		else
 		{
-			printMsg(TC_MAGENTA, TC_RED, "Could not find address for %s\n", address.c_str());
+			Log(EUnit::sock, "Could not find address for %s\n", address.c_str());
 			return true;
 		}
 	}
@@ -81,7 +81,7 @@ public:
 				{
 					if (1 > inet_pton(AF_INET, address, &(addr4->sin_addr)))
 					{
-						printMsg(TC_MAGENTA, TC_RED, "IPv4 SockAddress initialization failed for '%s'\n", address);
+						Log(EUnit::sock, "IPv4 SockAddress initialization failed for '%s'\n", address);
 						return true;
 					}
 				}
@@ -101,7 +101,7 @@ public:
 				{
 					if (1 > inet_pton(AF_INET6, address, &(addr6->sin6_addr)))
 					{
-						printMsg(TC_MAGENTA, TC_RED, "IPv6 SockAddress initialization failed for '%s'\n", address);
+						Log(EUnit::sock, "IPv6 SockAddress initialization failed for '%s'\n", address);
 						return true;
 					}
 				}
@@ -110,7 +110,7 @@ public:
 		else
 		{
 			addr.ss_family = AF_INET;
-			printMsg(TC_MAGENTA, TC_RED, "Address Family must be IPv4 or IPv6\n");
+			Log(EUnit::sock, "Address Family must be IPv4 or IPv6\n");
 			return true;
 		}
 		return false;
@@ -200,7 +200,7 @@ public:
 			auto addr6 = (struct sockaddr_in6 *)&addr;
 			inet_ntop(AF_INET6, &(addr6->sin6_addr), straddr, INET6_ADDRSTRLEN);
 		} else {
-			printMsg(TC_MAGENTA, TC_RED, "Can't get address, unknown family: %u", addr.ss_family);
+			Log(EUnit::sock, "Can't get address, unknown family: %u", addr.ss_family);
 			return "UNKNOWN";
 		}
 		return straddr;

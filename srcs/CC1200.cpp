@@ -169,14 +169,14 @@ bool CCC1200::setAttributes(unsigned speed, int parity)
 	struct termios tty;
 	if (tcgetattr(fd, &tty))
 	{
-		printMsg(nullptr, TC_RED, "tcgetattr() error: %s\n", strerror(errno));
+		Log(EUnit::null, "tcgetattr() error: %s\n", strerror(errno));
 		return true;
  	}
 
 	auto baud = getBaud(speed);
 	if (B0 == baud)
 	{
-		printMsg(nullptr, TC_YELLOW, "%u is not a valid baud rate, trying 460800 ", speed);
+		Log(EUnit::null, "%u is not a valid baud rate, trying 460800 ", speed);
 		baud = B460800;
 	}
 	cfsetospeed(&tty, baud);
@@ -203,7 +203,7 @@ bool CCC1200::setAttributes(unsigned speed, int parity)
 
 	if (tcsetattr(fd, TCSANOW, &tty))
 	{		
-		printMsg(nullptr, TC_RED, "tcsetattr() error: %s\n", strerror(errno));
+		Log(EUnit::null, "tcsetattr() error: %s\n", strerror(errno));
 		return true; 
 	}
 	
@@ -244,20 +244,20 @@ struct gpiod_line_request *CCC1200::gpioLineRequest(unsigned offset, int value, 
 	settings = gpiod_line_settings_new();
 	if (nullptr == settings)
 	{
-		printMsg(nullptr, TC_RED, "Could not create settings for gpio line #%u\n", offset);
+		Log(EUnit::cc12, "Could not create settings for gpio line #%u\n", offset);
 	} else {
 		if (gpiod_line_settings_set_direction(settings, GPIOD_LINE_DIRECTION_OUTPUT) or gpiod_line_settings_set_output_value(settings, value ? GPIOD_LINE_VALUE_ACTIVE : GPIOD_LINE_VALUE_INACTIVE))
 		{
-			printMsg(nullptr, TC_RED, "Could not adjust settings for gpio line #%u\n", offset);
+			Log(EUnit::cc12, "Could not adjust settings for gpio line #%u\n", offset);
 		} else {
 			line_cfg = gpiod_line_config_new();
 			if (nullptr == line_cfg)
 			{
-				printMsg(nullptr, TC_RED, "Could not create new config for gpio line #%u\n", offset);
+				Log(EUnit::cc12, "Could not create new config for gpio line #%u\n", offset);
 			} else {
 				if (gpiod_line_config_add_line_settings(line_cfg, &offset, 1, settings))
 				{
-					printMsg(nullptr, TC_RED, "could not add settings to config of gpio line #%u\n", offset);
+					Log(EUnit::cc12, "could not add settings to config of gpio line #%u\n", offset);
 				} else {
 					req_cfg = gpiod_request_config_new();
 					if (req_cfg)
@@ -265,7 +265,7 @@ struct gpiod_line_request *CCC1200::gpioLineRequest(unsigned offset, int value, 
 						gpiod_request_config_set_consumer(req_cfg, (not consumer) ? "SPOT" : consumer);
 						request = gpiod_chip_request_lines(gpio_chip, req_cfg, line_cfg);
 						if (nullptr == request)
-							printMsg(nullptr, TC_RED, "Could not open offset %u on configured gpio device\n", offset);
+							Log(EUnit::cc12, "Could not open offset %u on configured gpio device\n", offset);
 					}
 				}
 			}
@@ -291,13 +291,13 @@ bool CCC1200::gpioSetValue(unsigned offset, int value)
 	else if (cfg.nrst == offset)
 		lr = nrst_line;
 	else {
-		printMsg(nullptr, TC_RED, "gpioSetValue error: offset %u not confiugred\n", offset);
+		Log(EUnit::null, "gpioSetValue error: offset %u not confiugred\n", offset);
 		return true;
 	}
 
 	if (gpiod_line_request_set_value(lr, offset, value ? GPIOD_LINE_VALUE_ACTIVE : GPIOD_LINE_VALUE_INACTIVE))
 	{
-		printMsg(nullptr, TC_RED, "Could not set gpio line #%u to %d\n", offset, value);
+		Log(EUnit::null, "Could not set gpio line #%u to %d\n", offset, value);
 		return true;
 	}
 	return false;
@@ -307,7 +307,7 @@ bool CCC1200::gpioInit(const std::string &consumer)
 {
 	gpio_chip = gpiod_chip_open(cfg.gpioDev.c_str());
 	if (nullptr == gpio_chip) {
-		printMsg(nullptr, TC_RED, "Could not open %s\n", cfg.gpioDev.c_str());
+		Log(EUnit::cc12, "Could not open %s\n", cfg.gpioDev.c_str());
 		return true;
 	}
 	boot0_line = gpioLineRequest(cfg.boot0, 0, consumer.c_str());
@@ -322,7 +322,7 @@ bool CCC1200::gpioInit(const std::string &consumer)
 // Release GPIO resources
 void CCC1200::gpioCleanup()
 {
-	printMsg(TC_CYAN, TC_DEFAULT, "GPIO reset: ");
+	Log(EUnit::cc12, "GPIO reset: ");
 	if (boot0_line)
 	{
 		gpioSetValue(cfg.boot0, 0);
@@ -335,7 +335,7 @@ void CCC1200::gpioCleanup()
 	}
 	if (gpio_chip)
 		gpiod_chip_close(gpio_chip);
-	printMsg(nullptr, TC_GREEN, "GPIO lines set to low and resources released\n");
+	Log(EUnit::cc12, "GPIO lines set to low and resources released\n");
 }
 
 bool CCC1200::readDev(void *vbuf, int size)
@@ -346,10 +346,10 @@ bool CCC1200::readDev(void *vbuf, int size)
 	{
 		int r = read(fd, buf + rd, size - rd);
 		if (r < 0) {
-			printMsg(TC_CYAN, TC_RED, "read() %s returned error: %s", cfg.uartDev.c_str(), strerror(errno));
+			Log(EUnit::cc12, "read() %s returned error: %s", cfg.uartDev.c_str(), strerror(errno));
 			return true;
 		} else if (r == 0) {
-			printMsg(TC_CYAN, TC_RED, "read() %s returned zero bytes\n", cfg.uartDev.c_str());
+			Log(EUnit::cc12, "read() %s returned zero bytes\n", cfg.uartDev.c_str());
 			return true;
 		}
 		rd += r;
@@ -361,9 +361,9 @@ void CCC1200::writeDev(void *buf, int size, const char *where)
 {
 	ssize_t n = write(fd, buf, size);
 	if (n < 0) {
-		printMsg(TC_CYAN, TC_YELLOW, "In %s, write() error: %s\n", where, strerror(errno));
+		Log(EUnit::cc12, "In %s, write() error: %s\n", where, strerror(errno));
 	} else if (n != size) {
-		printMsg(TC_CYAN, TC_YELLOW, "In %s, write() only wrote %d of %d\n", where, n, size);
+		Log(EUnit::cc12, "In %s, write() only wrote %d of %d\n", where, n, size);
 	}
 	return;
 }
@@ -387,13 +387,13 @@ bool CCC1200::pingDev()
 	const uint8_t good[7] { cid, 7, 0, 0, 0, 0, 0 };
     if (0 == memcmp(resp, good, 7))
 	{
-		printMsg(nullptr, TC_GREEN, "PONG OK\n"); //OK
+		Log(EUnit::null, "PONG OK\n"); //OK
         return false;
     }
 
 	uint32_t dev_err;
 	memcpy((uint8_t*)&dev_err, &resp[3], sizeof(uint32_t));
-    printMsg(nullptr, TC_RED, "%02x %02x %02x PONG error code: %04X\n", resp[0], resp[1], resp[2], dev_err);
+    Log(EUnit::null, "%02x %02x %02x PONG error code: %04X\n", resp[0], resp[1], resp[2], dev_err);
     return true;
 }
 
@@ -413,15 +413,15 @@ bool CCC1200::setRxFreq(uint32_t freq)
 		return true;
 	}
 
-	printMsg(TC_CYAN, TC_DEFAULT, "RX frequency: ");
+	Log(EUnit::cc12, "RX frequency: ");
 	const uint8_t good[4] = { cid, 4, 0, ERR_OK };
     if (0 == memcmp(resp, good, 4))
 	{
-		printMsg(nullptr, TC_GREEN, "%lu Hz\n", freq); //OK
+		Log(EUnit::null, "%lu Hz\n", freq); //OK
         return false;
     }
 
-    printMsg(nullptr, TC_RED, "Error %d setting RX frequency: %u Hz\n", resp[3], freq); //error
+    Log(EUnit::null, "Error %d setting RX frequency: %u Hz\n", resp[3], freq); //error
     return true;
 }
 
@@ -441,15 +441,15 @@ bool CCC1200::setTxFreq(uint32_t freq)
 		return true;
 	}
 
-	printMsg(TC_CYAN, TC_DEFAULT, "TX frequency: ");
+	Log(EUnit::cc12, "TX frequency: ");
 	const uint8_t good[4] { cid, 4, 0, ERR_OK };
     if (0 == memcmp(resp, good, 4))
 	{
-		printMsg(nullptr, TC_GREEN, "%lu Hz\n", freq); //OK
+		Log(EUnit::null, "%lu Hz\n", freq); //OK
         return false;
     }
 
-    printMsg(nullptr, TC_RED, "Error %d setting TX frequency: %u Hz\n", resp[3], freq); //error
+    Log(EUnit::null, "Error %d setting TX frequency: %u Hz\n", resp[3], freq); //error
     return true;
 }
 
@@ -468,15 +468,15 @@ bool CCC1200::setFreqCorr(int16_t corr)
 		return true;
 	}
 
-	printMsg(TC_CYAN, TC_DEFAULT, "Frequency correction: ");
+	Log(EUnit::cc12, "Frequency correction: ");
 	const uint8_t good[4] { cid, 4, 0, ERR_OK };
     if (0 == memcmp(resp, good, 4))
 	{
-		printMsg(nullptr, TC_GREEN, "%d\n", corr); //OK
+		Log(EUnit::null, "%d\n", corr); //OK
         return false;
     }
 
-    printMsg(nullptr, TC_RED, "Error %d setting frequency correction: %d\n", resp[3], corr); //error
+    Log(EUnit::null, "Error %d setting frequency correction: %d\n", resp[3], corr); //error
     return true;
 }
 
@@ -495,15 +495,15 @@ bool CCC1200::setAfc(bool en)
 		return true;
 	}
 
-	printMsg(TC_CYAN, TC_DEFAULT, "AFC: ");
+	Log(EUnit::cc12, "AFC: ");
 	const uint8_t good[4] { cid, 4, 0, ERR_OK };
     if (0 == memcmp(resp, good, 4))
 	{
-		printMsg(nullptr, TC_GREEN, "%s\n", en==0?"disabled":"enabled"); //OK
+		Log(EUnit::null, "%s\n", en==0?"disabled":"enabled"); //OK
         return false;
     }
 
-    printMsg(nullptr, TC_RED, "Error setting AFC\n"); //error
+    Log(EUnit::null, "Error setting AFC\n"); //error
     return true;
 }
 
@@ -522,15 +522,15 @@ bool CCC1200::setTxPower(float power) //powr in dBm
 		return true;
 	}
 
-	printMsg(TC_CYAN, TC_DEFAULT, "TX power: ");
+	Log(EUnit::cc12, "TX power: ");
 	uint8_t good[4] { cid, 4, 0, ERR_OK };
     if (0 == memcmp(resp, good, 4))
 	{
-		printMsg(nullptr, TC_GREEN, "%2.2f dBm\n", power); //OK
+		Log(EUnit::null, "%2.2f dBm\n", power); //OK
         return false;
     }
 
-    printMsg(nullptr, TC_RED, "Error %d setting TX power: %2.2f dBm\n", resp[3], power); //error
+    Log(EUnit::null, "Error %d setting TX power: %2.2f dBm\n", resp[3], power); //error
     return true;
 }
 
@@ -574,7 +574,7 @@ err_t CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
 				rval = ERR_OK;
 			else
 			{
-				printMsg(TC_CYAN, TC_RED, "%s returned error value %d\n", what, int(resp[3]));
+				Log(EUnit::cc12, "%s returned error value %d\n", what, int(resp[3]));
 			}
 		}
 	}
@@ -613,14 +613,13 @@ bool CCC1200::getFwVersion()
 			if (readDev(fwv, size-3))
 				return true;
 			for (int i=0; fwv[i]; i++) if ('\n' == fwv[i]) fwv[i] = ' ';
-			printMsg(TC_CYAN, TC_GREEN, "CC1200 Firmware Version: ");
-			printMsg(nullptr, TC_DEFAULT, "%s\n", fwv);
+			Log(EUnit::cc12, "CC1200 Firmware Version: %s\n", fwv);
 		}
 		else
-			printMsg(TC_CYAN, TC_YELLOW, "CC1200 Version string has size 0!\n");
+			Log(EUnit::cc12, "CC1200 Version string has size 0!\n");
 		return false;
 	}
-	printMsg(TC_CYAN, TC_RED, "Unexpected getFwVersion response: %02x %02x %02x\n", resp[0], resp[1], resp[2]);
+	Log(EUnit::cc12, "Unexpected getFwVersion response: %02x %02x %02x\n", resp[0], resp[1], resp[2]);
 	return true;
 }
 
@@ -692,14 +691,14 @@ void CCC1200::filterSymbols(int8_t* __restrict out, const int8_t* __restrict in,
 // returns true on error
 bool CCC1200::Start()
 {
-	printMsg(TC_CYAN, TC_GREEN, "Starting up mspot\n");
+	Log(EUnit::cc12, "Starting up mspot\n");
 
 	// get config'ed params
 	if (loadConfig())
 		return true;
 
 	//------------------------------------gpio init------------------------------------
-	printMsg(TC_CYAN, TC_DEFAULT, "GPIO init: ");
+	Log(EUnit::cc12, "GPIO init: ");
 	if (gpioInit("mspot"))
 		return true;
 	if (gpioSetValue(cfg.nrst, 0)) //both pins should be at logic low already, but better be safe than sorry
@@ -708,22 +707,22 @@ bool CCC1200::Start()
 	if (gpioSetValue(cfg.nrst, 1))
 		return true;
 	usleep(1000000U); //1s for device boot-up
-	printMsg(nullptr, TC_GREEN, "OK\n");
+	Log(EUnit::null, "OK\n");
 
 	//-----------------------------------device part-----------------------------------
-	printMsg(TC_CYAN, TC_DEFAULT, "UART init: %s at %d baud: ", (char*)cfg.uartDev.c_str(), cfg.baudRate);
+	Log(EUnit::cc12, "UART init: %s at %d baud: ", (char*)cfg.uartDev.c_str(), cfg.baudRate);
 	fd = open((char*)cfg.uartDev.c_str(), O_RDWR | O_NOCTTY | O_SYNC);
 	if (fd < 0) {
-		printMsg(nullptr, TC_RED, "open(%s) error: %s\n", cfg.uartDev.c_str(), strerror(errno));
+		Log(EUnit::null, "open(%s) error: %s\n", cfg.uartDev.c_str(), strerror(errno));
 		return true;
 	} else if (setAttributes(cfg.baudRate, 0)) {
 		return true;
 	} else {
-		printMsg(nullptr, TC_GREEN, "OK\n");
+		Log(EUnit::null, "OK\n");
 	}
 
 	//PING-PONG test
-	printMsg(TC_CYAN, TC_DEFAULT, "Radio board's reply to PING... ");
+	Log(EUnit::cc12, "Radio board's reply to PING... ");
 	if (pingDev())
 		return true;
 
@@ -742,7 +741,7 @@ bool CCC1200::Start()
 
 	startRx();
 
-	printMsg(TC_CYAN, TC_GREEN, "Device start - RX\n");
+	Log(EUnit::cc12, "Device start - RX\n");
 
 	// start processes
 	keep_running = true;
@@ -753,32 +752,32 @@ bool CCC1200::Start()
 		if (rxFuture.valid())
 			return false;
 		else
-			printMsg(TC_CYAN, TC_RED, "Could not start the Rx processing thread\n");
+			Log(EUnit::cc12, "Could not start the Rx processing thread\n");
 	}
 	else
-		printMsg(TC_CYAN, TC_RED, "Could not start the Tx Processing thread\n");
+		Log(EUnit::cc12, "Could not start the Tx Processing thread\n");
 	keep_running = false;
 	return true;
 }
 
 void CCC1200::Stop()
 {
-	printMsg(TC_CYAN, TC_DEFAULT, "Stopping tx/rx threads...\n");
+	Log(EUnit::cc12, "Stopping tx/rx threads...\n");
 	keep_running = false;
 	if (txFuture.valid())
 		txFuture.get();
 	if (rxFuture.valid())
 		rxFuture.get();
-	printMsg(TC_CYAN, TC_DEFAULT, "Stopping tx/rx on CC1200...\n");
+	Log(EUnit::cc12, "Stopping tx/rx on CC1200...\n");
 	while(txrxControl(CMD_TX_START, 0, "stop tx"))
 		usleep(40000);
 	while(txrxControl(CMD_RX_START, 0, "stop rx"))
 		usleep(40000);
-	printMsg(TC_CYAN, TC_DEFAULT, "Stopping CC1200 UART...\n");
+	Log(EUnit::cc12, "Stopping CC1200 UART...\n");
 	gpioCleanup();
 	if (fd >= 0)
 		close(fd);
-	printMsg(TC_CYAN, TC_GREEN, "All CC1200 resources closed!\n");
+	Log(EUnit::cc12, "All CC1200 resources closed!\n");
 }
 
 void CCC1200::txProcess()
@@ -858,7 +857,7 @@ void CCC1200::txProcess()
 					{
 						const CCallsign dst(txlsf.GetCDstAddress());
 						const CCallsign src(txlsf.GetCSrcAddress());
-						printMsg(TC_CYAN, TC_GREEN, "GWY STR - DST: %s SRC: %s, TYPE: %04x FN: %04x\n", dst.c_str(), src.c_str(), txlsf.GetFrameType(), p->GetFrameNumber());
+						Log(EUnit::cc12, "GWY STR - DST: %s SRC: %s, TYPE: %04x FN: %04x\n", dst.c_str(), src.c_str(), txlsf.GetFrameType(), p->GetFrameNumber());
 					}
 				}
 				else
@@ -885,7 +884,7 @@ void CCC1200::txProcess()
 					auto nextfn = p->GetFrameNumber();
 					if (cfg.debug and (++pfn != nextfn))
 					{
-						printMsg(TC_CYAN, (nextfn & 0x8000u) ? TC_GREEN : TC_YELLOW, "GWY STR FN: %04x\n", nextfn);
+						Log(EUnit::cc12, "GWY STR FN: %04x\n", nextfn);
 						pfn = nextfn;
 					}
 				}
@@ -914,7 +913,7 @@ void CCC1200::txProcess()
 			//M17 packet data - "Packet Mode IP Packet"
 			else if (EPacketType::packet == p->GetType())
 			{
-				printMsg(TC_CYAN, TC_GREEN, "M17 Inet packet received\n");
+				Log(EUnit::cc12, "M17 Inet packet received\n");
 
 				const CCallsign dst(p->GetCDstAddress());
 				const CCallsign src(p->GetCSrcAddress());
@@ -927,29 +926,17 @@ void CCC1200::txProcess()
 				const auto can = TYPE.GetCan();
 				const unsigned type = *(p->GetCPayload());
 				
-				printMsg(TC_CYAN, TC_DEFAULT, "├ ");
-				printMsg(nullptr, TC_YELLOW, "DST: ");
-				printMsg(nullptr, TC_DEFAULT, "%s\n", dst.c_str());
-				printMsg(TC_CYAN, TC_DEFAULT, "├ ");
-				printMsg(nullptr, TC_YELLOW, "SRC: ");
-				printMsg(nullptr, TC_DEFAULT, "%s\n", src.c_str());
-				printMsg(TC_CYAN, TC_DEFAULT, "├ ");
-				printMsg(nullptr, TC_YELLOW, "CAN: ");
-				printMsg(nullptr, TC_DEFAULT, "%u\n", unsigned(can));
+				Log(EUnit::cc12, "├ DST: %s\n", dst.c_str());
+				Log(EUnit::cc12, "├ SRC: %s\n", src.c_str());
+				Log(EUnit::cc12, "├ CAN: %u\n", unsigned(can));
 				if (type != 5u or *(p->GetCPayload()+p->GetSize()-3)) //assuming 1-byte type specifier
 				{
-					printMsg(TC_CYAN, TC_DEFAULT, "└ ");
-					printMsg(nullptr, TC_YELLOW, "TYPE: ");
-					printMsg(nullptr, TC_DEFAULT, "%u\n", unsigned(p->GetCPayload()[0]));
+					Log(EUnit::cc12, "└ TYPE: %u\n", unsigned(p->GetCPayload()[0]));
 				}
 				else
 				{
-					printMsg(TC_CYAN, TC_DEFAULT, "├ ");
-					printMsg(nullptr, TC_YELLOW, "TYPE: ");
-					printMsg(nullptr, TC_DEFAULT, "SMS\n");
-					printMsg(TC_CYAN, TC_DEFAULT, "└ ");
-					printMsg(nullptr, TC_YELLOW, "MSG: ");
-					printMsg(nullptr, TC_DEFAULT, "%s\n", (char *)(p->GetPayload()+1));
+					Log(EUnit::cc12, "├ TYPE: SMS\n");
+					Log(EUnit::cc12, "└ MSG: %s\n", (char *)(p->GetPayload()+1));
 				}
 
 				//TODO: handle TX here
@@ -1030,7 +1017,7 @@ void CCC1200::txProcess()
 		if ((tx_state == ETxState::active) and ((getMS()-tx_timer) > 240)) //240ms timeout
 		{
 			g_GateState.Set2IdleIfGateIn();
-			printMsg(TC_CYAN, TC_YELLOW, "TX timeout\n");
+			Log(EUnit::cc12, "TX timeout\n");
 			//usleep(10*40e3); //wait 400ms (10 M17 frames)
 
 			startRx();
@@ -1078,9 +1065,9 @@ void CCC1200::rxProcess()
 		{
 			keep_running = false;
 			if (EINTR == errno)
-				printMsg(TC_CYAN, TC_DEFAULT, "Rx thread poll() interrupted, exiting\n");
+				Log(EUnit::cc12, "Rx thread poll() interrupted, exiting\n");
 			else
-				printMsg(TC_CYAN, TC_RED, "Rx thread poll() error: %s\n", strerror(errno));
+				Log(EUnit::cc12, "Rx thread poll() error: %s\n", strerror(errno));
 			raise(SIGINT);
 			return;
 		}
@@ -1088,7 +1075,7 @@ void CCC1200::rxProcess()
 			continue;
 		
 		if (pfd.revents != POLLIN) {
-			printMsg(TC_CYAN, TC_RED, "Rx process thread poll() returned revents containing error: %d\n", pfd.revents);
+			Log(EUnit::cc12, "Rx process thread poll() returned revents containing error: %d\n", pfd.revents);
 			raise(SIGINT);
 			return;
 		} else if ((not uart_lock) and g_GateState.IsRxReady()) {
@@ -1177,14 +1164,7 @@ void CCC1200::rxProcess()
 
 					uint32_t e = decode_LSF((lsf_t*)(rxlsf.GetData()), pld);
 
-
-					printMsg(TC_CYAN, TC_MAGENTA, "RF LSF: ");
-
-					if (rxlsf.CheckCRC()) //if CRC valid
-					{
-						printMsg(nullptr, TC_RED, "CRC ERR\n");
-					}
-					else
+					if (not rxlsf.CheckCRC()) //if CRC valid
 					{
 						if (g_GateState.TryState(EGateState::modemin))
 						{
@@ -1196,7 +1176,7 @@ void CCC1200::rxProcess()
 							const CCallsign dst(rxlsf.GetCDstAddress());
 							const CCallsign src(rxlsf.GetCSrcAddress());
 
-							printMsg(nullptr, TC_GREEN, "DST: %s SRC: %s TYPE: %04X (CAN=%d) ED^2: %5.2f MER: %4.1f%%\n", dst.c_str(), src.c_str(), rxType.GetOriginType(), rxType.GetCan(), sed_lsf, float(e)*escale);
+							Log(EUnit::cc12, "RF LSF DST: %s SRC: %s TYPE: %04X CAN: %d ED^2: %5.2f MER: %4.1f%%\n", dst.c_str(), src.c_str(), rxType.GetOriginType(), rxType.GetCan(), sed_lsf, float(e)*escale);
 
 							if (EPayloadType::packet != rxType.GetPayloadType()) //if stream
 							{
@@ -1205,7 +1185,7 @@ void CCC1200::rxProcess()
 								sid = g_RNG.Get();
 							}
 						} else if (cfg.debug)
-							printMsg(TC_CYAN, TC_YELLOW, "Could not obtain GateState modemin lock\n");
+							Log(EUnit::cc12, "Could not obtain GateState modemin lock\n");
 					}
 				}
 
@@ -1272,8 +1252,7 @@ void CCC1200::rxProcess()
 							{
 								if ((fn%12u==11u) or (fn>>15))
 								{
-									printMsg(TC_CYAN, TC_YELLOW, "RF Stream Frame: ");
-									printMsg(nullptr, TC_GREEN, "FN:%04X ED^2:%5.2f MER:%4.1f%%\n", fn, sed_str, float(e)*escale);
+									Log(EUnit::cc12, "RF Stream Frame: FN:%04X ED^2:%5.2f MER:%4.1f%%\n", fn, sed_str, float(e)*escale);
 								}
 							}
 						}
@@ -1288,8 +1267,7 @@ void CCC1200::rxProcess()
 								if (g_Crc.CheckCRC(lsf_b, 30)) {
 									if (cfg.debug)
 									{
-										printMsg(TC_CYAN, TC_MAGENTA, "LICH LSF: ");
-										printMsg(nullptr, TC_RED, "CRC Error\n");
+										Log(EUnit::cc12, "LICH LSF: CRC Error\n");
 										Dump(nullptr, lsf_b, 30);
 									}
 								} else {
@@ -1306,8 +1284,7 @@ void CCC1200::rxProcess()
 										const CCallsign src(rxlsf.GetCSrcAddress());
 										if (cfg.debug)
 										{
-											printMsg(TC_CYAN, TC_MAGENTA, "LICH LSF: ");
-											printMsg(nullptr, TC_GREEN, "DST: %s SRC: %s TYPE: %04X (CAN=%d)\n", dst.c_str(), src.c_str(), rxlsf.GetFrameType(), rxType.GetCan());
+											Log(EUnit::cc12, "LICH LSF: DST: %s SRC: %s TYPE: %04X CAN: %d\n", dst.c_str(), src.c_str(), rxlsf.GetFrameType(), rxType.GetCan());
 										}
 									}
 								}
@@ -1362,7 +1339,7 @@ void CCC1200::rxProcess()
 					uint32_t e = decode_pkt_frame(ppkt, &eof, &pkt_fn, pld);
 					sample_cnt = 0;
 
-					if (cfg.debug) printMsg(TC_CYAN, TC_DEFAULT, "RF PacketFrame: EOF: %s FN: %u d^2:%5.2f MER: %4.1f\n", (eof ? "true " : "false"), unsigned(pkt_fn), sed_pkt, e*escale);
+					if (cfg.debug) Log(EUnit::cc12, "RF PacketFrame: EOF: %s FN: %u d^2:%5.2f MER: %4.1f\n", (eof ? "true " : "false"), unsigned(pkt_fn), sed_pkt, e*escale);
 
 					// increment size and pointer
 					plsize += eof ? pkt_fn : 25;
@@ -1372,7 +1349,7 @@ void CCC1200::rxProcess()
 					{
 						if (g_Crc.CheckCRC(pkt_pld, plsize))
 						{
-							printMsg(TC_CYAN, TC_RED, "RF PKT: Payload CRC failed\n");
+							Log(EUnit::cc12, "RF PKT: Payload CRC failed\n");
 							Dump(nullptr, pkt_pld, plsize);
 						} else {
 							if (got_lsf)
@@ -1386,13 +1363,13 @@ void CCC1200::rxProcess()
 									Modem2Gate.Push(pkt);
 								}
 							} else {
-								printMsg(TC_CYAN, TC_RED, "Got a Packet Payload, but not the LSF!");
+								Log(EUnit::cc12, "Got a Packet Payload, but not the LSF!");
 							}
 							if (cfg.debug) {
 								if (0x5u == *pkt_pld and 0u == pkt_pld[plsize-3]) {
-									printMsg(TC_CYAN, TC_DEFAULT, "RF SMS Msg: %s", (char *)(pkt_pld+1));
+									Log(EUnit::cc12, "RF SMS Msg: %s", (char *)(pkt_pld+1));
 								} else {
-									printMsg(TC_CYAN, TC_DEFAULT, "Packet Payload:\n");
+									Log(EUnit::cc12, "Packet Payload:\n");
 									Dump(nullptr, pkt_pld, plsize);
 								}
 							}
@@ -1406,7 +1383,7 @@ void CCC1200::rxProcess()
 					sample_cnt++;
 					if (960*2 <= sample_cnt) // 80 ms without detecting anything in the sync'ed state
 					{
-						printMsg(TC_CYAN, TC_YELLOW, "RF Timeout\n");
+						Log(EUnit::cc12, "RF Timeout\n");
 						rx_state = ERxState::idle; // timeout
 						got_lsf = false;
 						sample_cnt = 0;
