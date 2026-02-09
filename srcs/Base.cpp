@@ -25,7 +25,11 @@
 
 #include "Base.h"
 
+#ifndef NO_TS
 void CBase::printMsg(const char *tsColor, const char *txColor, const char* fmt, ...) const
+#else
+void CBase::printMsg(const char */*tsColor*/, const char *txColor, const char *fmt, ...) const
+#endif
 {
 	if (nullptr == fmt)
 		return;	// this should never happen
@@ -35,9 +39,11 @@ void CBase::printMsg(const char *tsColor, const char *txColor, const char* fmt, 
 	while(*(endc+1))
 		endc++;
 
+#ifndef NO_TS
 	// print a timeStame if a color esc sequence was provided
 	if (tsColor)
 		timeStamp(tsColor);
+#endif
 
 	// now print a variable list of things
 	char str[1000];	// plenty of room

@@ -190,6 +190,7 @@ bool CGateway::Start()
 	}
 
 	can = g_Cfg.GetUnsigned(g_Keys.repeater.section, g_Keys.repeater.can);
+	printMsg(TC_MAGENTA, TC_DEFAULT, "CAN = %u\n", unsigned(can));
 	radioTypeIsV3 = g_Cfg.GetBoolean(g_Keys.repeater.section, g_Keys.repeater.radioTypeIsV3);
 	printMsg(TC_MAGENTA, TC_DEFAULT, "Radio is using %s TYPE values\n", radioTypeIsV3 ? "V#3" : "Legacy");
 
@@ -435,8 +436,12 @@ void CGateway::ProcessGateway()
 						printMsg(TC_MAGENTA, TC_RED, "Incoming Gateway Packet failed CRC check:\n");
 						Dump(nullptr, buf, length);
 					} else {
-						memset(p->GetDstAddress(), 0xffu, 6);
-						p->CalcCRC();
+						const CCallsign dst(p->GetCDstAddress());
+						if (dst == thisCS)
+						{
+							memset(p->GetDstAddress(), 0xffu, 6);
+							p->CalcCRC();
+						}
 						sendPacket2Modem(std::move(p));
 					}
 				}
@@ -508,6 +513,7 @@ void CGateway::ProcessModem()
 				g_GateState.Idle();
 				break;
 			case CalcCSCode("I"):
+			case CalcCSCode("S"):
 			case CalcCSCode("STATUS"):
 				doStatus(p);
 				g_GateState.Idle();

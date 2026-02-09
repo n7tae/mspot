@@ -33,15 +33,6 @@ struct SJsonKeys
 		"Repeater", "Callsign", "Module", "CAN", "RadioTypeIsV3", "IsPrivate", "Debug"
 	};
 
-	struct LOG
-	{
-		const std::string section, level, dashpath;
-	}
-	log
-	{
-		"Log", "Level", "DashboardPath"
-	};
-
 	struct MODEM
 	{
 		const std::string section, gpiochipDevice, uartDevice, uartBaudRate, boot0, nrst, rxFreq, txFreq, afc, freqCorr, txPower, debug;

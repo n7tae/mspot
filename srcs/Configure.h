@@ -29,7 +29,7 @@
 extern SJsonKeys g_Keys;
 
 enum class ErrorLevel { fatal, mild };
-enum class ESection { none, repeater, log, modem, gateway };
+enum class ESection { none, repeater, modem, gateway };
 
 #define IS_TRUE(a) ((a)=='t' || (a)=='T' || (a)=='1')
 

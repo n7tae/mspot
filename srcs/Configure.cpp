@@ -109,8 +109,6 @@ bool CConfigure::ReadData(const std::string &path)
 			section = ESection::none;
 			if (0 == hname.compare(g_Keys.repeater.section))
 				section = ESection::repeater;
-			else if (0 == hname.compare(g_Keys.log.section))
-				section = ESection::log;
 			else if (0 == hname.compare(g_Keys.modem.section))
 				section = ESection::modem;
 			else if (0 == hname.compare(g_Keys.gateway.section))
@@ -192,14 +190,6 @@ bool CConfigure::ReadData(const std::string &path)
 					data[g_Keys.modem.section][g_Keys.modem.debug] = IS_TRUE(value[0]);
 				else
 					badParam(g_Keys.modem.section, key);
-				break;
-			case ESection::log:
-				if (0 == key.compare(g_Keys.log.level))
-					data[g_Keys.log.section][g_Keys.log.level] = getUnsigned(value, "Display Level 0-6", 0u, 6u, 3u);
-				else if (0 == key.compare(g_Keys.log.dashpath))
-					data[g_Keys.log.section][g_Keys.log.dashpath] = value;
-				else
-					badParam(g_Keys.log.section, key);
 				break;
 			case ESection::gateway:
 				if (0 == key.compare(g_Keys.gateway.ipv4))
@@ -296,14 +286,6 @@ bool CConfigure::ReadData(const std::string &path)
 	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.freqCorr, rval);
 	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.txPower,  rval);
 	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.debug,    rval);
-
-	// Log section
-	isDefined(ErrorLevel::fatal, g_Keys.log.section, g_Keys.log.level, rval);
-	if (isDefined(ErrorLevel::fatal, g_Keys.log.section, g_Keys.log.dashpath, rval))
-	{
-		const auto path = GetString(g_Keys.log.section, g_Keys.log.dashpath);
-		checkPath(g_Keys.log.section, g_Keys.log.dashpath, path, std::filesystem::file_type::regular);
-	}
 
 	// Gateway section
 	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.ipv4, rval);

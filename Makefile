@@ -16,6 +16,10 @@ else
 CPPFLAGS  = -std=c++17 -Wall -Wextra -Werror -Isrcs
 endif
 
+ifeq ($(USE_TS), false)
+CPPFLAGS += -DNO_TS
+endif
+
 LIBS    = -pthread -lm -lgpiod
 
 SRCS = $(wildcard srcs/*.cpp)

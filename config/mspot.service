@@ -1,0 +1,16 @@
+[Unit]
+Description=M17 Hot Spot
+After=network-online.target
+Requires=networking.service
+
+[Service]
+Type=simple
+User=<USER_NAME>
+Group=<USER_GROUP_NAME>
+Restart=on-failure
+RestartSec=3
+ExecStart=/usr/local/bin/mspot <PATH_TO_INI_FILE>
+ExecReload=/bin/kill -HUP $MAINPID
+
+[Install]
+WantedBy=multi-user.target
