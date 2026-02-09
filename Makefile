@@ -25,8 +25,9 @@ LIBS    = -pthread -lm -lgpiod
 SRCS = $(wildcard srcs/*.cpp)
 OBJS = $(SRCS:.cpp=.o)
 DEPS = $(SRCS:.cpp=.d)
+EXES = mspot inicheck cc1200-reset
 
-all : mspot inicheck cc1200-reset
+all : $(EXES)
 
 mspot : $(OBJS)
 	$(CXX) $(CPPFLAGS) $(OBJS) /usr/local/lib/libm17.a $(LIBS) -o $@
@@ -44,7 +45,7 @@ cc1200-reset : tools/cc1200-reset.c
 
 .PHONY : clean
 clean :
-	$(RM) mspot inicheck srcs/*.o srcs/*.d
+	$(RM) $(EXES) srcs/*.o srcs/*.d
 
 .PHONY : install
 install : mspot.service mspot
