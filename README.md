@@ -5,7 +5,6 @@ An M17-only hot-spot for the M17 CC1200 Raspberry Pi hat.
 ## Description
 
 This open-source project will build an M17-only hot-spot for amateur radio. The design goals for this project include:
-- **Easy to build**: *mspot* is a single application and has both a novel M17 gateway that can connect to both M17 and URF reflectors *and* a CC1200 modem driver with M17 frame detection. You do need to prepare an SD card with trixie on it, see the `TRIXIE_SD_CARD_PREP.md` file for step-by-step instructions.
 - **Easy to configure**: With a single, self contained application, there is just a single configuration file, and the Makefile builds an additional program, *inicheck*, that will intelligently analyze your ini file and reports any problems it finds.
 - **Easy to use**: *mspot* includes many RF-base commands to manage its connection state and responds to many commands with voice messages, making *mspot* ideal for a mobile, smart-phone tethered repeater. I hope it's also useful to sight-impaired hams.
 - **Minimum executable size**: *mspot* is tiny, especially when you compare it to the multi-mode alternatives.
@@ -17,41 +16,46 @@ Having said that, it *might* be possible to get *mspot* to run on a different si
 
 Support for version 1.6 MMDVM modems is available in the `MMDVM` branch of this repo.
 
-## Updating the CC1200 firmware
+## First step, *trixie*
 
-This version of *mspot* supports CC1200 firmware version 2.2. Here is how to install that version:
-```
-cd   # return to home directory
-sudo apt-get install -y git gcc-arm-none-eabi binutils-arm-none-eabi
-git clone https://github.com/M17-Project/CC1200_HAT-fw.git
-cd CC1200_HAT-fw/Release
-sudo stm32flash -v -R -i "-532&-533&532,533,:-532,-533,533" -w CC1200_HAT-fw.bin /dev/ttyAMA0
-cd
-```
+If you already have an SD card with *trixie* on it, you can probably use it but you'll want to read the `TRIXIE_SD_CARD_PREP.md` file for step-by-step instructions for how to make a *trixie* SD card for your Pi.
 
-It will take several seconds to do the flashing and when it's all done, you'll see:
+After you've done the `sudo apt update` and `sudo apt upgrade`, there are several packages you will need:
 
 ```
-Reset Done.
+sudo apt install git build-essential cmake nlohmann-json3-dev`
 ```
-When you start *mspot* you'll see it report the CC1200 firmware version.
+
+## The M17 library, libm17
+
+This library does all the heavy lifting to convert between the symbols to/from the CC1200 and the *mspot* internet gateway.
+1. In your home directory, clone the repo: `git clone https://github.com/M17-Project/libm17.git
+2. Move to the repo: `cd libm17`
+3. When you do this step, you'll see a warning about unit testing you can ignore. Prep the build: `cmake -B build`
+4. Build it: `cmake --build build`
+5. Install it: `sudo cmake --install build`
+6. Your done! Return to your home directory: `cd`
 
 ## Dialout
 
-If you created you trixie SD card using the instructions in the TRIXIE_SD_CARD_PREP.md file, you're all set because the user you defined is already a member of the *dialout* group!
+If you created you trixie SD card using the instructions in the TRIXIE_SD_CARD_PREP.md file, you're all set because the user you defined is already a member of the *dialout* group! If not, read on...
 
 The user that executes *mspot* needs to be in the `dialout` group! Do a `getent group dialout`. If the user is not listed, do a `sudo adduser <username> dialout`, where `<username>` is the login name of the user. After this, you can verify with another `getent grep dialout` command.
 
+## Updating the CC1200 firmware
+
+This version of *mspot* supports CC1200 firmware version 2.2. You don't need to compile the firware, but you do need a few things. Here is how to install that version:
+1. Install packages: `sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi`
+2. Clone the firmware repo: `git clone https://github.com/M17-Project/CC1200_HAT-fw.git`
+2. Move to the repo: `cd CC1200_HAT-fw/Release`
+3. Flash it: `sudo stm32flash -v -R -i "-532&-533&532,533,:-532,-533,533" -w CC1200_HAT-fw.bin /dev/ttyAMA0`
+4. Return to your home directory: `cd`
+
+It will take several seconds to do the flashing and when it's all done, you'll see `Reset Done.` When you start *mspot* you'll see it report the CC1200 firmware version.
+
 ## Building *mspot*
 
-These instructions are for Debian-based operating system.
-
-Start by making sure your system is up to date: `sudo apt update && sudo apt upgrade`
-
-There are a few things you need: `sudo apt install git build-essential nlohmann-json3-dev`
-
-
-Then copy this repo: `git clone https://github.com/n7tae/mspot.git`
+First copy this repo: `git clone https://github.com/n7tae/mspot.git`
 
 Move to the *mspot* folder: `cd mspot`, then copy a few configuration file to this folder (don't forget the period at the end!): `cp config/* .`
 
@@ -79,16 +83,19 @@ In the `Building` section, a few `.txt` files were copied when you copied the co
 
 ### Starting *mspot*
 
+There are two options to starting mspot:
+
+#### Manual start
+
 To start *mspot* manually, go to its repo folder and type `./mspot mspot.ini`. Then log messages will be printed in the terminal window. Timestamp colors indicate where the message is being generated. Extra messages from the CC1200 modem class will be printed if the `[Modem]Debug` value is `true`. To stop *mspot*, just type \<Control>C. It will print a few messages as it shuts down.
 
-If you want to have *mspot* start whenever your system starts, edit your new copy of *mspot.service*. Everything in angle brackets, \<>, needs to be replaced with the proper value. If you want run *mspot* as root you can remove the definitions for `[Service]User` and `[Service]Group`. If not, you need to set these. Also make sure the `[Service]ExecStart` specifies the exact file path to your ini file and if you changed `BINDIR` in your *mspot.mk* file that will also have the full path to *mspot* on this same line. Once you have modified this mspot.service file, do `sudo make install` to install and start *mspot*.
+#### It's always running
 
-### Controlling *mspot*
-
+If you want to have *mspot* start whenever your system starts, edit your new copy of *mspot.service*. Everything in angle brackets, \<>, needs to be replaced with the proper value. If you want run *mspot* as root you can remove the definitions for `[Service]User` and `[Service]Group`. If not, you need to set these. Also make sure the `[Service]ExecStart` specifies the exact file path to your ini file and if you changed `BINDIR` in your *mspot.mk* file that will also have the full path to *mspot* on this same line. Once you have modified this mspot.service file, do `sudo make install` to install and start *mspot*, and `sudo make uninstall` to stop and uninstall it. Once running, there are lots of things you can do:
 - To view *mspot*'s log in real time: `sudo journalctl -u mspot -f` Type \<Control>C to stop the view.
 - If you want to know all the times you heard a particular callsign, like N0CALL: `sudo journalctl -u mspot | grep NOCALL` See `journalctl --help` for other options/features.
 - To stop *mspot* without uninstalling it: `sudo systemctl stop mspot`. To start it back up: `sudo systemctl start mspot`. See `systemctl --help` for other features.
-- Uninstall *mspot*: `sudo make uninstall`
+- For a quick look at how *mspot* is doing, including the last few lines of it's log: `systemctl status mspot`
 
 ## Connecting to a reflector
 

@@ -31,15 +31,15 @@ void CStream::OpenStream(const uint8_t *src, uint16_t sid, const std::string &f)
 	count = 0u;
 	from.assign(f);
 	if ((EStreamType::gate == type))
-		Log(EUnit::str, "G-way stream id=%04x from %s at %s is Opened\n", streamid, source.c_str(), from.c_str());
+		Log(EUnit::null, "G-way stream id=%04x from %s at %s is Opened\n", streamid, source.c_str(), from.c_str());
 	else
-		Log(EUnit::str, "Modem stream id=%04x from %s is Opened\n", sid, source.c_str());
+		Log(EUnit::null, "Modem stream id=%04x from %s is Opened\n", sid, source.c_str());
 }
 
 void CStream::CloseStream(bool istimeout)
 {
 	const std::string name((EStreamType::gate == type) ? "G-way" : "Modem");
-	Log(EUnit::str, "%s stream id=%04x, duration=%.2f sec %s\n", name.c_str(), streamid, 0.04f * count, (istimeout ? "Timed out" : "Closed"));
+	Log(EUnit::null, "%s stream id=%04x, duration=%.2f sec %s\n", name.c_str(), streamid, 0.04f * count, (istimeout ? "Timed out" : "Closed"));
 	streamid = 0u;
 }
 

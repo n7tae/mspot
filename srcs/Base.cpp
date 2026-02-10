@@ -47,7 +47,6 @@ void CBase::Log(EUnit unit, const char* fmt, ...) const
 		case EUnit::gate: printf("Gateway, ");  break;
 		case EUnit::host: printf("HostMap, ");  break;
 		case EUnit::sock: printf("SockAddr, "); break;
-		case EUnit::str:  printf("StreamGW, "); break;
 		case EUnit::udp:  printf("UDP, ");      break;
 		case EUnit::null: default:              break;
 	}
