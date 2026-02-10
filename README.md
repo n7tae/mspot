@@ -14,7 +14,7 @@ This version of *mspot* only works with a Rasperry Pi running trixie OS and the 
 
 Having said that, it *might* be possible to get *mspot* to run on a different single board computer as long as that sbc has a Pi-compatible 40-bit GPIO header, and you can install or build and install a compatible `gpiod-dev` library. If you are interested in this, let us know, we can help.
 
-Support for version 1.6 MMDVM modems is available in the `MMDVM` branch of this repo.
+Support for version 1.6 MMDVM modems is available in the `mmdvm` branch of this repo.
 
 ## First step, *trixie*
 
