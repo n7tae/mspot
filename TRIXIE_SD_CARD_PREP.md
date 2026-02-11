@@ -16,7 +16,7 @@ In the `Use OS Customisation?` pop-up, press the `EDIT SETTINGS` buttons to set 
 
 In the "SERVICES" tab, be sure to turn on SSH. You can select the `Use password authentication`, but I highly recommend you use `Allow public key authentication only`. You can generate a new key or use an existing key. Just copy and paste the contents of the *.public file into the space provided.
 
-Finally, finish up your choices on the `OPTIONS` tab, then press the `SAVE` button. On the previous pop-up click `YES`. Once the card is imaged, remove it from you compute and put it in your Pi and power it up. Wait a minute or so because it will boot up a couple of times before it's ready to accept a login.
+Finally, finish up your choices on the `OPTIONS` tab, then press the `SAVE` button. On the previous pop-up click `YES`. Once the card is imaged, remove it from you computer and put it in your Pi and power it up. Wait a minute or so because it will boot up a couple of times before it's ready to accept a login.
 
 ## Finalizing trixie
 
