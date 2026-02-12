@@ -1016,11 +1016,11 @@ void CCC1200::txProcess()
 		//tx timeout
 		if ((tx_state == ETxState::active) and ((getMS()-tx_timer) > 240)) //240ms timeout
 		{
-			g_GateState.Set2IdleIfGateIn();
 			Log(EUnit::cc12, "TX timeout\n");
-			//usleep(10*40e3); //wait 400ms (10 M17 frames)
-
 			startRx();
+
+			g_GateState.Set2IdleIfGateIn();
+			//usleep(10*40e3); //wait 400ms (10 M17 frames)
 
 			tx_state=ETxState::idle;
 		}

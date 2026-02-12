@@ -211,18 +211,18 @@ bool CGateway::Start()
 	makeCSData(thisCS, "repeater.dat");
 
 	addMessage("welcome repeater");
-	gateFuture = std::async(std::launch::async, &CGateway::ProcessGateway, this);
+	gateFuture = std::async(std::launch::async, &CGateway::processGateway, this);
 	if (not gateFuture.valid())
 	{
-		Log(EUnit::gate, "Could not start the ProcessGateway() thread\n");
+		Log(EUnit::gate, "Could not start the processGateway() thread\n");
 		keep_running = false;
 		return true;
 	}
 
-	modemFuture = std::async(std::launch::async, &CGateway::ProcessModem, this);
+	modemFuture = std::async(std::launch::async, &CGateway::processModem, this);
 	if (not modemFuture.valid())
 	{
-		Log(EUnit::gate, "Could not start the ProcessModem() thread\n");
+		Log(EUnit::gate, "Could not start the processModem() thread\n");
 		keep_running = false;
 		return true;
 	}
@@ -231,7 +231,7 @@ bool CGateway::Start()
 	return false;
 }
 
-void CGateway::ProcessGateway()
+void CGateway::processGateway()
 {
 	struct pollfd pfds[2];
 	for (unsigned i=0; i<2; i++)
@@ -458,7 +458,7 @@ void CGateway::ProcessGateway()
 	}
 }
 
-void CGateway::ProcessModem()
+void CGateway::processModem()
 {
 	while (keep_running)
 	{

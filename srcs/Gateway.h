@@ -127,12 +127,12 @@ private:
 	std::unique_ptr<SMessageTask> msgTask;
 	std::queue<CPayload> fifo;
 
-	void ProcessGateway();
+	void processGateway();
 	EPacketType validate(uint8_t *in, unsigned length);
 	void sendPacket(const void *buf, const size_t size, const CSockAddress &addr) const;
 	void sendPacket2Modem(std::unique_ptr<CPacket>);
 	void sendPacket2Dest(std::unique_ptr<CPacket>);
-	void ProcessModem();
+	void processModem();
 	void sendLinkRequest();
 	// returns true on error
 	bool setDestination(const std::string &cs);
