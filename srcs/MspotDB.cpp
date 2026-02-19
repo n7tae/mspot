@@ -81,10 +81,10 @@ bool CMspotDB::Init()
 
 	std::string sql("CREATE TABLE IF NOT EXISTS LHEARD("
 					"callsign	TEXT PRIMARY KEY, "
-					"maidenhead TEXT DEFAULT '      ', "
-					"latitude   REAL DEFAULT 0.0, "
-					"longitude  REAL DEFAULT 0.0, "
-					"source		TEXT DEFAULT ' ', "
+					"maidenhead TEXT, "
+					"latitude   REAL, "
+					"longitude  REAL, "
+					"source		TEXT, "
 					"lasttime	INT NOT NULL"
 					") WITHOUT ROWID;");
 
@@ -137,8 +137,9 @@ bool CMspotDB::UpdateLH(const char *callsign, const char *source)
 {
 	if (NULL == db)
 		return false;
+	CleanCS(callsign);
 	std::stringstream sql;
-	sql << "SELECT COUNT(*) FROM LHEARD WHERE callsign='" << callsign << "';";
+	sql << "SELECT COUNT(*) FROM LHEARD WHERE callsign='" << cs.c_str() << "';";
 
 	int count = 0;
 
@@ -154,11 +155,11 @@ bool CMspotDB::UpdateLH(const char *callsign, const char *source)
 
 	if (count)
 	{
-		sql << "UPDATE LHEARD SET source = '" << source << "', lasttime = strftime('%s','now') WHERE callsign = '" << callsign << "';";
+		sql << "UPDATE LHEARD SET source = '" << source << "', lasttime = strftime('%s','now') WHERE callsign = '" << cs.c_str() << "';";
 	}
 	else
 	{
-		sql << "INSERT INTO LHEARD (callsign, source, lasttime) VALUES ('" << callsign << "', '" << source << "', strftime('%s','now'));";
+		sql << "INSERT INTO LHEARD (callsign, source, lasttime) VALUES ('" << cs.c_str() << "', '" << source << "', strftime('%s','now'));";
 	}
 
 	if (SQLITE_OK != sqlite3_exec(db, sql.str().c_str(), NULL, 0, &eMsg))
@@ -175,8 +176,9 @@ bool CMspotDB::UpdatePosition(const char *callsign, const char *maidenhead, doub
 {
 	if (NULL == db)
 		return false;
+	CleanCS(callsign);
 	std::stringstream sql;
-	sql << "UPDATE LHEARD SET maidenhead = '" << maidenhead << "', latitude = " << latitude << ", longitude = " << longitude << ", lasttime = strftime('%s','now') WHERE callsign='" << callsign << "';";
+	sql << "UPDATE LHEARD SET maidenhead = '" << maidenhead << "', latitude = " << latitude << ", longitude = " << longitude << ", lasttime = strftime('%s','now') WHERE callsign='" << cs.c_str() << "';";
 
 	char *eMsg;
 	if (SQLITE_OK != sqlite3_exec(db, sql.str().c_str(), NULL, 0, &eMsg))
@@ -195,7 +197,6 @@ bool CMspotDB::UpdateLS(const char *address, uint16_t port, const char *target)
 		return false;
 	std::stringstream sql;
 	sql << "INSERT OR REPLACE INTO LINKSTATUS (address, port, target, linked_time) VALUES ('" << address << "', " << port << ", '" << target << "', strftime('%s','now'));";
-	printf("%s\n", sql.str().c_str()); // log these updates
 	char *eMsg;
 	if (SQLITE_OK != sqlite3_exec(db, sql.str().c_str(), NULL, 0, &eMsg))
 	{
@@ -390,4 +391,12 @@ int CMspotDB::Count(const char *table)
 	}
 
 	return count;
+}
+
+void CMspotDB::CleanCS(const char *s)
+{
+	cs.assign(s);
+	auto pos = cs.find(' ');
+	if (2 < pos and pos < 8)
+		cs.resize(pos);
 }
