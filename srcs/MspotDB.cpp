@@ -194,7 +194,7 @@ bool CMspotDB::UpdateLS(const char *address, uint16_t port, const char *target)
 	if (NULL == db)
 		return false;
 	std::stringstream sql;
-	sql << "INSERT OR REPLACE INTO LINKSTATUS (ip_address, port, target, linked_time) VALUES ('" << address << "', " << port << ", '" << target << "', strftime('%s','now'));";
+	sql << "INSERT OR REPLACE INTO LINKSTATUS (address, port, target, linked_time) VALUES ('" << address << "', " << port << ", '" << target << "', strftime('%s','now'));";
 	printf("%s\n", sql.str().c_str()); // log these updates
 	char *eMsg;
 	if (SQLITE_OK != sqlite3_exec(db, sql.str().c_str(), NULL, 0, &eMsg))
@@ -310,15 +310,15 @@ int CMspotDB::FillGW(const char *pname)
 			split(line, ';', elem);
 			if (elem.size() == 10 or elem.size() == 9) {
 				if (hasIPv6 and (not elem[4].empty())) {
-					if (UpdateGW(elem[0], elem[4], elem[5], elem[6], std::stoul(elem[7])))
+					if (not UpdateGW(elem[0], elem[4], elem[5], elem[6], std::stoul(elem[7])))
 						added++;
 				} else if (not elem[3].empty()) {
-					if (UpdateGW(elem[0], elem[3], elem[5], elem[6], std::stoul(elem[7])))
+					if (not UpdateGW(elem[0], elem[3], elem[5], elem[6], std::stoul(elem[7])))
 						added++;
 				} else
 					Log(EUnit::db, "Gateway %s at line %u does not have a compatible IP address\n", elem[0].c_str(), lineno);
 			} else if (elem.size() == 3) {
-				if (UpdateGW(elem[0], elem[1], "", "", std::stoul(elem[3])))
+				if (not UpdateGW(elem[0], elem[1], "", "", std::stoul(elem[3])))
 					added++;
 			}
 		}
