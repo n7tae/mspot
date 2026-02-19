@@ -84,7 +84,7 @@ bool CMspotDB::Init()
 					"maidenhead TEXT DEFAULT '      ', "
 					"latitude   REAL DEFAULT 0.0, "
 					"longitude  REAL DEFAULT 0.0, "
-					"from		TEXT, "
+					"source		TEXT DEFAULT ' ', "
 					"lasttime	INT NOT NULL"
 					") WITHOUT ROWID;");
 
@@ -133,7 +133,7 @@ static int countcallback(void *count, int /*argc*/, char **argv, char ** /*azCol
 	return 0;
 }
 
-bool CMspotDB::UpdateLH(const char *callsign, const char *from)
+bool CMspotDB::UpdateLH(const char *callsign, const char *source)
 {
 	if (NULL == db)
 		return false;
@@ -154,11 +154,11 @@ bool CMspotDB::UpdateLH(const char *callsign, const char *from)
 
 	if (count)
 	{
-		sql << "UPDATE LHEARD SET from = '" << from << "', lasttime = strftime('%s','now') WHERE callsign = '" << callsign << "';";
+		sql << "UPDATE LHEARD SET source = '" << source << "', lasttime = strftime('%s','now') WHERE callsign = '" << callsign << "';";
 	}
 	else
 	{
-		sql << "INSERT INTO LHEARD (callsign, from, lasttime) VALUES ('" << callsign << "', '" << from << "', strftime('%s','now'));";
+		sql << "INSERT INTO LHEARD (callsign, source, lasttime) VALUES ('" << callsign << "', '" << source << "', strftime('%s','now'));";
 	}
 
 	if (SQLITE_OK != sqlite3_exec(db, sql.str().c_str(), NULL, 0, &eMsg))
