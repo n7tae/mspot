@@ -96,7 +96,7 @@ bool CConfigure::ReadData(const std::string &path)
 		trim(line);
 		if (3 > line.size())
 			continue;	// can't be anything
-		if ('#' == line.at(0))
+		if (';' == line.at(0))
 			continue;	// skip comments
 
 		// check for next section
@@ -129,7 +129,7 @@ bool CConfigure::ReadData(const std::string &path)
 			continue;
 		}
 		// check value for end-of-line comment
-		auto pos = tokens[1].find('#');
+		auto pos = tokens[1].find(';');
 		if (std::string::npos != pos)
 		{
 			tokens[1].assign(tokens[1].substr(0, pos));
@@ -204,6 +204,8 @@ bool CConfigure::ReadData(const std::string &path)
 					data[g_Keys.gateway.section][g_Keys.gateway.hostPath] = value;
 				else if (0 == key.compare(g_Keys.gateway.myHostPath))
 					data[g_Keys.gateway.section][g_Keys.gateway.myHostPath] = value;
+				else if (0 == key.compare(g_Keys.gateway.dbPath))
+					data[g_Keys.gateway.section][g_Keys.gateway.dbPath] = value;
 				else if (0 == key.compare(g_Keys.gateway.allowNotTranscoded))
 					data[g_Keys.gateway.section][g_Keys.gateway.allowNotTranscoded] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.gateway.audioFolder))
@@ -281,6 +283,8 @@ bool CConfigure::ReadData(const std::string &path)
 		}
 	}
 	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.rxFreq,   rval);
+	if (not data[g_Keys.modem.section].contains(g_Keys.modem.txFreq))
+		data[g_Keys.modem.section][g_Keys.modem.txFreq] = data[g_Keys.modem.section][g_Keys.modem.rxFreq];
 	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.txFreq,   rval);
 	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.afc,      rval);
 	isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.freqCorr, rval);
@@ -291,7 +295,7 @@ bool CConfigure::ReadData(const std::string &path)
 	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.ipv4, rval);
 	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.ipv6, rval);
 	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.maintainLink, rval);
-	if (data.contains(g_Keys.gateway.startupLink))
+	if (data[g_Keys.gateway.section].contains(g_Keys.gateway.startupLink))
 	{
 		const auto ref = GetString(g_Keys.gateway.section, g_Keys.gateway.startupLink);
 		if (not(std::regex_match(ref, MrefdCS) and not(std::regex_match(ref, UrfdCS))))
@@ -299,14 +303,19 @@ bool CConfigure::ReadData(const std::string &path)
 			std::cout << "WARNING: [" << g_Keys.gateway.section << "]" << g_Keys.gateway.startupLink << "doesn't look like a reflector module" << std::endl;
 		}
 	}
-	if (isDefined(ErrorLevel::mild, g_Keys.gateway.section, g_Keys.gateway.hostPath,   rval))
+	if (isDefined(ErrorLevel::mild, g_Keys.gateway.section, g_Keys.gateway.hostPath, rval))
 	{
 		const auto path = GetString(g_Keys.gateway.section, g_Keys.gateway.hostPath);
 		checkPath(g_Keys.gateway.section, g_Keys.gateway.hostPath, path, std::filesystem::file_type::regular);
 	}
-	if (isDefined(ErrorLevel::mild, g_Keys.gateway.section, g_Keys.gateway.myHostPath,    rval))
+	if (isDefined(ErrorLevel::mild, g_Keys.gateway.section, g_Keys.gateway.myHostPath, rval))
 	{
 		const auto path = GetString(g_Keys.gateway.section, g_Keys.gateway.myHostPath);
+		checkPath(g_Keys.gateway.section, g_Keys.gateway.myHostPath, path, std::filesystem::file_type::regular);
+	}
+	if (isDefined(ErrorLevel::mild, g_Keys.gateway.section, g_Keys.gateway.dbPath, rval))
+	{
+		const auto path = GetString(g_Keys.gateway.section, g_Keys.gateway.dbPath);
 		checkPath(g_Keys.gateway.section, g_Keys.gateway.myHostPath, path, std::filesystem::file_type::regular);
 	}
 	//isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.allowNotTranscoded, rval);

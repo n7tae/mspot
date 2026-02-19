@@ -137,7 +137,14 @@ void CGateway::Stop()
 
 bool CGateway::Start()
 {
-	destMap.ReadAll();
+	if (dataBase.Open(g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.dbPath).c_str()))
+		return true;
+	auto hosts = g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.hostPath);
+	auto n = dataBase.FillGW(hosts.c_str());
+	auto myhosts = g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.myHostPath);
+	n += dataBase.FillGW(myhosts.c_str());
+	Log(EUnit::gate, "Loaded %d targets from %s and %s\n", n, hosts.c_str(), myhosts.c_str());
+		
 	std::string cs(g_Cfg.GetString(g_Keys.repeater.section, g_Keys.repeater.callsign));
 	cs.resize(8, ' ');
 	cs.append(1, g_Cfg.GetString(g_Keys.repeater.section, g_Keys.repeater.module).at(0));
@@ -253,6 +260,7 @@ void CGateway::processGateway()
 				addMessage("repeater was_disconnected_from destination");
 				Log(EUnit::gate, "Disconnected from %s, TIMEOUT...\n", mlink.cs.c_str());
 				mlink.state = ELinkState::unlinked;
+				dataBase.ClearLS();
 				if (not mlink.maintainLink)
 					mlink.addr.Clear();
 			}
@@ -364,6 +372,7 @@ void CGateway::processGateway()
 						addMessage("repeater is_linked_to destination");
 						Log(EUnit::gate, "Connected to %s at %s\n", mlink.cs.c_str(), mlink.addr.GetAddress());
 						mlink.receivePingTimer.start();
+						dataBase.UpdateLS(mlink.addr.GetAddress(), mlink.addr.GetPort(), mlink.cs.c_str());
 					}
 					else if (0 == memcmp(buf, "NACK", 4))
 					{
@@ -379,6 +388,7 @@ void CGateway::processGateway()
 						Log(EUnit::gate, "Disconnected from %s at %s\n", mlink.cs.c_str(), mlink.addr.GetAddress());
 						mlink.addr.Clear(); // initiated with UNLINK, so don't try to reconnect
 						mlink.cs.Clear();   // ^^^^^^^^^ ^^^^ ^^^^^^
+						dataBase.ClearLS();
 						mlink.state = ELinkState::unlinked;
 					}
 					else
@@ -410,6 +420,7 @@ void CGateway::processGateway()
 							mlink.state = ELinkState::unlinked;
 							if (not mlink.maintainLink)
 								mlink.addr.Clear();
+							dataBase.ClearLS();
 							Log(EUnit::gate, "%s initiated a disconnect\n", from.GetCS().c_str());
 						}
 						else
@@ -670,7 +681,16 @@ void CGateway::sendPacket2Modem(std::unique_ptr<CPacket> p)
 		// Open the stream
 		if (g_GateState.TryState(EGateState::gatestreamin))
 		{
-			gateStream.OpenStream(p->GetCSrcAddress(), sid, from17k.GetAddress());
+			const CCallsign src(p->GetCSrcAddress());
+			if (from17k == mlink.addr) {
+				gateStream.OpenStream(src.c_str(), sid, mlink.cs.c_str());
+				dataBase.UpdateLH(src.c_str(), mlink.cs.c_str());
+			} else {
+				const CCallsign src(p->GetCSrcAddress());
+				dataBase.UpdateGW(src.GetCS(), from17k);
+				gateStream.OpenStream(src.c_str(), sid, from17k.GetAddress());
+				dataBase.UpdateLH(src.c_str(), "Direct");
+			}
 			Gate2Modem.Push(p);
 			gateStream.CountnTouch();
 		}
@@ -730,7 +750,7 @@ void CGateway::sendPacket2Dest(std::unique_ptr<CPacket> p)
 
 		// Open the Stream!!
 		const CCallsign src(p->GetCSrcAddress());
-		modemStream.OpenStream(p->GetCSrcAddress(), framesid);
+		modemStream.OpenStream(src.c_str(), framesid, "CC1200");
 		sendPacket(p->GetCData(), p->GetSize(), mlink.addr);
 		modemStream.CountnTouch();
 	}
@@ -754,40 +774,22 @@ bool CGateway::setDestination(const std::string &callsign)
 // returns true on error
 bool CGateway::setDestination(const CCallsign &cs)
 {
-	auto phost = destMap.Find(cs.c_str());
-
-	if (phost)
+	char target[9] { 0 };
+	memcpy(target, cs.c_str(), 8); // don't want the module
+	unsigned pos = 7;
+	while ((' ' == target[pos]) and pos)
+		target[pos--] = 0;
+	std::string address, mods, smods;
+	uint16_t port;
+	if (dataBase.GetTarget(target, address, mods, smods, port))
 	{
-		// prefer IPv6
-		if (EInternetType::ipv4only != internetType and not phost->ipv6address.empty())
-		{
-			mlink.addr.Initialize(phost->ipv6address, phost->port);
-			mlink.cs = cs;
-			mlink.isReflector = cs.IsReflector();
-			return false;
-		}
-
-		// if this is IPv6 only, we're done
-		if (EInternetType::ipv6only == internetType)
-		{
-			Log(EUnit::gate, "This IPv6-only system could not find an IPv6 address for '%s'\n", cs.c_str());
-			return true;
-		}
-
-		// if the host is IPv6 only, we're also done
-		if (phost->ipv4address.empty())
-		{
-			Log(EUnit::gate, "There is no IPv4 address for '%s'\n", cs.c_str());
-			return true;
-		}
-
-		// this is the default IPv4 address
-		mlink.addr.Initialize(phost->ipv4address, phost->port);
+		mlink.addr.Initialize(address, port);
 		mlink.cs = cs;
+		mlink.mods.assign(mods);
+		mlink.smods.assign(smods);
 		mlink.isReflector = cs.IsReflector();
 		return false;
 	}
-
 	Log(EUnit::gate, "Host '%s' not found\n", cs.c_str());
 	return true;
 }

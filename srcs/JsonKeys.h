@@ -44,10 +44,10 @@ struct SJsonKeys
 
 	struct GATEWAY
 	{
-		const std::string section, ipv4, ipv6, startupLink, maintainLink, hostPath, myHostPath, allowNotTranscoded, audioFolder;
+		const std::string section, ipv4, ipv6, startupLink, maintainLink, hostPath, myHostPath, dbPath, allowNotTranscoded, audioFolder;
 	}
 	gateway
 	{
-		"Gateway", "EnableIPv4", "EnableIPv6", "StartupLink", "MaintainLink", "HostPath", "MyHostPath", "AllowNotTranscoded", "AudioFolderPath"
+		"Gateway", "EnableIPv4", "EnableIPv6", "StartupLink", "MaintainLink", "HostPath", "MyHostPath", "DBPath", "AllowNotTranscoded", "AudioFolderPath"
 	};
 };

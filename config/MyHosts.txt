@@ -1,1 +1,8 @@
+# This section is for Reflectors
+#
+# These reflectors might not be registered at DVRref.com
+# or the data from DVRef.com might erroneous or missing.
 #Reflector;Version;Domain-name;IPv4-address;IPv6-address;Modules;Special-modules;Port;Source;Dashboard-URL
+
+# This Section is for Direct routing to another M17 node
+#Destination;IP-Address;Port

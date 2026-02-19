@@ -23,7 +23,7 @@ If you already have an SD card with *trixie* on it, you can probably use it but 
 After you've done the `sudo apt update` and `sudo apt upgrade`, there are several packages you will need:
 
 ```
-sudo apt install git build-essential cmake nlohmann-json3-dev`
+sudo apt install git build-essential cmake nlohmann-json3-dev libsqlite3-dev`
 ```
 
 ## The M17 library, libm17
@@ -44,7 +44,7 @@ The user that executes *mspot* needs to be in the `dialout` group! Do a `getent 
 
 ## Updating the CC1200 firmware
 
-This version of *mspot* supports CC1200 firmware version 2.2. You don't need to compile the firware, but you do need a few things. Here is how to install that version:
+This version of *mspot* supports CC1200 firmware version 2.2. You don't need to compile the firmware, but you do need a few things. Here is how to install that version:
 1. Install packages: `sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi`
 2. Clone the firmware repo: `git clone https://github.com/M17-Project/CC1200_HAT-fw.git`
 2. Move to the repo: `cd CC1200_HAT-fw/Release`

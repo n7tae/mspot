@@ -24,16 +24,17 @@ void CStream::Initialize(EStreamType t)
 }
 
 // returns false on success
-void CStream::OpenStream(const uint8_t *src, uint16_t sid, const std::string &f)
+void CStream::OpenStream(const std::string &cs, uint16_t sid, const std::string &f)
 {
-	source.CodeIn(src);
 	previousid = streamid = sid;
 	count = 0u;
 	from.assign(f);
-	if ((EStreamType::gate == type))
-		Log(EUnit::null, "G-way stream id=%04x from %s at %s is Opened\n", streamid, source.c_str(), from.c_str());
-	else
-		Log(EUnit::null, "Modem stream id=%04x from %s is Opened\n", sid, source.c_str());
+	src.assign(cs);
+	if ((EStreamType::gate == type)) {
+		Log(EUnit::null, "G-way stream id=%04x from %s at %s is Opened\n", streamid, src.c_str(), from.c_str());
+	 } else {
+		Log(EUnit::null, "Modem stream id=%04x from %s is Opened\n", sid, src.c_str());
+	 }
 }
 
 void CStream::CloseStream(bool istimeout)

@@ -31,7 +31,7 @@
 #include "Configure.h"
 #include "UDPSocket.h"
 #include "Callsign.h"
-#include "HostMap.h"
+#include "MspotDB.h"
 #include "Packet.h"
 #include "Stream.h"
 #include "Base.h"
@@ -56,6 +56,7 @@ using SM17Link = struct sm17link_tag
 	SM17RefPacket pongPacket;
 	CSockAddress addr;
 	CCallsign cs;
+	std::string mods, smods;
 	std::atomic<ELinkState> state;
 	bool maintainLink;
 	CSteadyTimer receivePingTimer;
@@ -119,10 +120,9 @@ private:
 	SM17Link mlink;
 	CSteadyTimer linkingTime, lastLinkSent;
 	CStream gateStream, modemStream;
-	std::mutex stateLock;
 	CSockAddress from17k;
+	CMspotDB dataBase;
 	std::future<void> gateFuture, modemFuture;
-	CHostMap destMap;
 	CSafeMessageQueue voiceQueue;
 	std::unique_ptr<SMessageTask> msgTask;
 	std::queue<CPayload> fifo;

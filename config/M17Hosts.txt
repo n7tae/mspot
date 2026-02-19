@@ -171,7 +171,7 @@ URF561;;tg61-yhsm.ref.vk44.net;44.32.8.4;;;;17000;dvref.com;https://tg61.vk44.ne
 URF562;;tg62.ref.vk44.net;44.32.8.5;;;;17000;dvref.com;https://tg62.vk44.net
 URF563;;tg63-serg.ref.vk44.net;44.32.8.6;;;;17000;dvref.com;https://tg63.vk44.net
 URF564;;tg64.ref.vk44.net;44.32.8.7;;;;17000;dvref.com;https://tg64.vk44.net
-URF587;2.8.6-dht;;104.8.207.66;;ACHM;ACH;17000;Ham-DHT;https://https://xlx587.openquad.net
+URF587;2.8.6-dht;;104.8.207.66;;ACHM;ACH;17000;Ham-DHT;https://xlx587.openquad.net
 URF621;;urf.hrcc.link;50.37.125.76;;A;A;17000;dvref.com;https://urf.hrcc.link/
 URF658;;xlx658.ddns.net;45.79.238.109;;;;17000;dvref.com;http://xlx658.ddns.net/
 URF668;3.1.4-dht;urf.n9hxr.radio;99.198.100.8;2001:470:c236:1::8;ABCDEZ;A;17000;Ham-DHT;https://urf.n9hxr.radio

@@ -20,7 +20,7 @@ ifeq ($(USE_TS), false)
 CPPFLAGS += -DNO_TS
 endif
 
-LIBS    = -pthread -lm -lgpiod
+LIBS    = -pthread -lm -lgpiod -lsqlite3
 
 SRCS = $(wildcard srcs/*.cpp)
 OBJS = $(SRCS:.cpp=.o)
