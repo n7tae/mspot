@@ -156,8 +156,6 @@ bool CConfigure::ReadData(const std::string &path)
 					data[g_Keys.repeater.section][g_Keys.repeater.can] = getUnsigned(value, "Channel Access Number", 0u, 15u, 0u);
 				else if (0 == key.compare(g_Keys.repeater.radioTypeIsV3))
 					data[g_Keys.repeater.section][g_Keys.repeater.radioTypeIsV3] = IS_TRUE(value[0]);
-				else if (0 == key.compare(g_Keys.repeater.isprivate))
-					data[g_Keys.repeater.section][g_Keys.repeater.isprivate] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.repeater.debug))
 					data[g_Keys.repeater.section][g_Keys.repeater.debug] = IS_TRUE(value[0]);
 				else
@@ -252,7 +250,6 @@ bool CConfigure::ReadData(const std::string &path)
 	}
 	isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.can,          rval);
 	isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.radioTypeIsV3,rval);
-	isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.isprivate,    rval);
 	isDefined(ErrorLevel::fatal, g_Keys.repeater.section, g_Keys.repeater.debug,        rval);
 
 	// Modem section
