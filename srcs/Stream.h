@@ -42,8 +42,8 @@ public:
 	void CountnTouch();
 
 private:
-	uint16_t streamid, previousid;
 	EStreamType type;
+	uint16_t streamid, previousid;
 	std::string from, src;
 	unsigned count;
 	CSteadyTimer lastPacketTime;

@@ -47,9 +47,7 @@ public:
 
 private:
 	bool Init();
-	void CleanCS(const char *);
 	bool UpdateGW(const std::string &name, const std::string &address, const std::string &mods, const std::string &smods, uint16_t port);
 
 	sqlite3 *db;
-	std::string cs; // a clean callsign for last heard (truncated at the first ' ')
 };

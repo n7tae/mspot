@@ -31,9 +31,9 @@ void CStream::OpenStream(const std::string &cs, uint16_t sid, const std::string 
 	from.assign(f);
 	src.assign(cs);
 	if ((EStreamType::gate == type)) {
-		Log(EUnit::null, "G-way sid=%04x %s / %s is Opened\n", streamid, src.c_str(), from.c_str());
+		Log(EUnit::null, "G-way stream id=%04x from %s / %s is Opened\n", streamid, src.c_str(), from.c_str());
 	 } else {
-		Log(EUnit::null, "Modem sid=%04x %s is Opened\n", sid, src.c_str());
+		Log(EUnit::null, "Modem stream id=%04x from %s is Opened\n", sid, src.c_str());
 	 }
 }
 
