@@ -80,12 +80,12 @@ bool CMspotDB::Init()
 	char *eMsg;
 
 	std::string sql("CREATE TABLE IF NOT EXISTS LHEARD("
-					"callsign	TEXT PRIMARY KEY, "
-					"maidenhead TEXT, "
-					"latitude   REAL, "
-					"longitude  REAL, "
-					"source		TEXT, "
-					"lasttime	INT NOT NULL"
+					"callsign TEXT PRIMARY KEY, "
+					"maidenhead TEXT DEFAULT '', "
+					"latitude REAL, "
+					"longitude REAL, "
+					"source TEXT, "
+					"lasttime INT NOT NULL"
 					") WITHOUT ROWID;");
 
 	if (SQLITE_OK != sqlite3_exec(db, sql.c_str(), NULL, 0, &eMsg))
@@ -96,10 +96,10 @@ bool CMspotDB::Init()
 	}
 
 	sql.assign("CREATE TABLE IF NOT EXISTS LINKSTATUS("
-			   "address		TEXT PRIMARY KEY, "
-			   "port		INT NOT NULL, "
-			   "target		TEXT NOT NULL, "
-			   "linked_time	INT NOT NULL"
+			   "address TEXT PRIMARY KEY, "
+			   "port INT NOT NULL, "
+			   "target TEXT NOT NULL, "
+			   "linked_time INT NOT NULL"
 			   ") WITHOUT ROWID;");
 
 	if (SQLITE_OK != sqlite3_exec(db, sql.c_str(), NULL, 0, &eMsg))
@@ -110,11 +110,11 @@ bool CMspotDB::Init()
 	}
 
 	sql.assign("CREATE TABLE IF NOT EXISTS GATEWAYS("
-			   "name	TEXT PRIMARY KEY, "
-			   "address	TEXT NOT NULL, "
-			   "mods    TEXT, "
-			   "smods   TEXT, "
-			   "port	INT NOT NULL"
+			   "name TEXT PRIMARY KEY, "
+			   "address TEXT NOT NULL, "
+			   "mods TEXT DEFAULT '', "
+			   "smods TEXT DEFAULT '', "
+			   "port INT NOT NULL"
 			   ") WITHOUT ROWID;");
 
 	if (SQLITE_OK != sqlite3_exec(db, sql.c_str(), NULL, 0, &eMsg))
