@@ -26,6 +26,7 @@
 #include <mutex>
 #include <queue>
 
+#include "SafePacketQueue.h"
 #include "SteadyTimer.h"
 #include "SockAddress.h"
 #include "Configure.h"
@@ -124,6 +125,7 @@ private:
 	CMspotDB dataBase;
 	std::future<void> gateFuture, modemFuture;
 	CSafeMessageQueue voiceQueue;
+	IPFrameFIFO pmQueue;
 	std::unique_ptr<SMessageTask> msgTask;
 	std::queue<CPayload> fifo;
 

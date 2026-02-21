@@ -50,4 +50,13 @@ struct SJsonKeys
 	{
 		"Gateway", "EnableIPv4", "EnableIPv6", "StartupLink", "MaintainLink", "HostPath", "MyHostPath", "DBPath", "AllowNotTranscoded", "AudioFolderPath"
 	};
+
+	struct DASHBOARD
+	{
+		const std::string section, refresh, lhcount, showorder;
+	}
+	dashboard
+	{
+		"Dashboard", "RefreshPeriod", "LastHeardSize", "ShowOrder"
+	};
 };

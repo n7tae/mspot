@@ -25,6 +25,7 @@
 #include <cstring>
 #include <vector>
 #include <list>
+#include <map>
 #include <algorithm>
 #include <regex>
 
@@ -113,6 +114,8 @@ bool CConfigure::ReadData(const std::string &path)
 				section = ESection::modem;
 			else if (0 == hname.compare(g_Keys.gateway.section))
 				section = ESection::gateway;
+			else if (0 == hname.compare(g_Keys.dashboard.section))
+				section = ESection::dashboard;
 			else
 			{
 				std::cerr << "WARNING: unknown ini file section: " << line << std::endl;
@@ -149,9 +152,9 @@ bool CConfigure::ReadData(const std::string &path)
 		{
 			case ESection::repeater:
 				if (0 == key.compare(g_Keys.repeater.callsign))
-					data[g_Keys.repeater.section][g_Keys.repeater.callsign] = value;
+					data[g_Keys.repeater.section][g_Keys.repeater.callsign] = getString(value, g_Keys.repeater.callsign, rval);
 				else if (0 == key.compare(g_Keys.repeater.module))
-					data[g_Keys.repeater.section][g_Keys.repeater.module] = value;
+					data[g_Keys.repeater.section][g_Keys.repeater.module] = getString(value, g_Keys.repeater.callsign, rval);
 				else if (0 == key.compare(g_Keys.repeater.can))
 					data[g_Keys.repeater.section][g_Keys.repeater.can] = getUnsigned(value, "Channel Access Number", 0u, 15u, 0u);
 				else if (0 == key.compare(g_Keys.repeater.radioTypeIsV3))
@@ -163,9 +166,9 @@ bool CConfigure::ReadData(const std::string &path)
 				break;
 			case ESection::modem:
 				if      (0 == key.compare(g_Keys.modem.gpiochipDevice))
-					data[g_Keys.modem.section][g_Keys.modem.gpiochipDevice] = value;
+					data[g_Keys.modem.section][g_Keys.modem.gpiochipDevice] = getString(value, g_Keys.repeater.callsign, rval);
 				else if (0 == key.compare(g_Keys.modem.uartDevice))
-					data[g_Keys.modem.section][g_Keys.modem.uartDevice] = value;
+					data[g_Keys.modem.section][g_Keys.modem.uartDevice] = getString(value, g_Keys.repeater.callsign, rval);
 				else if (0 == key.compare(g_Keys.modem.uartBaudRate))
 					data[g_Keys.modem.section][g_Keys.modem.uartBaudRate] = getUnsigned(value, "Uart Speed", 38400u, 921600u, 460800u);
 				else if (0 == key.compare(g_Keys.modem.boot0))
@@ -195,21 +198,31 @@ bool CConfigure::ReadData(const std::string &path)
 				else if (0 == key.compare(g_Keys.gateway.ipv6))
 					data[g_Keys.gateway.section][g_Keys.gateway.ipv6] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.gateway.startupLink))
-					data[g_Keys.gateway.section][g_Keys.gateway.startupLink] = value;
+					data[g_Keys.gateway.section][g_Keys.gateway.startupLink] = getString(value, g_Keys.repeater.callsign, rval);
 				else if (0 == key.compare(g_Keys.gateway.maintainLink))
 					data[g_Keys.gateway.section][g_Keys.gateway.maintainLink] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.gateway.hostPath))
-					data[g_Keys.gateway.section][g_Keys.gateway.hostPath] = value;
+					data[g_Keys.gateway.section][g_Keys.gateway.hostPath] = getString(value, g_Keys.repeater.callsign, rval);
 				else if (0 == key.compare(g_Keys.gateway.myHostPath))
-					data[g_Keys.gateway.section][g_Keys.gateway.myHostPath] = value;
+					data[g_Keys.gateway.section][g_Keys.gateway.myHostPath] = getString(value, g_Keys.repeater.callsign, rval);
 				else if (0 == key.compare(g_Keys.gateway.dbPath))
-					data[g_Keys.gateway.section][g_Keys.gateway.dbPath] = value;
+					data[g_Keys.gateway.section][g_Keys.gateway.dbPath] = getString(value, g_Keys.repeater.callsign, rval);
 				else if (0 == key.compare(g_Keys.gateway.allowNotTranscoded))
 					data[g_Keys.gateway.section][g_Keys.gateway.allowNotTranscoded] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.gateway.audioFolder))
-					data[g_Keys.gateway.section][g_Keys.gateway.audioFolder] = value;
+					data[g_Keys.gateway.section][g_Keys.gateway.audioFolder] = getString(value, g_Keys.repeater.callsign, rval);
 				else
 					badParam(g_Keys.gateway.section, key);
+				break;
+			case ESection::dashboard:
+				if (0 == key.compare(g_Keys.dashboard.refresh))
+					data[g_Keys.dashboard.section][g_Keys.dashboard.refresh] = getUnsigned(value, "Dashboard Refresh Rate", 2, 20, 10);
+				else if (0 == key.compare(g_Keys.dashboard.lhcount))
+					data[g_Keys.dashboard.section][g_Keys.dashboard.lhcount] = getUnsigned(value, "Lastheard Size", 1, 100, 20);
+				else if (0 == key.compare(g_Keys.dashboard.showorder))
+					data[g_Keys.dashboard.section][g_Keys.dashboard.showorder] = getString(value, g_Keys.repeater.callsign, rval);
+				else
+					badParam(g_Keys.dashboard.section, key);
 				break;
 			case ESection::none:
 			default:
@@ -322,6 +335,35 @@ bool CConfigure::ReadData(const std::string &path)
 		checkPath(g_Keys.gateway.section, g_Keys.gateway.audioFolder, path, std::filesystem::file_type::directory);
 	}
 
+	// dashboard section
+	isDefined(ErrorLevel::fatal, g_Keys.dashboard.section, g_Keys.dashboard.lhcount, rval);
+	isDefined(ErrorLevel::fatal, g_Keys.dashboard.section, g_Keys.dashboard.refresh, rval);
+	if(isDefined(ErrorLevel::fatal, g_Keys.dashboard.section, g_Keys.dashboard.showorder, rval))
+	{
+		std::vector<std::string> sections;
+		split(GetString(g_Keys.dashboard.section, g_Keys.dashboard.showorder), ',', sections);
+		if ( sections.empty()) {
+			std::cerr << "ERROR: there must be at least one section specified in " << g_Keys.dashboard.showorder << std::endl;
+			rval = true;
+		} else {
+			std::map<std::string, int> smap { { "IP", 0 }, { "LH", 0 }, { "LS", 0 }, { "MS", 0 }, { "PS", 0 }, { "SY", 0 } };
+			for (const auto &sect : sections)
+			{
+				auto pair = smap.find(sect);
+				if (smap.end() == pair) {
+					std::cerr << "ERROR: " << g_Keys.dashboard.showorder << " does not have a section called '" << sect << "'" << std::endl;
+					rval = true;
+				}
+				pair->second++;
+				if (2 == pair->second) {
+					std::cerr << "ERROR: " << sect << " is listed mutiple times in " << g_Keys.dashboard.showorder << std::endl;
+					rval = true;
+				}
+			}
+			smap.clear();
+		}
+	}
+
 	return rval;
 }
 
@@ -400,6 +442,16 @@ int CConfigure::getInt(const std::string &valuestr, const std::string &label, in
 		std::cerr << "WARNING: Line #" << counter << ": '" << valuestr << "' could not be converted to an unsigned value, it will be set to " << def << std::endl;
 		return def;
 	}
+}
+
+std::string CConfigure::getString(const std::string &value, const std::string &key, bool &rval) const
+{
+	if (('"' == value.at(0)) and ('"') == value.back())
+		return value.substr(1, value.size()-2);
+
+	std::cerr << "ERROR: line #" << counter << ": " << key << " is not contained in double quotes";
+	rval = true;
+	return value;
 }
 
 void CConfigure::badParam(const std::string &section, const std::string &key) const
@@ -512,6 +564,7 @@ std::string CConfigure::GetString(const std::string &section, const std::string 
 		else if (data[section][key].is_string())
 		{
 			str.assign(data[section][key].get<std::string>());
+			
 		}
 		else
 			std::cerr << "ERROR: GetString(): [" << section << ']' << key << " is not a string" << std::endl;

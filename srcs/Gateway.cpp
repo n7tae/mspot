@@ -260,7 +260,7 @@ void CGateway::processGateway()
 				addMessage("repeater was_disconnected_from destination");
 				Log(EUnit::gate, "Disconnected from %s, TIMEOUT...\n", mlink.cs.c_str());
 				mlink.state = ELinkState::unlinked;
-				dataBase.ClearLS();
+				dataBase.ClearTable("linkstatus");
 				if (not mlink.maintainLink)
 					mlink.addr.Clear();
 			}
@@ -388,7 +388,7 @@ void CGateway::processGateway()
 						Log(EUnit::gate, "Disconnected from %s at %s\n", mlink.cs.c_str(), mlink.addr.GetAddress());
 						mlink.addr.Clear(); // initiated with UNLINK, so don't try to reconnect
 						mlink.cs.Clear();   // ^^^^^^^^^ ^^^^ ^^^^^^
-						dataBase.ClearLS();
+						dataBase.ClearTable("linkstatus");
 						mlink.state = ELinkState::unlinked;
 					}
 					else
@@ -420,7 +420,7 @@ void CGateway::processGateway()
 							mlink.state = ELinkState::unlinked;
 							if (not mlink.maintainLink)
 								mlink.addr.Clear();
-							dataBase.ClearLS();
+							dataBase.ClearTable("linkstatus");
 							Log(EUnit::gate, "%s initiated a disconnect\n", from.GetCS().c_str());
 						}
 						else
@@ -465,6 +465,13 @@ void CGateway::processGateway()
 		{
 			gateStream.CloseStream(true);
 			g_GateState.Idle();
+		}
+
+		// finally, if we can, send a saved PM data. It should already be in the lastheard.
+		if (not pmQueue.IsEmpty() and g_GateState.SetStateToOnlyIfFrom(EGateState::gatepacketin, EGateState::idle))
+		{
+			auto p = pmQueue.PopWait();
+			Gate2Modem.Push(p);
 		}
 	}
 }
@@ -632,18 +639,20 @@ void CGateway::sendPacket2Modem(std::unique_ptr<CPacket> p)
 	}
 	if (EPacketType::packet == p->GetType())
 	{
+		const CCallsign dst(p->GetCDstAddress());
+		const CCallsign src(p->GetCSrcAddress());
+		std::string from;
+		if (from17k == mlink.addr)
+			from.assign(mlink.cs.c_str());
+		else
+			from.assign("Direct");
+		dataBase.UpdateLH(src.c_str(), dst.c_str(), false, from.c_str());
 		if (g_GateState.TryState(EGateState::gatepacketin))
 			Gate2Modem.Push(p);
 		else
 		{
-			const CCallsign dst(p->GetCDstAddress());
-			const CCallsign src(p->GetCSrcAddress());
-			Log(EUnit::gate, "Packet mode data received from the Gateway, but the system was busy\n");
-			Log(EUnit::gate, "SRC = %s, DST = %s Message:\n", src.c_str(), dst.c_str());
-			if (0x5u == *p->GetCPayload() and (0 == p->GetCData()[p->GetSize()-3]))
-				Log(EUnit::gate, "%s\n", (const char *)(p->GetCPayload()+1));
-			else
-				Dump(nullptr, p->GetCPayload(), p->GetSize()-34);
+			// save this for sending later;
+			pmQueue.Push(p);
 		}
 		return;
 	}
@@ -682,14 +691,14 @@ void CGateway::sendPacket2Modem(std::unique_ptr<CPacket> p)
 		if (g_GateState.TryState(EGateState::gatestreamin))
 		{
 			const CCallsign src(p->GetCSrcAddress());
+			const CCallsign dst(p->GetCDstAddress());
 			if (from17k == mlink.addr) {
 				gateStream.OpenStream(src.c_str(), sid, mlink.cs.c_str());
-				dataBase.UpdateLH(src.c_str(), mlink.cs.c_str());
+				dataBase.UpdateLH(src.c_str(), dst.c_str(), true, mlink.cs.c_str());
 			} else {
-				const CCallsign src(p->GetCSrcAddress());
 				dataBase.UpdateGW(src.GetCS(), from17k);
 				gateStream.OpenStream(src.c_str(), sid, from17k.GetAddress());
-				dataBase.UpdateLH(src.c_str(), "Direct");
+				dataBase.UpdateLH(src.c_str(), dst.c_str(), true, "Direct");
 			}
 			Gate2Modem.Push(p);
 			gateStream.CountnTouch();

@@ -75,16 +75,39 @@ bool CMspotDB::Open(const char *name)
 	return Init();
 }
 
+bool CMspotDB::execSqlCmd(const std::string &cmd)
+{
+	char *eMsg;
+	if (SQLITE_OK != sqlite3_exec(db, cmd.c_str(), NULL, 0, &eMsg))
+	{
+		Log(EUnit::db, "Init [%s] error: %s\n", cmd.c_str(), eMsg);
+		sqlite3_free(eMsg);
+		return true;
+	}
+	return false;
+}
+
 bool CMspotDB::Init()
 {
 	char *eMsg;
 
-	std::string sql("CREATE TABLE IF NOT EXISTS LHEARD("
-					"callsign TEXT PRIMARY KEY, "
-					"maidenhead TEXT DEFAULT '', "
-					"latitude REAL, "
-					"longitude REAL, "
-					"source TEXT, "
+	std::string sql("DROP TABEL IF EXISTS lastheard;");
+	
+	if (SQLITE_OK != sqlite3_exec(db, sql.c_str(), NULL, 0, &eMsg))
+	{
+		Log(EUnit::db, "Init [%s] error: %s\n", sql.c_str(), eMsg);
+		sqlite3_free(eMsg);
+		return true;
+	}
+
+	sql.assign("CREATE TABLE lastheard("
+					"src TEXT PRIMARY KEY, "
+					"dst TEXT NOT NULL, "
+					"mode TEXT NOT NULL, "
+					"maidenhead TEXT DEFAULT '      ', "
+					"latitude REAL DEFAULT 0.0, "
+					"longitude REAL DEFAULT 0.0, "
+					"fromnode TEXT NOT NULL, "
 					"lasttime INT NOT NULL"
 					") WITHOUT ROWID;");
 
@@ -95,10 +118,19 @@ bool CMspotDB::Init()
 		return true;
 	}
 
-	sql.assign("CREATE TABLE IF NOT EXISTS LINKSTATUS("
-			   "address TEXT PRIMARY KEY, "
+	sql.assign("DROP TABEL IF EXISTS linkstatus;");
+	
+	if (SQLITE_OK != sqlite3_exec(db, sql.c_str(), NULL, 0, &eMsg))
+	{
+		Log(EUnit::db, "Init [%s] error: %s\n", sql.c_str(), eMsg);
+		sqlite3_free(eMsg);
+		return true;
+	}
+
+	sql.assign("CREATE TABLE linkstatus("
+			   "reflector TEXT PRIMARY KEY, "
+			   "address TEXT NOT NULL, "
 			   "port INT NOT NULL, "
-			   "target TEXT NOT NULL, "
 			   "linked_time INT NOT NULL"
 			   ") WITHOUT ROWID;");
 
@@ -109,7 +141,16 @@ bool CMspotDB::Init()
 		return true;
 	}
 
-	sql.assign("CREATE TABLE IF NOT EXISTS GATEWAYS("
+	sql.assign("DROP TABEL IF EXISTS targets;");
+	
+	if (SQLITE_OK != sqlite3_exec(db, sql.c_str(), NULL, 0, &eMsg))
+	{
+		Log(EUnit::db, "Init [%s] error: %s\n", sql.c_str(), eMsg);
+		sqlite3_free(eMsg);
+		return true;
+	}
+
+	sql.assign("CREATE TABLE targets("
 			   "name TEXT PRIMARY KEY, "
 			   "address TEXT NOT NULL, "
 			   "mods TEXT DEFAULT '', "
@@ -133,12 +174,12 @@ static int countcallback(void *count, int /*argc*/, char **argv, char ** /*azCol
 	return 0;
 }
 
-bool CMspotDB::UpdateLH(const char *callsign, const char *source)
+bool CMspotDB::UpdateLH(const char *src, const char *dst, bool isstream, const char *fromnode)
 {
 	if (NULL == db)
 		return false;
 	std::stringstream sql;
-	sql << "SELECT COUNT(*) FROM LHEARD WHERE callsign='" << callsign << "';";
+	sql << "SELECT COUNT(*) FROM lastheard WHERE src='" << src << "';";
 
 	int count = 0;
 
@@ -152,13 +193,14 @@ bool CMspotDB::UpdateLH(const char *callsign, const char *source)
 
 	sql.clear();
 
+	const char *mode = isstream ? "Str" : "Pkt";
 	if (count)
 	{
-		sql << "UPDATE LHEARD SET source = '" << source << "', lasttime = strftime('%s','now') WHERE callsign = '" << callsign << "';";
+		sql << "UPDATE lastheard SET dst = '" << dst << "', isstream = '" << mode << "', fromnode = '" << fromnode << "', lasttime = strftime('%s','now') WHERE src = '" << src << "';";
 	}
 	else
 	{
-		sql << "INSERT INTO LHEARD (callsign, source, lasttime) VALUES ('" << callsign << "', '" << source << "', strftime('%s','now'));";
+		sql << "INSERT INTO lastheard (src, dst, isstream, fromnode, lasttime) VALUES ('" << src << "', '" << dst << "', '" << mode << "', '" << fromnode << "', strftime('%s','now'));";
 	}
 
 	if (SQLITE_OK != sqlite3_exec(db, sql.str().c_str(), NULL, 0, &eMsg))
@@ -176,7 +218,7 @@ bool CMspotDB::UpdatePosition(const char *callsign, const char *maidenhead, doub
 	if (NULL == db)
 		return false;
 	std::stringstream sql;
-	sql << "UPDATE LHEARD SET maidenhead = '" << maidenhead << "', latitude = " << latitude << ", longitude = " << longitude << ", lasttime = strftime('%s','now') WHERE callsign='" << callsign << "';";
+	sql << "UPDATE lastheard SET maidenhead = '" << maidenhead << "', latitude = " << latitude << ", longitude = " << longitude << ", lasttime = strftime('%s','now') WHERE callsign='" << callsign << "';";
 
 	char *eMsg;
 	if (SQLITE_OK != sqlite3_exec(db, sql.str().c_str(), NULL, 0, &eMsg))
@@ -189,12 +231,12 @@ bool CMspotDB::UpdatePosition(const char *callsign, const char *maidenhead, doub
 	return false;
 }
 
-bool CMspotDB::UpdateLS(const char *address, uint16_t port, const char *target)
+bool CMspotDB::UpdateLS(const char *address, uint16_t port, const char *reflector)
 {
 	if (NULL == db)
 		return false;
 	std::stringstream sql;
-	sql << "INSERT OR REPLACE INTO LINKSTATUS (address, port, target, linked_time) VALUES ('" << address << "', " << port << ", '" << target << "', strftime('%s','now'));";
+	sql << "INSERT OR REPLACE INTO linkstatus (reflector, address, port, linked_time) VALUES ('" << reflector << "', '" << address << "', " << port << ", strftime('%s','now'));";
 	char *eMsg;
 	if (SQLITE_OK != sqlite3_exec(db, sql.str().c_str(), NULL, 0, &eMsg))
 	{
@@ -211,7 +253,7 @@ bool CMspotDB::UpdateGW(const std::string &name, const std::string &address, con
 	if (NULL == db)
 		return true;
 	std::stringstream sql;
-	sql << "INSERT OR REPLACE INTO GATEWAYS (name, address, mods, smods, port) VALUES ('" << name.c_str() << "', '" << address.c_str() << "', '" << mods.c_str() <<"', '" << smods.c_str() << "', " << port << ");";
+	sql << "INSERT OR REPLACE INTO targets (name, address, mods, smods, port) VALUES ('" << name.c_str() << "', '" << address.c_str() << "', '" << mods.c_str() <<"', '" << smods.c_str() << "', " << port << ");";
 
 	char *eMsg;
 	if (SQLITE_OK != sqlite3_exec(db, sql.str().c_str(), NULL, 0, &eMsg))
@@ -229,7 +271,7 @@ bool CMspotDB::GetLS(std::string &address, uint16_t &port, std::string &target, 
 	if (NULL == db)
 		return false;
 	std::stringstream sql;
-	sql << "SELECT address,port,target,linked_time FROM LINKSTATUS;";
+	sql << "SELECT address,port,target,linked_time FROM linkstatus;";
 
 	sqlite3_stmt *stmt;
 	int rval = sqlite3_prepare_v2(db, sql.str().c_str(), -1, &stmt, 0);
@@ -256,7 +298,7 @@ bool CMspotDB::GetTarget(const char *name, std::string &address, std::string &mo
 	if (NULL == db)
 		return false;
 	std::stringstream sql;
-	sql << "SELECT address, mods, smods, port FROM GATEWAYS WHERE name=='" << name << "';";
+	sql << "SELECT address, mods, smods, port FROM targets WHERE name=='" << name << "';";
 
 	sqlite3_stmt *stmt;
 	int rval = sqlite3_prepare_v2(db, sql.str().c_str(), -1, &stmt, 0);
@@ -328,44 +370,19 @@ int CMspotDB::FillGW(const char *pname)
 	return added;
 }
 
-void CMspotDB::ClearLH()
+void CMspotDB::ClearTable(const char *table)
 {
 	if (NULL == db)
 		return;
 
 	char *eMsg;
 
-	if (SQLITE_OK != sqlite3_exec(db, "DELETE FROM LHEARD;", NULL, 0, &eMsg))
+	std::string sql("DELETE FROM ");
+	sql.append(table);
+	sql.append(";");
+	if (SQLITE_OK != sqlite3_exec(db, sql.c_str(), NULL, 0, &eMsg))
 	{
-		Log(EUnit::db, "ClearLH error: %s\n", eMsg);
-		sqlite3_free(eMsg);
-	}
-}
-
-void CMspotDB::ClearLS()
-{
-	if (NULL == db)
-		return;
-
-	char *eMsg;
-
-	if (SQLITE_OK != sqlite3_exec(db, "DELETE FROM LINKSTATUS;", NULL, 0, &eMsg))
-	{
-		Log(EUnit::db, "ClearLS error: %s\n", eMsg);
-		sqlite3_free(eMsg);
-	}
-}
-
-void CMspotDB::ClearGW()
-{
-	if (NULL == db)
-		return;
-
-	char *eMsg;
-
-	if (SQLITE_OK != sqlite3_exec(db, "DELETE FROM GATEWAYS;", NULL, 0, &eMsg))
-	{
-		Log(EUnit::db, "ClearGW error: %s\n", eMsg);
+		Log(EUnit::db, "ClearTable(%s) error: %s\n", table, eMsg);
 		sqlite3_free(eMsg);
 	}
 }

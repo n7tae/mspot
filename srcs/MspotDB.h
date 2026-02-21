@@ -33,20 +33,19 @@ public:
 	CMspotDB() : db(NULL) {}
 	~CMspotDB() { if (db) sqlite3_close(db); }
 	bool Open(const char *name);
-	bool UpdateLH(const char *callsign, const char *from);
+	bool UpdateLH(const char *src, const char *dst, bool isstream, const char *from);
 	bool UpdatePosition(const char *callsign, const char *maidenhead, double latitude, double longitude);
 	bool UpdateLS(const char *address, uint16_t port, const char *to_callsign);
 	bool GetLS(std::string &address, uint16_t &port, std::string &target, time_t &connect_time);
 	bool GetTarget(const char *name, std::string &address, std::string &mods, std::string &smods, uint16_t &port);
-	void ClearLH();
-	void ClearLS();
-	void ClearGW();
+	void ClearTable(const char *table);
 	void UpdateGW(const std::string &src, const CSockAddress &addr);
 	int FillGW(const char *pathname);
 	int Count(const char *table);
 
 private:
 	bool Init();
+	bool execSqlCmd(const std::string &cmd);
 	bool UpdateGW(const std::string &name, const std::string &address, const std::string &mods, const std::string &smods, uint16_t port);
 
 	sqlite3 *db;

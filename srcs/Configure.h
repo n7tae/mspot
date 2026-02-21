@@ -29,7 +29,7 @@
 extern SJsonKeys g_Keys;
 
 enum class ErrorLevel { fatal, mild };
-enum class ESection { none, repeater, modem, gateway };
+enum class ESection { none, repeater, modem, gateway, dashboard };
 
 #define IS_TRUE(a) ((a)=='t' || (a)=='T' || (a)=='1')
 
@@ -58,6 +58,7 @@ private:
 	unsigned getUnsigned(const std::string &value, const std::string &label, unsigned min, unsigned max, unsigned defaultvalue) const;
 	int getInt(const std::string &value, const std::string &label, int min, int max, int defaultvalue) const;
 	float getFloat(const std::string &value, const std::string &label, float min, float max, float defaultValue) const;
+	std::string getString(const std::string &value, const std::string &key, bool &rval) const;
 	void badParam(const std::string &section, const std::string &key) const;
 	void checkPath(const std::string &section, const std::string &key, const std::string &filepath, const std::filesystem::file_type type) const;
 	bool isDefined(ErrorLevel level, const std::string &section, const std::string &key, bool &rval);
