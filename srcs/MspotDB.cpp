@@ -103,7 +103,6 @@ bool CMspotDB::Init()
 	sql.assign("CREATE TABLE lastheard("
 					"src TEXT PRIMARY KEY, "
 					"dst TEXT NOT NULL, "
-					"isstream TEXT NOT NULL, "
 					"mode TEXT NOT NULL, "
 					"maidenhead TEXT DEFAULT '      ', "
 					"latitude REAL DEFAULT 0.0, "
@@ -197,11 +196,11 @@ bool CMspotDB::UpdateLH(const char *src, const char *dst, bool isstream, const c
 	const char *mode = isstream ? "Str" : "Pkt";
 	if (count)
 	{
-		sql << "UPDATE lastheard SET dst = '" << dst << "', isstream = '" << mode << "', fromnode = '" << fromnode << "', lasttime = strftime('%s','now') WHERE src = '" << src << "';";
+		sql << "UPDATE lastheard SET dst = '" << dst << "', mode = '" << mode << "', fromnode = '" << fromnode << "', lasttime = strftime('%s','now') WHERE src = '" << src << "';";
 	}
 	else
 	{
-		sql << "INSERT INTO lastheard (src, dst, isstream, fromnode, lasttime) VALUES ('" << src << "', '" << dst << "', '" << mode << "', '" << fromnode << "', strftime('%s','now'));";
+		sql << "INSERT INTO lastheard (src, dst, mode, fromnode, lasttime) VALUES ('" << src << "', '" << dst << "', '" << mode << "', '" << fromnode << "', strftime('%s','now'));";
 	}
 
 	if (SQLITE_OK != sqlite3_exec(db, sql.str().c_str(), NULL, 0, &eMsg))
