@@ -91,7 +91,7 @@ bool CMspotDB::Init()
 {
 	char *eMsg;
 
-	std::string sql("DROP TABEL IF EXISTS lastheard;");
+	std::string sql("DROP TABLE IF EXISTS lastheard;");
 	
 	if (SQLITE_OK != sqlite3_exec(db, sql.c_str(), NULL, 0, &eMsg))
 	{
@@ -118,7 +118,7 @@ bool CMspotDB::Init()
 		return true;
 	}
 
-	sql.assign("DROP TABEL IF EXISTS linkstatus;");
+	sql.assign("DROP TABLE IF EXISTS linkstatus;");
 	
 	if (SQLITE_OK != sqlite3_exec(db, sql.c_str(), NULL, 0, &eMsg))
 	{
@@ -141,7 +141,7 @@ bool CMspotDB::Init()
 		return true;
 	}
 
-	sql.assign("DROP TABEL IF EXISTS targets;");
+	sql.assign("DROP TABLE IF EXISTS targets;");
 	
 	if (SQLITE_OK != sqlite3_exec(db, sql.c_str(), NULL, 0, &eMsg))
 	{
