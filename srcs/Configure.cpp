@@ -154,7 +154,7 @@ bool CConfigure::ReadData(const std::string &path)
 				if (0 == key.compare(g_Keys.repeater.callsign))
 					data[g_Keys.repeater.section][g_Keys.repeater.callsign] = getString(value, g_Keys.repeater.callsign, rval);
 				else if (0 == key.compare(g_Keys.repeater.module))
-					data[g_Keys.repeater.section][g_Keys.repeater.module] = getString(value, g_Keys.repeater.callsign, rval);
+					data[g_Keys.repeater.section][g_Keys.repeater.module] = getString(value, g_Keys.repeater.module, rval);
 				else if (0 == key.compare(g_Keys.repeater.can))
 					data[g_Keys.repeater.section][g_Keys.repeater.can] = getUnsigned(value, "Channel Access Number", 0u, 15u, 0u);
 				else if (0 == key.compare(g_Keys.repeater.radioTypeIsV3))
@@ -166,9 +166,9 @@ bool CConfigure::ReadData(const std::string &path)
 				break;
 			case ESection::modem:
 				if      (0 == key.compare(g_Keys.modem.gpiochipDevice))
-					data[g_Keys.modem.section][g_Keys.modem.gpiochipDevice] = getString(value, g_Keys.repeater.callsign, rval);
+					data[g_Keys.modem.section][g_Keys.modem.gpiochipDevice] = getString(value, g_Keys.modem.gpiochipDevice, rval);
 				else if (0 == key.compare(g_Keys.modem.uartDevice))
-					data[g_Keys.modem.section][g_Keys.modem.uartDevice] = getString(value, g_Keys.repeater.callsign, rval);
+					data[g_Keys.modem.section][g_Keys.modem.uartDevice] = getString(value, g_Keys.modem.uartDevice, rval);
 				else if (0 == key.compare(g_Keys.modem.uartBaudRate))
 					data[g_Keys.modem.section][g_Keys.modem.uartBaudRate] = getUnsigned(value, "Uart Speed", 38400u, 921600u, 460800u);
 				else if (0 == key.compare(g_Keys.modem.boot0))
@@ -198,19 +198,19 @@ bool CConfigure::ReadData(const std::string &path)
 				else if (0 == key.compare(g_Keys.gateway.ipv6))
 					data[g_Keys.gateway.section][g_Keys.gateway.ipv6] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.gateway.startupLink))
-					data[g_Keys.gateway.section][g_Keys.gateway.startupLink] = getString(value, g_Keys.repeater.callsign, rval);
+					data[g_Keys.gateway.section][g_Keys.gateway.startupLink] = getString(value, g_Keys.gateway.startupLink, rval);
 				else if (0 == key.compare(g_Keys.gateway.maintainLink))
 					data[g_Keys.gateway.section][g_Keys.gateway.maintainLink] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.gateway.hostPath))
-					data[g_Keys.gateway.section][g_Keys.gateway.hostPath] = getString(value, g_Keys.repeater.callsign, rval);
+					data[g_Keys.gateway.section][g_Keys.gateway.hostPath] = getString(value, g_Keys.gateway.hostPath, rval);
 				else if (0 == key.compare(g_Keys.gateway.myHostPath))
-					data[g_Keys.gateway.section][g_Keys.gateway.myHostPath] = getString(value, g_Keys.repeater.callsign, rval);
+					data[g_Keys.gateway.section][g_Keys.gateway.myHostPath] = getString(value, g_Keys.gateway.myHostPath, rval);
 				else if (0 == key.compare(g_Keys.gateway.dbPath))
-					data[g_Keys.gateway.section][g_Keys.gateway.dbPath] = getString(value, g_Keys.repeater.callsign, rval);
+					data[g_Keys.gateway.section][g_Keys.gateway.dbPath] = getString(value, g_Keys.gateway.dbPath, rval);
 				else if (0 == key.compare(g_Keys.gateway.allowNotTranscoded))
 					data[g_Keys.gateway.section][g_Keys.gateway.allowNotTranscoded] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.gateway.audioFolder))
-					data[g_Keys.gateway.section][g_Keys.gateway.audioFolder] = getString(value, g_Keys.repeater.callsign, rval);
+					data[g_Keys.gateway.section][g_Keys.gateway.audioFolder] = getString(value, g_Keys.gateway.audioFolder, rval);
 				else
 					badParam(g_Keys.gateway.section, key);
 				break;
@@ -220,7 +220,7 @@ bool CConfigure::ReadData(const std::string &path)
 				else if (0 == key.compare(g_Keys.dashboard.lhcount))
 					data[g_Keys.dashboard.section][g_Keys.dashboard.lhcount] = getUnsigned(value, "Lastheard Size", 1, 100, 20);
 				else if (0 == key.compare(g_Keys.dashboard.showorder))
-					data[g_Keys.dashboard.section][g_Keys.dashboard.showorder] = getString(value, g_Keys.repeater.callsign, rval);
+					data[g_Keys.dashboard.section][g_Keys.dashboard.showorder] = getString(value, g_Keys.dashboard.showorder, rval);
 				else
 					badParam(g_Keys.dashboard.section, key);
 				break;
@@ -449,7 +449,7 @@ std::string CConfigure::getString(const std::string &value, const std::string &k
 	if (('"' == value.at(0)) and ('"') == value.back())
 		return value.substr(1, value.size()-2);
 
-	std::cerr << "ERROR: line #" << counter << ": " << key << " is not contained in double quotes";
+	std::cerr << "ERROR: line #" << counter << ": " << key << " is not contained in double quotes" << std::endl;
 	rval = true;
 	return value;
 }
