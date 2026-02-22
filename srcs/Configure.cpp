@@ -346,7 +346,7 @@ bool CConfigure::ReadData(const std::string &path)
 			std::cerr << "ERROR: there must be at least one section specified in " << g_Keys.dashboard.showorder << std::endl;
 			rval = true;
 		} else {
-			std::map<std::string, int> smap { { "IP", 0 }, { "LH", 0 }, { "LS", 0 }, { "MS", 0 }, { "PS", 0 }, { "SY", 0 } };
+			std::map<std::string, int> smap { { "IP", 0 }, { "LH", 0 }, { "LS", 0 }, { "MS", 0 }, { "SY", 0 } };
 			for (const auto &sect : sections)
 			{
 				auto pair = smap.find(sect);
