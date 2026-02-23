@@ -269,7 +269,7 @@ bool CConfigure::ReadData(const std::string &path)
 	if (not data[g_Keys.modem.section].contains(g_Keys.modem.boot0))
 		data[g_Keys.modem.section][g_Keys.modem.boot0] = 20u;
 	if (not data[g_Keys.modem.section].contains(g_Keys.modem.nrst))
-		data[g_Keys.modem.section][g_Keys.modem.boot0] = 21u;
+		data[g_Keys.modem.section][g_Keys.modem.nrst] = 21u;
 	if (isDefined(ErrorLevel::fatal, g_Keys.modem.section, g_Keys.modem.uartDevice, rval))
 	{
 		const auto path = GetString(g_Keys.modem.section, g_Keys.modem.uartDevice);
