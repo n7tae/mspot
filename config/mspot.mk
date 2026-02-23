@@ -4,6 +4,11 @@
 # If you change this and running mspot using mspot.service, you'll need to update your mspot.service file.
 BINDIR = /usr/local/bin
 
+# WWWDIR defines where the dashboard index.php file will be installed.
+# If you change this, you'll need to also change the working directory for the php miniserver
+# in the mdash.service file
+WWWDIR = /usr/local/www
+
 # If you don't want mspot to print the timestamp with each message, set USE_TS to false.
 # For example, if you are planning to use systemd to run mspot, set USE_TS to false.
 USE_TS = true

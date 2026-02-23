@@ -20,21 +20,26 @@ Support for version 1.6 MMDVM modems is available in the `mmdvm` branch of this 
 
 If you already have an SD card with *trixie* on it, you can probably use it but you'll want to read the `TRIXIE_SD_CARD_PREP.md` file for step-by-step instructions for how to make a *trixie* SD card for your Pi.
 
-After you've done the `sudo apt update` and `sudo apt upgrade`, there are several packages you will need:
+## install required packages
+
+After you've completed the SD card prep and have booted it up on your Pi and have completed `sudo apt update` and `sudo apt full-upgrade`, there are several packages you will need:
 
 ```
-sudo apt install git build-essential cmake nlohmann-json3-dev libsqlite3-dev`
+sudo apt install -y git build-essential cmake nlohmann-json3-dev libsqlite3-dev php-common php-fpm sqlite3 php-sqlite3 dnsutils
 ```
+If you are not going to show the IP address on your dashboard, you don't need the `dsnutils` package. And if you are not going to install the *mspot* dashboard server, you don't need any of the packages that have `php` in their package name.
 
 ## The M17 library, libm17
 
-This library does all the heavy lifting to convert between the symbols to/from the CC1200 and the *mspot* internet gateway.
-1. In your home directory, clone the repo: `git clone https://github.com/M17-Project/libm17.git
-2. Move to the repo: `cd libm17`
-3. When you do this step, you'll see a warning about unit testing you can ignore. Prep the build: `cmake -B build`
-4. Build it: `cmake --build build`
-5. Install it: `sudo cmake --install build`
-6. Your done! Return to your home directory: `cd`
+This library is used by *mspot* and it does all the math calculations needed to convert between the symbols that come to/from the CC1200 and the internet packets that *mspot* uses to send and receive data to or from a reflector or other target. Building this is simple. Start from your home directory:
+```
+git clone https://github.com/M17-Project/libm17.git
+cd libm17
+cmake -B build
+cmake --build build
+sudo cmake --install build
+cd
+```
 
 ## Dialout
 
@@ -45,19 +50,21 @@ The user that executes *mspot* needs to be in the `dialout` group! Do a `getent 
 ## Updating the CC1200 firmware
 
 This version of *mspot* supports CC1200 firmware version 2.2. You don't need to compile the firmware, but you do need a few things. Here is how to install that version:
-1. Install packages: `sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi`
-2. Clone the firmware repo: `git clone https://github.com/M17-Project/CC1200_HAT-fw.git`
-2. Move to the repo: `cd CC1200_HAT-fw/Release`
-3. Flash it: `sudo stm32flash -v -R -i "-532&-533&532,533,:-532,-533,533" -w CC1200_HAT-fw.bin /dev/ttyAMA0`
-4. Return to your home directory: `cd`
+```
+sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi
+git clone https://github.com/M17-Project/CC1200_HAT-fw.git
+cd CC1200_HAT-fw/Release
+sudo stm32flash -v -R -i "-532&-533&532,533,:-532,-533,533" -w CC1200_HAT-fw.bin /dev/ttyAMA0
+cd
+```
 
-It will take several seconds to do the flashing and when it's all done, you'll see `Reset Done.` When you start *mspot* you'll see it report the CC1200 firmware version.
+It will take several seconds to do the flashing and when it's all done, you'll see `Reset Done.` When you start *mspot* wil report the CC1200 firmware version.
 
 ## Building *mspot*
 
 First copy this repo: `git clone https://github.com/n7tae/mspot.git`
 
-Move to the *mspot* folder: `cd mspot`, then copy a few configuration file to this folder (don't forget the period at the end!): `cp config/* .`
+Move to the *mspot* folder: `cd mspot`, then copy the configuration file to this folder (don't forget the period at the end!): `cp config/* .`
 
 Then you can use your favorite text editor to modify these files to your needs. Comments within these files will help you decide what you need to do.
 
@@ -65,7 +72,7 @@ Then you can use your favorite text editor to modify these files to your needs. 
 
 Use your favorite editor to edit your new copy of *mspot.mk*.
 
-If you are planning on automatically launching *mspot* when your Pi boots up, you should probably set both `DEBUG` and `USE_TS` to `false`. If you want to run *mspot* manually, then you should make sure `USE_TS` is `true`.
+If you are planning on automatically launching *mspot* when your Pi boots up, you should set both `DEBUG` and `USE_TS` to `false`. If you want to run *mspot* manually, then you should set `USE_TS` is `true`.
 
 Once you're done editing this file, you can then build *mspot*: `make`
 
@@ -75,7 +82,20 @@ Use your editor to edit your new copy of *mspot.ini*.
 
 You may have noticed that two programs were created at the build stage: *mspot* the M17-only repeater/hot-spot, and *inicheck*, a program that will check you initialization file for errors. *inicheck* tries to be very thorough. In addition to making sure that all needed variable are define and have reasonable values, it checks that path names are pointing to existing files on your system, and that those files are the kinds of files they need to be. Do: `./inicheck mspot.ini`. If any errors are identified, *mspot* won't run.
 
-Each parameter in the example ini file is commented to help you understand what it does. Using `inicheck` will tell you if your `UartPort` is pointing to a character device and it checks a lot of other things.
+The first time you do this check, you'll see a warning that it could not find the database file.
+
+### Start the *mspot* dashboard server
+
+Edit the copy of the `index.php` file. Near the very beginning of the file, the file path to your ini file is defined as `/home/USER/mspot/mspot.ini`. This should point to you copy of `mspot.ini`.
+
+The dashboard web server is started with:
+```
+sudo make installdash
+```
+
+The *mspot* dashboard is intended for a local, private nework. The server installed by the systemd `mdash.service` file is the php miniserver. You should not use this server if you intend on publishing you're dashboard on the WWW.
+
+You can stop the miniserver with `sudo make uninstalldash`
 
 ### Set up any custom destinations
 
@@ -83,15 +103,12 @@ In the `Building` section, a few `.txt` files were copied when you copied the co
 
 ### Starting *mspot*
 
-There are two options to starting mspot:
-
-#### Manual start
-
-To start *mspot* manually, go to its repo folder and type `./mspot mspot.ini`. Then log messages will be printed in the terminal window. Timestamp colors indicate where the message is being generated. Extra messages from the CC1200 modem class will be printed if the `[Modem]Debug` value is `true`. To stop *mspot*, just type \<Control>C. It will print a few messages as it shuts down.
-
-#### It's always running
-
-If you want to have *mspot* start whenever your system starts, edit your new copy of *mspot.service*. Everything in angle brackets, \<>, needs to be replaced with the proper value. If you want run *mspot* as root you can remove the definitions for `[Service]User` and `[Service]Group`. If not, you need to set these. Also make sure the `[Service]ExecStart` specifies the exact file path to your ini file and if you changed `BINDIR` in your *mspot.mk* file that will also have the full path to *mspot* on this same line. Once you have modified this mspot.service file, do `sudo make install` to install and start *mspot*, and `sudo make uninstall` to stop and uninstall it. Once running, there are lots of things you can do:
+Edit your new copy of `mspot.service`. Everything in angle brackets, \<>, needs to be replaced with the proper value. If you want run *mspot* as root you can remove the definitions for `[Service]User` and `[Service]Group`. If not, you need to set these. Also make sure the `[Service]ExecStart` specifies the exact file path to your ini file and if you changed `BINDIR` in your *mspot.mk* file that will also have the full path to *mspot* on this same line. Once you have modified this mspot.service file, do:
+```
+sudo make install
+```
+Once running, there are lots of things you can do:
+- `sudo make uninstall` to stop *mspot* and uninstall it. 
 - To view *mspot*'s log in real time: `sudo journalctl -u mspot -f` Type \<Control>C to stop the view.
 - If you want to know all the times you heard a particular callsign, like N0CALL: `sudo journalctl -u mspot | grep NOCALL` See `journalctl --help` for other options/features.
 - To stop *mspot* without uninstalling it: `sudo systemctl stop mspot`. To start it back up: `sudo systemctl start mspot`. See `systemctl --help` for other features.
@@ -121,16 +138,16 @@ Make sure you have an M17 radio on and set to the proper frequency. You'll hear 
 
 Controlling the gateway is done with your M17 radio by setting different *commands* in the destination of your radio and sending a short transmission to *mspot*.
 
-You can connect to any known reflector module by putting that reflector's callsign and module letter in your radio and keying up. Be sure the reflector module letter is always at position nine! For example:
+You can connect to any known reflector module by putting that reflector's callsign and module letter in your radio and keying up. *mspot* will link to your reflector once you release the PTT button on your radio.Be sure the reflector module that you want connect is always at position nine! For example:
 
 | Type | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
 |------|---|---|---|---|---|---|---|---|---|
-| M17  | M | 1 | 7 | - | X | Y | Z |   | A |
+| M17  | M | 1 | 7 | - | X | Y | Z |   | C |
 | URF  | U | R | F | X | Y | Z |   |   | A |
 
 There will alway be one space at position eight for an M17 reflector module destination, and two spaces at positions seven and eight for a URF reflector module destination.
 
-Once you hear a message that it's connected successfully, the next time you key up, you'll be transmitting into the reflector module.
+Once you hear a message that it's connected successfully, the next time you key up, you'll be transmitting into the reflector.
 - **`ECHO`** or **`E`** will parrot back anything that's transmitted to the repeater. Maximum recording time is two minutes. Also, don't forget that non-legacy versions of the M17 reflector will echo back up to 20 seconds of your transmission if you change your destination to **`PARROT`**. You have to be already linked to the reflector.
 - **`STATUS`** or **`S`** or **`I`** will play a connection state message.
 - **`UNLINK`** or **`U`** will disconnect you from a connected reflector module. Please note that *mspot* has to be in a disconnected state before you can connect to a reflector module. If you try to change modules or change reflectors, your transmission will be ignored and a connection message will be played when you end your transmission.
@@ -164,13 +181,12 @@ I don't have a radio that can send or receive PM transmissions yet. The code is 
 
 This software is published using the GNU GPU, Version 3. Please see the enclosed `LICENSE` file for details.
 
-## Finally
+## To do
 
-There is still a lot of work to do before *mspot* will be really useful and catch up with Jim N1ADJ's excellent go-based m17-gateway.
 I am working on:
-- A fully functional dashboard.
+- GNSS data is not currently decoded and displayed on the dashboard.
 - Packet mode. I am waiting for OpenRTX to release firmware for my CS7000-M17 radio.
-- Systemd support. I have some things to fix in *mspot's* output before I am ready for that.
 - Better voices and more voice prompts. See the new generation of voices available in [*mat*](https://github.com/n7tae/mat).
 
 73 de N7TAE
+

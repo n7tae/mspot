@@ -1,9 +1,12 @@
 <!DOCTYPE html>
 <?php
-$ifn = '/home/<USER>/mspot/mspot.ini';
+$ifn = '/home/USER/mspot/mspot.ini';
 $inidata = parse_ini_file($ifn, true);
 if (false === $inidata)
 	die('Could not parse mspot ini file '.$ifn);
+
+// get the sqlite3 database pathway
+$dbfile = $inidata['Gateway']['DBPath'];
 
 // here are some useful defines for html
 function Table(int $b)
@@ -44,8 +47,6 @@ function Th($p, $s)
 	echo '</th>';
 }
 
-$dbfile = $inidata['Gateway']['DBPath'];
-
 function GetIP(string $type)
 {
 	if ('internal' == $type) {
@@ -62,6 +63,7 @@ function GetIP(string $type)
 	return $ip;
 }
 
+// other helper functions
 function SecToString(int $sec) {
 	if ($sec >= 86400)
 		return sprintf("%0.2f days", $sec/86400);
@@ -90,7 +92,8 @@ function SrcLinkToQRZ(string $src)
 	}
 	return str_replace('*', ' ', str_replace(' ', '&nbsp;', $link));
 }
-//example URL: https://www.google.com/maps?q=+52.37745,+001.99960
+
+//example URL: https://www.google.com/maps?q=+32.4090013,-110.9943204
 function Maidenhead(string $maid, float $lat, float $lon)
 {
 	$str = trim($maid);
@@ -285,7 +288,7 @@ foreach($showlist as $section) {
 			echo '</tr>'.PHP_EOL;
 			echo '<tr>';
 			Th(1, 'Temp');
-			Td(-1, str_replace("'", '&deg;', trim(`vcgencmd measure_temp`)));
+			Td(-1, str_replace("'", '&deg;', substr(`vcgencmd measure_temp`, 5)));
 			echo '</tr>'.PHP_EOL;
 			echo '<tr>';
 			Th(1, 'Kernel');
@@ -306,6 +309,6 @@ foreach($showlist as $section) {
 	}
 }
 ?>
-<p><i>mspot</i> Dashboard Version 260222 Copyright &copy; by Thomas A. Early, N7TAE.</p>
+<p><i>mspot</i> Dashboard V# 1.0.0 Copyright &copy; 2026 by Thomas A. Early, N7TAE.</p>
 </body>
 </html>
