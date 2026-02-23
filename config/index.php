@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <?php
-$ifn = '/home/USER/mspot/mspot.ini';
+$ifn = '/home/tom/mspot/mspot.ini';
 $inidata = parse_ini_file($ifn, true);
 if (false === $inidata)
 	die('Could not parse mspot ini file '.$ifn);
@@ -173,7 +173,7 @@ foreach($showlist as $section) {
 			Th(0,'DST');
 			Th(0,'Type');
 			Th(0,'GNSS');
-			Th(0,'Time');
+			Th(0,'Heard');
 			echo '</tr>'.PHP_EOL;
 			$db = new SQLite3($dbfile, SQLITE3_OPEN_READONLY);
 			//             0   1   2      3          4        5           6 
@@ -186,7 +186,7 @@ foreach($showlist as $section) {
 						Td(0, $row[1]);
 						Td(0, $row[2]);
 						Td(0, Maidenhead($row[3], $row[4], $row[5]));
-						Td(-1, SecToString(intval($row[6])));
+						Td(-1, SecToString(intval($row[6])).' ago');
 						echo '</tr>'.PHP_EOL;
 					}
 					$result->finalize();
@@ -251,7 +251,7 @@ foreach($showlist as $section) {
 		case 'SY':
 			$hn = trim(`uname -n`);
 			$kn = trim(`uname -rmo`);
-			$ps = explode(' ', `ps -eo "%p %C %z %c" | grep mspot | grep -v grep`);
+			$ps = explode(' ', trim(`ps -eo "%p %C %z %c" | grep mspot | grep -v grep`));
 			$osinfo = file('/etc/os-release', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
 			foreach ($osinfo as $line) {
 				list( $key, $value ) = explode('=', $line);
@@ -283,12 +283,12 @@ foreach($showlist as $section) {
 			Td(-1, $ps[2]);
 			echo '</tr>'.PHP_EOL;
 			echo '<tr>';
-			Th(1, 'cpu');
-			Td(-1, $cu);
-			echo '</tr>'.PHP_EOL;
-			echo '<tr>';
 			Th(1, 'Temp');
 			Td(-1, str_replace("'", '&deg;', substr(`vcgencmd measure_temp`, 5)));
+			echo '</tr>'.PHP_EOL;
+			echo '<tr>';
+			Th(1, 'cpu');
+			Td(-1, $cu);
 			echo '</tr>'.PHP_EOL;
 			echo '<tr>';
 			Th(1, 'Kernel');

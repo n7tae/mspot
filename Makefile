@@ -75,6 +75,6 @@ uninstall :
 uninstalldash :
 	systemctl stop mdash.service
 	systemctl disable mdash.service
-	/bin/rm -f $(SYSDIR)/mdash.service
+	/bin/rm -f /etc/systemd/system/mdash.service
 	systemctl daemon-reload
 	/bin/rm -f $(WWWDIR)/index.php
