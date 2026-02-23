@@ -59,14 +59,13 @@ install : mspot.service mspot
 installdash : index.php
 	mkdir -p $(WWWDIR)
 	/bin/ln -f -s $(shell pwd)/index.php $(WWWDIR)
-	/bin/cp -f system/mdash.service /etc/systemd/system/
+	/bin/cp -f mdash.service /etc/systemd/system/
 	systemctl enable mdash.service
 	systemctl daemon-reload
 	systemctl start mdash.service
 
 .PHONY : uninstall
 uninstall :
-	### Uninstalling mspot... ###
 	systemctl stop mspot
 	systemctl disable mspot
 	$(RM) /etc/systemd/system/mspot.service
