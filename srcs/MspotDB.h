@@ -33,7 +33,8 @@ public:
 	CMspotDB() : db(NULL) {}
 	~CMspotDB() { if (db) sqlite3_close(db); }
 	bool Open(const char *name);
-	bool UpdateLH(const char *src, const char *dst, bool isstream, const char *from);
+	bool UpdateLH(const char *src, const char *dst, bool isstream, const char *from, unsigned framecount = 0);
+	bool UpdateLH(const char *src, unsigned framecount);
 	bool UpdatePosition(const char *callsign, const char *maidenhead, double latitude, double longitude);
 	bool UpdateLS(const char *address, uint16_t port, const char *to_callsign);
 	bool GetLS(std::string &address, uint16_t &port, std::string &target, time_t &connect_time);

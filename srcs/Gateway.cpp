@@ -463,7 +463,7 @@ void CGateway::processGateway()
 		// check for a stream timeout
 		if (gateStream.IsOpen() and gateStream.GetLastTime() >= 1.6)
 		{
-			gateStream.CloseStream(true);
+			gateStream.CloseStream(true, dataBase);
 			g_GateState.Idle();
 		}
 
@@ -604,7 +604,7 @@ void CGateway::processModem()
 			// check for a timeout from the modem
 			if (modemStream.IsOpen() and modemStream.GetLastTime() >= 1.0)
 			{
-				modemStream.CloseStream(true); // close the modemStream
+				modemStream.CloseStream(true, dataBase); // close the modemStream
 				g_GateState.Idle();
 			}
 		}
@@ -646,7 +646,9 @@ void CGateway::sendPacket2Modem(std::unique_ptr<CPacket> p)
 			from.assign(mlink.cs.c_str());
 		else
 			from.assign("Direct");
-		dataBase.UpdateLH(src.c_str(), dst.c_str(), false, from.c_str());
+		unsigned fc = p->GetSize()-34u;
+		fc = fc / 25 + ((fc % 25) ? 2 : 1);
+		dataBase.UpdateLH(src.c_str(), dst.c_str(), false, from.c_str(), fc);
 		if (g_GateState.TryState(EGateState::gatepacketin))
 			Gate2Modem.Push(p);
 		else
@@ -667,7 +669,7 @@ void CGateway::sendPacket2Modem(std::unique_ptr<CPacket> p)
 			if (islast)
 			{
 				std::this_thread::sleep_for(std::chrono::milliseconds(2));
-				gateStream.CloseStream(false); // close the stream
+				gateStream.CloseStream(false, dataBase); // close the stream
 			}
 		}
 	}
@@ -722,7 +724,12 @@ void CGateway::sendPacket2Dest(std::unique_ptr<CPacket> p)
 	// TODO: -----------------------------------------------------------------
 	if (EPacketType::packet == p->GetType())
 	{
-		sendPacket(p->GetCData(), p->GetSize(), mlink.addr);
+		const CCallsign dst(p->GetCDstAddress());
+		const CCallsign src(p->GetCSrcAddress());
+		auto fc = p->GetSize();
+		sendPacket(p->GetCData(), fc, mlink.addr);
+		fc = fc / 25 + ((fc % 25) ? 2 : 1);
+		dataBase.UpdateLH(src.c_str(), dst.c_str(), false, "CC1200", fc);
 		g_GateState.Idle();
 		return;
 	}
@@ -738,7 +745,7 @@ void CGateway::sendPacket2Dest(std::unique_ptr<CPacket> p)
 			modemStream.CountnTouch();
 			if (islast)
 			{
-				modemStream.CloseStream(false);
+				modemStream.CloseStream(false, dataBase);
 				g_GateState.Idle();
 			}
 		}
@@ -758,9 +765,11 @@ void CGateway::sendPacket2Dest(std::unique_ptr<CPacket> p)
 		}
 
 		// Open the Stream!!
+		const CCallsign dst(p->GetCDstAddress());
 		const CCallsign src(p->GetCSrcAddress());
 		modemStream.OpenStream(src.c_str(), framesid, "CC1200");
 		sendPacket(p->GetCData(), p->GetSize(), mlink.addr);
+		dataBase.UpdateLH(src.c_str(), dst.c_str(), true, "CC1200");
 		modemStream.CountnTouch();
 	}
 }

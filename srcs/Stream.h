@@ -23,6 +23,7 @@
 
 #include "SteadyTimer.h"
 #include "Callsign.h"
+#include "MspotDB.h"
 #include "Base.h"
 
 enum class EStreamType { gate, modem };
@@ -34,7 +35,7 @@ public:
 	~CStream() {}
 	void Initialize(EStreamType t);
 	void OpenStream(const std::string &src, uint16_t id, const std::string &from);
-	void CloseStream(bool isTimeout);
+	void CloseStream(bool isTimeout, CMspotDB &db);
 	bool IsOpen();
 	double GetLastTime();
 	uint16_t GetStreamID();

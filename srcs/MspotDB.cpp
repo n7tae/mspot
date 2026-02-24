@@ -103,6 +103,7 @@ bool CMspotDB::Init()
 	sql.assign("CREATE TABLE lastheard("
 					"src TEXT PRIMARY KEY, "
 					"dst TEXT NOT NULL, "
+					"framecount INT NOT NULL, "
 					"mode TEXT NOT NULL, "
 					"maidenhead TEXT DEFAULT '      ', "
 					"latitude REAL DEFAULT 0.0, "
@@ -174,7 +175,7 @@ static int countcallback(void *count, int /*argc*/, char **argv, char ** /*azCol
 	return 0;
 }
 
-bool CMspotDB::UpdateLH(const char *src, const char *dst, bool isstream, const char *fromnode)
+bool CMspotDB::UpdateLH(const char *src, const char *dst, bool isstream, const char *fromnode, unsigned framecount)
 {
 	if (NULL == db)
 		return false;
@@ -196,7 +197,7 @@ bool CMspotDB::UpdateLH(const char *src, const char *dst, bool isstream, const c
 	const char *mode = isstream ? "Str" : "Pkt";
 	if (count)
 	{
-		sql << "UPDATE lastheard SET dst = '" << dst << "', mode = '" << mode << "', fromnode = '" << fromnode << "', lasttime = strftime('%s','now') WHERE src = '" << src << "';";
+		sql << "UPDATE lastheard SET dst = '" << dst << "', mode = '" << mode << "', fromnode = '" << fromnode << "', lasttime = strftime('%s','now'), framecouunt = " <<framecount << " WHERE src = '" << src << "';";
 	}
 	else
 	{
@@ -206,6 +207,24 @@ bool CMspotDB::UpdateLH(const char *src, const char *dst, bool isstream, const c
 	if (SQLITE_OK != sqlite3_exec(db, sql.str().c_str(), NULL, 0, &eMsg))
 	{
 		Log(EUnit::db, "UpdateLH [%s] error: %s\n", sql.str().c_str(), eMsg);
+		sqlite3_free(eMsg);
+		return true;
+	}
+
+	return false;
+}
+
+bool CMspotDB::UpdateLH(const char *callsign, unsigned framecount)
+{
+	if (NULL == db)
+		return false;
+	std::stringstream sql;
+	sql << "UPDATE lastheard SET framecount = " << framecount << ", lasttime = strftime('%s','now') WHERE callsign='" << callsign << "';";
+
+	char *eMsg;
+	if (SQLITE_OK != sqlite3_exec(db, sql.str().c_str(), NULL, 0, &eMsg))
+	{
+		Log(EUnit::db, "framecount update [%s] error: %s\n", sql.str().c_str(), eMsg);
 		sqlite3_free(eMsg);
 		return true;
 	}

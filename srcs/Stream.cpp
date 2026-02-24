@@ -37,11 +37,12 @@ void CStream::OpenStream(const std::string &cs, uint16_t sid, const std::string 
 	 }
 }
 
-void CStream::CloseStream(bool istimeout)
+void CStream::CloseStream(bool istimeout, CMspotDB &db)
 {
 	const std::string name((EStreamType::gate == type) ? "G-way" : "Modem");
-	Log(EUnit::null, "%s stream id=%04x %.2f sec %s\n", name.c_str(), streamid, 0.04f * count, (istimeout ? "Timed out" : "Closed"));
+	Log(EUnit::null, "%s stream id=%04x %.2f sec %s\n", name.c_str(), streamid, 0.04f * ++count, (istimeout ? "Timed out" : "Closed"));
 	streamid = 0u;
+	db.UpdateLH(src.c_str(), count);
 }
 
 bool CStream::IsOpen()
