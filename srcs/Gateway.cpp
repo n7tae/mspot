@@ -672,7 +672,7 @@ void CGateway::sendPacket2Modem(std::unique_ptr<CPacket> p)
 				if (maidenhead) {
 					const CCallsign src(p->GetCSrcAddress());
 					dataBase.UpdatePosition(src.c_str(), maidenhead, la, lo);
-					Log(EUnit::cc12, "Postion for %s: lat=%.5f lon=%.5f Station=%s Source=%s\n", src.c_str(), la, lo, position.GetStation(), position.GetSource());
+					//Log(EUnit::cc12, "Position for %s: lat=%.5f lon=%.5f Station=%s Source=%s\n", src.c_str(), la, lo, position.GetStation(), position.GetSource());
 				}
 			}
 			gateStream.CountnTouch();
@@ -761,7 +761,7 @@ void CGateway::sendPacket2Dest(std::unique_ptr<CPacket> p)
 				if (maidenhead) {
 					const CCallsign src(p->GetCSrcAddress());
 					dataBase.UpdatePosition(src.c_str(), maidenhead, la, lo);
-					Log(EUnit::cc12, "Postion for %s: lat=%.5f lon=%.5f Station=%s Source=%s\n", src.c_str(), la, lo, position.GetStation(), position.GetSource());
+					//Log(EUnit::cc12, "Pos'tion for %s: lat=%.5f lon=%.5f Station=%s Source=%s\n", src.c_str(), la, lo, position.GetStation(), position.GetSource());
 				}
 			}
 			sendPacket(p->GetCData(), p->GetSize(), mlink.addr);

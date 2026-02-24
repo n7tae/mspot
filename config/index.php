@@ -108,7 +108,7 @@ function Maidenhead(string $maid, float $lat, float $lon)
 	else
 		$slon = $lon;
 	$str = '<a*target="_blank"*href="https://www.google.com/maps?q='.$slat.','.$slon.'">'.$maid.'</a>';
-	return $str;
+	return str_replace('*', ' ', $str);
 }
 ?>
 
