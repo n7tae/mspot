@@ -214,12 +214,12 @@ bool CMspotDB::UpdateLH(const char *src, const char *dst, bool isstream, const c
 	return false;
 }
 
-bool CMspotDB::UpdateLH(const char *callsign, unsigned framecount)
+bool CMspotDB::UpdateLH(const char *src, unsigned framecount)
 {
 	if (NULL == db)
 		return false;
 	std::stringstream sql;
-	sql << "UPDATE lastheard SET framecount = " << framecount << ", lasttime = strftime('%s','now') WHERE callsign='" << callsign << "';";
+	sql << "UPDATE lastheard SET framecount = " << framecount << ", lasttime = strftime('%s','now') WHERE src='" << src << "';";
 
 	char *eMsg;
 	if (SQLITE_OK != sqlite3_exec(db, sql.str().c_str(), NULL, 0, &eMsg))
