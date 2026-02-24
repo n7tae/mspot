@@ -186,9 +186,9 @@ foreach($showlist as $section) {
 						Td(-1, SrcLinkToQRZ($row[0]));
 						Td(0, $row[1]);
 						if ($row[2] > 0)
-							$txtime = sprintf('%.2f s', 0.04 * $row[2]);
+							$txtime = sprintf('%.2f sec', 0.04 * $row[2]);
 						else
-							$txtime = "Tx'ing";
+							$txtime = 'Now TXing';
 						Td(1, $txtime);
 						Td(0, $row[3]);
 						Td(0, Maidenhead($row[4], $row[5], $row[6]));
@@ -212,7 +212,7 @@ foreach($showlist as $section) {
 				Th(0, 'Reflector');
 				Th(0, 'IP Address');
 				Th(0, 'Port');
-				Th(-1, 'Linked Time');
+				Th(0, 'Linked');
 				echo '</tr>'.PHP_EOL;
 				$results = $db->query('SELECT reflector,address,port,strftime("%s","now")-linked_time FROM linkstatus');
 				while ($row = $results->FetchArray(SQLITE3_NUM)) {
@@ -220,7 +220,7 @@ foreach($showlist as $section) {
 					Td(0, $row[0]);
 					Td(0, $row[1]);
 					Td(0, $row[2]);
-					Td(-1, SecToString(intval($row[3])));
+					Td(0, SecToString(intval($row[3])));
 					echo '</tr>'.PHP_EOL;
 				}
 			} else {
