@@ -186,10 +186,10 @@ foreach($showlist as $section) {
 						Td(-1, SrcLinkToQRZ($row[0]));
 						Td(0, $row[1]);
 						if ($row[2] > 0)
-							$txtime = sprintf('%.2f sec', 0.04 * $row[2]);
+							$txtime = sprintf('%.2f s', 0.04 * $row[2]);
 						else
 							$txtime = "Tx'ing";
-						Td(0, $txtime);
+						Td(1, $txtime);
 						Td(0, $row[3]);
 						Td(0, Maidenhead($row[4], $row[5], $row[6]));
 						Td(-1, SecToString(intval($row[7])).' ago');

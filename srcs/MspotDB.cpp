@@ -197,7 +197,7 @@ bool CMspotDB::UpdateLH(const char *src, const char *dst, bool isstream, const c
 	const char *mode = isstream ? "Str" : "Pkt";
 	if (count)
 	{
-		sql << "UPDATE lastheard SET dst = '" << dst << "', mode = '" << mode << "', fromnode = '" << fromnode << "', lasttime = strftime('%s','now'), framecouunt = " <<framecount << " WHERE src = '" << src << "';";
+		sql << "UPDATE lastheard SET dst = '" << dst << "', mode = '" << mode << "', fromnode = '" << fromnode << "', lasttime = strftime('%s','now'), framecount = " <<framecount << " WHERE src = '" << src << "';";
 	}
 	else
 	{
