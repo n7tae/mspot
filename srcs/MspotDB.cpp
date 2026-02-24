@@ -103,7 +103,7 @@ bool CMspotDB::Init()
 	sql.assign("CREATE TABLE lastheard("
 					"src TEXT PRIMARY KEY, "
 					"dst TEXT NOT NULL, "
-					"framecount INT NOT NULL, "
+					"framecount INT, "
 					"mode TEXT NOT NULL, "
 					"maidenhead TEXT DEFAULT '      ', "
 					"latitude REAL DEFAULT 0.0, "
