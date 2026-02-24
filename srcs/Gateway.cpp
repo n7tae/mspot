@@ -31,6 +31,7 @@
 #include "FrameType.h"
 #include "Configure.h"
 #include "GateState.h"
+#include "Position.h"
 #include "Gateway.h"
 #include "Random.h"
 #include "CRC.h"
@@ -663,6 +664,17 @@ void CGateway::sendPacket2Modem(std::unique_ptr<CPacket> p)
 	{
 		if (gateStream.GetStreamID() == sid)
 		{
+			if ((p->GetFrameNumber()%6 == 0) and (CFrameType(p->GetFrameType()).GetMetaDataType()==EMetaDatType::gnss))
+			{
+				CPosition position(p->GetCMetaData());
+				double la, lo;
+				auto maidenhead = position.GetPosition(la, lo);
+				if (maidenhead) {
+					const CCallsign src(p->GetCSrcAddress());
+					dataBase.UpdatePosition(src.c_str(), maidenhead, la, lo);
+					Log(EUnit::gate, "Postion for %s: %.5f %.5f\n");
+				}
+			}
 			gateStream.CountnTouch();
 			auto islast = p->IsLastPacket();
 			Gate2Modem.Push(p);
@@ -741,6 +753,17 @@ void CGateway::sendPacket2Dest(std::unique_ptr<CPacket> p)
 		{	// Here's the next stream packet
 			auto islast = p->IsLastPacket();
 			p->CalcCRC();
+			if ((p->GetFrameNumber()%6 == 0) and (TYPE.GetMetaDataType()==EMetaDatType::gnss))
+			{
+				CPosition position(p->GetCMetaData());
+				double la, lo;
+				auto maidenhead = position.GetPosition(la, lo);
+				if (maidenhead) {
+					const CCallsign src(p->GetCSrcAddress());
+					dataBase.UpdatePosition(src.c_str(), maidenhead, la, lo);
+					Log(EUnit::cc12, "Postion for %s: %.5f %.5f\n");
+				}
+			}
 			sendPacket(p->GetCData(), p->GetSize(), mlink.addr);
 			modemStream.CountnTouch();
 			if (islast)
