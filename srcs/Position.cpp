@@ -44,6 +44,29 @@ void CPosition::Get(const uint8_t *data)
 	}
 }
 
+const char *CPosition::GetSource() const
+{
+	switch (source)
+	{
+		case 0:  return "M17 client";
+		case 1:  return "OpenRTx";
+		case 15: return "Other";
+		default: return "Reserved";
+	}
+}
+
+const char *CPosition::GetStation() const
+{
+	switch (station)
+	{
+		case 0:  return "Fixed";
+		case 1:  return "Mobile";
+		case 2:  return "Handheld";
+		case 15: return "Other";
+		default: return "Reserved";
+	}
+}
+
 const char *CPosition::GetPosition(double &la, double &lo)
 {
 	if (positionValid)

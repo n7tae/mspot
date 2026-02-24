@@ -24,6 +24,8 @@ class CPosition
 public:
 	CPosition() = delete;
 	CPosition(const uint8_t *data);
+	const char *GetStation() const;
+	const char *GetSource() const;
 	virtual ~CPosition() {}
 
 	const char *GetPosition(double &lat, double &lon);
@@ -32,7 +34,7 @@ private:
 	void Get(const uint8_t *data);
 	// Meta data
 	double latitude, longitude;
-	unsigned station, source;
+	int station, source;
 	bool positionValid;
 	char maidenhead[7];
 };
