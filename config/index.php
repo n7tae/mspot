@@ -171,28 +171,30 @@ foreach($showlist as $section) {
 			echo '<tr>';
 			Th(0, 'SRC');
 			Th(0, 'DST');
+			Th(0, "From");
 			Th(0, 'TxTime');
 			Th(0, 'Type');
 			Th(0, 'GNSS');
 			Th(0, 'Heard');
 			echo '</tr>'.PHP_EOL;
 			$db = new SQLite3($dbfile, SQLITE3_OPEN_READONLY);
-			//             0   1       2      3          4       5        6        7
-			$ss = 'SELECT src,dst,framecount,mode,maidenhead,latitude,longitude,strftime("%s","now")-lasttime FROM lastheard ORDER BY lasttime DESC LIMIT '.$inidata['Dashboard']['LastHeardSize'].' ';
+			//             0   1       2      3        4       5        6          7       8
+			$ss = 'SELECT src,dst,fromnode,framecount,mode,maidenhead,latitude,longitude,strftime("%s","now")-lasttime FROM lastheard ORDER BY lasttime DESC LIMIT '.$inidata['Dashboard']['LastHeardSize'].' ';
 			if ($stmnt = $db->prepare($ss)) {
 				if ($result = $stmnt->execute()) {
 					while ($row = $result->FetchArray(SQLITE3_NUM)) {
 						echo '<tr>';
 						Td(-1, SrcLinkToQRZ($row[0]));
 						Td(0, $row[1]);
+						Td(0, $row[2]);
 						if ($row[2] > 0)
-							$txtime = sprintf('%.2f sec', 0.04 * $row[2]);
+							$txtime = sprintf('%.2f sec', 0.04 * $row[3]);
 						else
 							$txtime = '..TXing..';
 						Td(1, $txtime);
-						Td(0, $row[3]);
-						Td(0, Maidenhead($row[4], $row[5], $row[6]));
-						Td(-1, SecToString(intval($row[7])).' ago');
+						Td(0, $row[4]);
+						Td(0, Maidenhead($row[5], $row[6], $row[7]));
+						Td(-1, SecToString(intval($row[8])).' ago');
 						echo '</tr>'.PHP_EOL;
 					}
 					$result->finalize();

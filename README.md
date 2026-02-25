@@ -14,11 +14,11 @@ This version of *mspot* only works with a Rasperry Pi running trixie OS and the 
 
 Having said that, it *might* be possible to get *mspot* to run on a different single board computer as long as that sbc has a Pi-compatible 40-bit GPIO header, and you can install or build and install a compatible `gpiod-dev` library. If you are interested in this, let us know, we can help.
 
-Support for version 1.6 MMDVM modems is available in the `mmdvm` branch of this repo.
+Support for MMDVM modems running firmware version 1.6 is available in the `mmdvm` branch of this repo.
 
 ## First step, *trixie*
 
-If you already have an SD card with *trixie* on it, you can probably use it but you'll want to read the `TRIXIE_SD_CARD_PREP.md` file for step-by-step instructions for how to make a *trixie* SD card for your Pi.
+If you already have an SD card with *trixie* on it, you can probably use it but you'll want to read `TRIXIE_SD_CARD_PREP.md` step-by-step instructions for how to make a *trixie* SD card for your Pi.
 
 ## install required packages
 
@@ -49,7 +49,7 @@ The user that executes *mspot* needs to be in the `dialout` group! Do a `getent 
 
 ## Updating the CC1200 firmware
 
-This version of *mspot* supports CC1200 firmware version 2.2. You don't need to compile the firmware, but you do need a few things. Here is how to install that version:
+This version of *mspot* supports CC1200 firmware version 2.2. You don't need to compile the firmware, but you do need a few things to flash the CC1200 if it's not already running 2.2. Here is how to install that version:
 ```
 sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi
 git clone https://github.com/M17-Project/CC1200_HAT-fw.git
@@ -58,7 +58,7 @@ sudo stm32flash -v -R -i "-532&-533&532,533,:-532,-533,533" -w CC1200_HAT-fw.bin
 cd
 ```
 
-It will take several seconds to do the flashing and when it's all done, you'll see `Reset Done.` When you start *mspot* wil report the CC1200 firmware version.
+It will take several seconds to do the flashing and when it's all done, you'll see `Reset Done.` When you start *mspot* wil report the CC1200 firmware version in the log.
 
 ## Building *mspot*
 
@@ -88,14 +88,14 @@ The first time you do this check, you'll see a warning that it could not find th
 
 Edit the copy of the `index.php` file. Near the very beginning of the file, the file path to your ini file is defined as `/home/USER/mspot/mspot.ini`. This should point to you copy of `mspot.ini`.
 
+The `mdash.service` file will run the php miniserver on TCP port 80 (HTTP). If you want to use a different port, you can edit this file. You should not use this server if you intend on publishing you're dashboard on the WWW.
+
 The dashboard web server is started with:
 ```
 sudo make installdash
 ```
 
-The *mspot* dashboard is intended for a local, private nework. The server installed by the systemd `mdash.service` file is the php miniserver. You should not use this server if you intend on publishing you're dashboard on the WWW.
-
-You can stop the miniserver with `sudo make uninstalldash`
+You can uninstall the miniserver with `sudo make uninstalldash`
 
 ### Set up any custom destinations
 
@@ -169,10 +169,6 @@ to make sure there are no errors in your ini file.
 6. If you are starting *mspot* automatically and a new mspot.service file came down, with the "git pull", you'll probably need to create a new mspot.service file.
 7. You are now ready to restart *mspot*.
 
-### More about voice message
-
-The robotic voice prompts currently being used are generated from a rather old open-source program, *espeak*. The first time you hear it, it might be a little difficult to understand. For example, the first time you hear espeak say "hotel", it may be hard to recognize. However, it gets much easier with repetition. If you are interested in recording your own voice messages or want to re-record messages in a different language, see the related [mat](https://github.com/n7tae/mat) repo, the *M17 Audio Tools*. These are the tools used to create the *mspot* voice messages.
-
 ## Packet mode
 
 I don't have a radio that can send or receive PM transmissions yet. The code is there, but it hasn't yet been debugged! *Caveat emptor!*
@@ -184,7 +180,6 @@ This software is published using the GNU GPU, Version 3. Please see the enclosed
 ## To do
 
 I am working on:
-- GNSS data is not currently decoded and displayed on the dashboard.
 - Packet mode. I am waiting for OpenRTX to release firmware for my CS7000-M17 radio.
 - Better voices and more voice prompts. See the new generation of voices available in [*mat*](https://github.com/n7tae/mat).
 
