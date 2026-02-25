@@ -119,17 +119,23 @@ function Maidenhead(string $maid, float $lat, float $lon)
 </head>
 <style>
 table {
-	font-family: arial, sans-serif;
+	font-family:Arial, Helvetica, sans-serif;
 	border-collapse: collapse;
 }
 
 td {
-	font-family: monospace;
-	padding: 3px;
+	font-family:'Courier New', Courier, monospace;
 }
 
 th {
-	padding: 3px;
+	color: #a52a2a;
+}
+
+th, td {
+    padding-top: 2px;
+    padding-bottom: 1px;
+    padding-right: 10px;
+    padding-left: 10px;
 }
 
 tr:nth-child(even) {
@@ -139,6 +145,7 @@ tr:nth-child(even) {
 caption {
 	font-family:'Times New Roman', Times, serif;
 	font-weight: bold;
+	color: #0000b0
 }
 </style>
 <body>
@@ -169,9 +176,9 @@ foreach($showlist as $section) {
 			Table(0);
 			Caption('Last Heard');
 			echo '<tr>';
-			Th(0, 'SRC');
-			Th(0, 'DST');
-			Th(0, "From");
+			Th(-1, 'User');
+			Th(-1, 'From');
+			Th(-1, "Destination");
 			Th(0, 'TxTime');
 			Th(0, 'Type');
 			Th(0, 'GNSS');
@@ -179,14 +186,14 @@ foreach($showlist as $section) {
 			echo '</tr>'.PHP_EOL;
 			$db = new SQLite3($dbfile, SQLITE3_OPEN_READONLY);
 			//             0   1       2      3        4       5        6          7       8
-			$ss = 'SELECT src,dst,fromnode,framecount,mode,maidenhead,latitude,longitude,strftime("%s","now")-lasttime FROM lastheard ORDER BY lasttime DESC LIMIT '.$inidata['Dashboard']['LastHeardSize'].' ';
+			$ss = 'SELECT src,fromnode,dst,framecount,mode,maidenhead,latitude,longitude,strftime("%s","now")-lasttime FROM lastheard ORDER BY lasttime DESC LIMIT '.$inidata['Dashboard']['LastHeardSize'].' ';
 			if ($stmnt = $db->prepare($ss)) {
 				if ($result = $stmnt->execute()) {
 					while ($row = $result->FetchArray(SQLITE3_NUM)) {
 						echo '<tr>';
 						Td(-1, SrcLinkToQRZ($row[0]));
-						Td(0, $row[1]);
-						Td(0, $row[2]);
+						Td(-1, $row[1]);
+						Td(-1, $row[2]);
 						if ($row[2] > 0)
 							$txtime = sprintf('%.2f sec', 0.04 * $row[3]);
 						else
