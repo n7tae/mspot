@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <?php
-$ifn = '/home/USER_LOGIN_NAME/mspot/mspot.ini';
+$ifn = '/home/USER/mspot/mspot.ini';
 $inidata = parse_ini_file($ifn, true);
 if (false === $inidata)
 	die('Could not parse mspot ini file '.$ifn);
@@ -110,6 +110,78 @@ function Maidenhead(string $maid, float $lat, float $lon)
 	$str = '<a*target="_blank"*href="https://www.google.com/maps?q='.$slat.','.$slon.'">'.$maid.'</a>';
 	return str_replace('*', ' ', $str);
 }
+
+// get all the data needed for the page
+$db = new SQLite3($dbfile, SQLITE3_OPEN_READONLY);
+$showlist = explode(',', trim($inidata['Dashboard']['ShowOrder']));
+foreach ($showlist as $section) {
+	switch ($section) {
+		case 'IP':
+			$ipaddr['internal'] = GetIP('internal');
+			$hasv6 = $inidata['Gateway']['EnableIPv6'];
+			$hasv4 = $inidata['Gateway']['EnableIPv4'];
+			if ($hasv4) $ipaddr['ipv4'] = GetIP('ipv4');
+			if ($hasv6) $ipaddr['ipv6'] = GetIP('ipv6');
+			break;
+		case 'LH':
+			$lheard = array();
+			$ss = 'SELECT src,fromnode,dst,framecount,mode,maidenhead,latitude,longitude,strftime("%s","now")-lasttime FROM lastheard ORDER BY lasttime DESC LIMIT '.$inidata['Dashboard']['LastHeardSize'].' ';
+			if ($stmnt = $db->prepare($ss)) {
+				if ($result = $stmnt->execute()) {
+					$i = 0;
+					while ($row = $result->FetchArray(SQLITE3_NUM)) {
+						$lheard[$i] = array(
+							'src'        => SrcLinkToQRZ($row[0]),
+							'fromnode'   => $row[1],
+							'dst'        => $row[2],
+							'framecount' => ($row[3] > 0) ? sprintf('%.2f sec', 0.04 * $row[3]) : '..TXing..',
+							'mode'       => $row[4],
+							'maidenhead' => Maidenhead($row[5], $row[6], $row[7]),
+							'lasttime'   => SecToString($row[8]),
+						);
+						$i++;
+					}
+					$result->finalize();
+				}
+				$stmnt->close();
+			}
+			break;
+		case 'LS':
+			$linkcount = $db->querySingle('SELECT COUNT(*) FROM linkstatus');
+			if ($linkcount > 0) {
+				$results = $db->query('SELECT reflector,address,port,strftime("%s","now")-linked_time FROM linkstatus');
+				while ($row = $results->FetchArray(SQLITE3_NUM)) {
+					$lstatus = '<tr><td>'.$row[0].'</td><td>'.$row[1].'</td><td>'.$row[2].'</td><td>'.SecToString($row[3]).'</td></tr>'.PHP_EOL;
+				}
+			} else {
+				$lstatus = '<tr><td colspan="4">unlinked</td></tr>'.PHP_EOL;
+			}
+			break;
+		case 'SY':
+			$hn = trim(`uname -n`);
+			$kn = trim(`uname -rmo`);
+			$ps = explode(' ', trim(`ps -eo "%p %C %z %c" | grep mspot | grep -v grep`));
+			$osinfo = file('/etc/os-release', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+			foreach ($osinfo as $line) {
+				list( $key, $value ) = explode('=', $line);
+				if ($key == 'PRETTY_NAME') {
+					$os = trim($value, '"');
+					break;
+				}
+			}
+			$cu = trim(`cat /proc/cpuinfo | grep Model`);
+			if (0 == strlen($cu))
+				$cu = trim(`cat /proc/cpuinfo | grep "model name"`);
+			$culist = explode("\n", $cu);
+			$mnlist = explode(':', $culist[0]);
+			$cu = trim($mnlist[1]);
+			if (count($culist) > 1)
+				$cu .= ' ' . count($culist) . ' Threads';
+			$temperature = str_replace("'", '&deg;', substr(`vcgencmd measure_temp`, 5));
+			break;
+	}
+}
+$db->close();
 ?>
 
 <html>
@@ -149,16 +221,12 @@ caption {
 }
 </style>
 <body>
-<h2><?php echo $inidata['Repeater']['Callsign']; ?> Dashboard</h2>
+<h3><?php echo $inidata['Repeater']['Callsign']; ?> <i>mspot</i> Dashboard</h2>
 
 <?php
-$showorder = $inidata['Dashboard']['ShowOrder'];
-$showlist = explode(',', trim($showorder));
 foreach($showlist as $section) {
 	switch ($section) {
 		case 'IP':
-			$hasv6 = $inidata['Gateway']['EnableIPv6'];
-			$hasv4 = $inidata['Gateway']['EnableIPv4'];
 			Table(1);
 			Caption('IP Addresses');
 			echo '<tr>';
@@ -167,9 +235,9 @@ foreach($showlist as $section) {
 			if ($hasv6) Th(0, 'IPV6');
 			echo '</tr>'.PHP_EOL;
 			echo '<tr>';
-			Td(0, GetIP('internal'));
-			if ($hasv4) Td(0, GetIP('ipv4'));
-			if ($hasv6) Td(0, GetIP('ipv6'));
+			Td(0, $ipaddr['internal']);
+			if ($hasv4) Td(0, $ipaddr['ipv4']);
+			if ($hasv6) Td(0, $ipaddr['ipv6']);
 			echo '</tr></table><br>'.PHP_EOL;
 			break;
 		case 'LH':
@@ -180,65 +248,34 @@ foreach($showlist as $section) {
 			Th(-1, 'From');
 			Th(-1, "Destination");
 			Th(0, 'TxTime');
-			Th(0, 'Type');
+			Th(0, 'Mode');
 			Th(0, 'GNSS');
 			Th(0, 'Heard');
 			echo '</tr>'.PHP_EOL;
-			$db = new SQLite3($dbfile, SQLITE3_OPEN_READONLY);
-			//             0   1       2      3        4       5        6          7       8
-			$ss = 'SELECT src,fromnode,dst,framecount,mode,maidenhead,latitude,longitude,strftime("%s","now")-lasttime FROM lastheard ORDER BY lasttime DESC LIMIT '.$inidata['Dashboard']['LastHeardSize'].' ';
-			if ($stmnt = $db->prepare($ss)) {
-				if ($result = $stmnt->execute()) {
-					while ($row = $result->FetchArray(SQLITE3_NUM)) {
-						echo '<tr>';
-						Td(-1, SrcLinkToQRZ($row[0]));
-						Td(-1, $row[1]);
-						Td(-1, $row[2]);
-						if ($row[2] > 0)
-							$txtime = sprintf('%.2f sec', 0.04 * $row[3]);
-						else
-							$txtime = '..TXing..';
-						Td(1, $txtime);
-						Td(0, $row[4]);
-						Td(0, Maidenhead($row[5], $row[6], $row[7]));
-						Td(-1, SecToString(intval($row[8])).' ago');
-						echo '</tr>'.PHP_EOL;
-					}
-					$result->finalize();
-				}
-				$stmnt->close();
+			foreach ($lheard as $lhrow) {
+				echo '<tr>';
+				Td(-1, $lhrow['src']);
+				Td(-1, $lhrow['fromnode']);
+				Td(-1, $lhrow['dst']);
+				Td(0,  $lhrow['framecount']);
+				Td(0,  $lhrow['mode']);
+				Td(0,  $lhrow['maidenhead']);
+				Td(1,  $lhrow['lasttime'].' ago');
+				echo '</tr>'.PHP_EOL;
 			}
-			$db->Close();
 			echo '</table><br>'.PHP_EOL;
 			break;
 		case 'LS':
 			Table('1');
 			Caption('Link Status');
-			$db = new SQLite3($inidata['Gateway']['DBPath'], SQLITE3_OPEN_READONLY);
-			$linkcount = $db->querySingle('SELECT COUNT(*) FROM linkstatus');
-			if ($linkcount > 0) {
-				echo '<tr>';
-				Th(0, 'Reflector');
-				Th(0, 'IP Address');
-				Th(0, 'Port');
-				Th(0, 'Linked');
-				echo '</tr>'.PHP_EOL;
-				$results = $db->query('SELECT reflector,address,port,strftime("%s","now")-linked_time FROM linkstatus');
-				while ($row = $results->FetchArray(SQLITE3_NUM)) {
-					echo '<tr>';
-					Td(0, $row[0]);
-					Td(0, $row[1]);
-					Td(0, $row[2]);
-					Td(0, SecToString(intval($row[3])));
-					echo '</tr>'.PHP_EOL;
-				}
-			} else {
-				echo '<tr>';
-				Td(0, 'Unlinked');
-				echo '</td></tr>'.PHP_EOL;
-			}
+			echo '<tr>';
+			Th(0, 'Reflector');
+			Th(0, 'IP Address');
+			Th(0, 'Port');
+			Th(0, 'Linked');
+			echo '</tr>'.PHP_EOL;
+			echo $lstatus;
 			echo '</table><br>'.PHP_EOL;
-			$db->close();
 			break;
 		case 'MS':
 			$rx = $inidata['Modem']['RXFrequency'] / 1000000;
@@ -264,25 +301,6 @@ foreach($showlist as $section) {
 			echo '</tr></table><br>'.PHP_EOL;
 			break;
 		case 'SY':
-			$hn = trim(`uname -n`);
-			$kn = trim(`uname -rmo`);
-			$ps = explode(' ', trim(`ps -eo "%p %C %z %c" | grep mspot | grep -v grep`));
-			$osinfo = file('/etc/os-release', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-			foreach ($osinfo as $line) {
-				list( $key, $value ) = explode('=', $line);
-				if ($key == 'PRETTY_NAME') {
-					$os = trim($value, '"');
-					break;
-				}
-			}
-			$cu = trim(`cat /proc/cpuinfo | grep Model`);
-			if (0 == strlen($cu))
-				$cu = trim(`cat /proc/cpuinfo | grep "model name"`);
-			$culist = explode("\n", $cu);
-			$mnlist = explode(':', $culist[0]);
-			$cu = trim($mnlist[1]);
-			if (count($culist) > 1)
-				$cu .= ' ' . count($culist) . ' Threads';
 			echo Table(1);
 			Caption('System Info');
 			echo '<tr>';
@@ -299,7 +317,7 @@ foreach($showlist as $section) {
 			echo '</tr>'.PHP_EOL;
 			echo '<tr>';
 			Th(1, 'Temp');
-			Td(-1, str_replace("'", '&deg;', substr(`vcgencmd measure_temp`, 5)));
+			Td(-1, $temperature);
 			echo '</tr>'.PHP_EOL;
 			echo '<tr>';
 			Th(1, 'cpu');
