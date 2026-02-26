@@ -16,7 +16,7 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <stdio.h>
+#include <cstdio>
 
 #include "Position.h"
 
@@ -67,7 +67,7 @@ const char *CPosition::GetStation() const
 	}
 }
 
-const char *CPosition::GetPosition(double &la, double &lo)
+const char *CPosition::GetPosition(std::string &la, std::string &lo)
 {
 	if (positionValid)
 	{
@@ -80,8 +80,11 @@ const char *CPosition::GetPosition(double &la, double &lo)
 		maidenhead[4] = 'a' +  (int(lon * 12.0) % 24);
 		maidenhead[5] = 'a' +  (int(lat * 24.0) % 24);
 		maidenhead[6] = '\0';
-		la = latitude;
-		lo = longitude;
+		char buf[16];
+		snprintf(buf, 15, "%+.6f", latitude);
+		la.assign(buf);
+		snprintf(buf, 15, "%+.6f", longitude);
+		lo.assign(buf);
 		return maidenhead;
 	}
 	return nullptr;

@@ -106,8 +106,8 @@ bool CMspotDB::Init()
 					"framecount INT, "
 					"mode TEXT NOT NULL, "
 					"maidenhead TEXT DEFAULT '      ', "
-					"latitude REAL DEFAULT 0.0, "
-					"longitude REAL DEFAULT 0.0, "
+					"latitude TEXT, "
+					"longitude TEXT, "
 					"fromnode TEXT NOT NULL, "
 					"lasttime INT NOT NULL"
 					") WITHOUT ROWID;");
@@ -232,12 +232,12 @@ bool CMspotDB::UpdateLH(const char *src, unsigned framecount)
 	return false;
 }
 
-bool CMspotDB::UpdatePosition(const char *src, const char *maidenhead, double latitude, double longitude)
+bool CMspotDB::UpdatePosition(const char *src, const char *maidenhead, const std::string &latitude, const std::string &longitude)
 {
 	if (NULL == db)
 		return false;
 	std::stringstream sql;
-	sql << "UPDATE lastheard SET maidenhead = '" << maidenhead << "', latitude = " << latitude << ", longitude = " << longitude << ", lasttime = strftime('%s','now') WHERE src='" << src << "';";
+	sql << "UPDATE lastheard SET maidenhead = '" << maidenhead << "', latitude = '" << latitude << "', longitude = '" << longitude << "', lasttime = strftime('%s','now') WHERE src='" << src << "';";
 
 	char *eMsg;
 	if (SQLITE_OK != sqlite3_exec(db, sql.str().c_str(), NULL, 0, &eMsg))

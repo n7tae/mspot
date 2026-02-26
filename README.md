@@ -86,9 +86,9 @@ The first time you do this check, you'll see a warning that it could not find th
 
 ### Start the *mspot* dashboard server
 
-Edit the copy of the `index.php` file. Near the very beginning of the file, the file path to your ini file is defined as `/home/USER/mspot/mspot.ini`. This should point to you copy of `mspot.ini`.
+Edit the copy of the `index.php` file. Near the very beginning of the file, the file path to your ini file is defined as `/home/USER/mspot/mspot.ini`. This should point to your copy of `mspot.ini`. This is an ***extremely*** light-weight dashboard. The entire PHP code is contained in this single file. There are no dependencies, except for your .ini file.
 
-The `mdash.service` file will run the php miniserver on TCP port 80 (HTTP). If you want to use a different port, you can edit this file. You should not use this server if you intend on publishing you're dashboard on the WWW.
+The `mdash.service` file will run the php miniserver on TCP port 80 (HTTP). If you want to use a different port, you can edit this file. You should not use this server if you intend on publishing your dashboard on the WWW.
 
 The dashboard web server is started with:
 ```

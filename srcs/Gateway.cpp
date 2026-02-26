@@ -667,7 +667,7 @@ void CGateway::sendPacket2Modem(std::unique_ptr<CPacket> p)
 			if ((p->GetFrameNumber()%6 == 0) and (CFrameType(p->GetFrameType()).GetMetaDataType()==EMetaDatType::gnss))
 			{
 				CPosition position(p->GetCMetaData());
-				double la, lo;
+				std::string la, lo;
 				auto maidenhead = position.GetPosition(la, lo);
 				if (maidenhead) {
 					const CCallsign src(p->GetCSrcAddress());
@@ -756,7 +756,7 @@ void CGateway::sendPacket2Dest(std::unique_ptr<CPacket> p)
 			if ((p->GetFrameNumber()%6 == 0) and (TYPE.GetMetaDataType()==EMetaDatType::gnss))
 			{
 				CPosition position(p->GetCMetaData());
-				double la, lo;
+				std::string la, lo;
 				auto maidenhead = position.GetPosition(la, lo);
 				if (maidenhead) {
 					const CCallsign src(p->GetCSrcAddress());

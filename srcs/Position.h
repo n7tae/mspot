@@ -28,7 +28,7 @@ public:
 	const char *GetSource() const;
 	virtual ~CPosition() {}
 
-	const char *GetPosition(double &lat, double &lon);
+	const char *GetPosition(std::string &lat, std::string &lon);
 
 private:
 	void Get(const uint8_t *data);

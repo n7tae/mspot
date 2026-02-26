@@ -35,7 +35,7 @@ public:
 	bool Open(const char *name);
 	bool UpdateLH(const char *src, const char *dst, bool isstream, const char *from, unsigned framecount = 0);
 	bool UpdateLH(const char *src, unsigned framecount);
-	bool UpdatePosition(const char *callsign, const char *maidenhead, double latitude, double longitude);
+	bool UpdatePosition(const char *callsign, const char *maidenhead, const std::string &latitude, const std::string &longitude);
 	bool UpdateLS(const char *address, uint16_t port, const char *to_callsign);
 	bool GetLS(std::string &address, uint16_t &port, std::string &target, time_t &connect_time);
 	bool GetTarget(const char *name, std::string &address, std::string &mods, std::string &smods, uint16_t &port);
