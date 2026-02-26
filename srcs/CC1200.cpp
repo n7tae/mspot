@@ -1248,12 +1248,9 @@ void CCC1200::rxProcess()
 							if (g_GateState.TryState(EGateState::modemin))
 								Modem2Gate.Push(p);
 
-							if (cfg.debug)
+							if ((cfg.debug and (fn%12u==11u)) or (fn>>15))
 							{
-								if ((fn%12u==11u) or (fn>>15))
-								{
-									Log(EUnit::cc12, "RF Stream Frame: FN:%04X ED^2:%5.2f MER:%4.1f%%\n", fn, sed_str, float(e)*escale);
-								}
+								Log(EUnit::cc12, "RF Stream Frame: FN:%04X ED^2:%5.2f MER:%4.1f%%\n", fn, sed_str, float(e)*escale);
 							}
 						}
 
@@ -1275,16 +1272,18 @@ void CCC1200::rxProcess()
 									if (not got_lsf)
 									{
 										rxType.SetFrameType(rxlsf.GetFrameType());
-										(bool)g_GateState.TryState(EGateState::modemin);
-										rx_state = ((EPayloadType::packet == rxType.GetPayloadType()) ? ERxState::pkt : ERxState::str); // the LICH
-										sample_cnt = 0; // LICH LSF
-										got_lsf = true;
-										sid = g_RNG.Get();
-										const CCallsign dst(rxlsf.GetCDstAddress());
-										const CCallsign src(rxlsf.GetCSrcAddress());
-										if (cfg.debug)
+										if (g_GateState.TryState(EGateState::modemin))
 										{
+											rx_state = ((EPayloadType::packet == rxType.GetPayloadType()) ? ERxState::pkt : ERxState::str); // the LICH
+											sample_cnt = 0; // LICH LSF
+											got_lsf = true;
+											sid = g_RNG.Get();
+											const CCallsign dst(rxlsf.GetCDstAddress());
+											const CCallsign src(rxlsf.GetCSrcAddress());
 											Log(EUnit::cc12, "LICH LSF: DST: %s SRC: %s TYPE: %04X CAN: %d\n", dst.c_str(), src.c_str(), rxlsf.GetFrameType(), rxType.GetCan());
+										} else {
+											Log(EUnit::cc12, "Got LICH LSF, but could not obtain GateLock\n");
+											Dump(nullptr, lsf_b, 30);
 										}
 									}
 								}
