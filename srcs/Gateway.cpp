@@ -303,9 +303,7 @@ void CGateway::processGateway()
 				Log(EUnit::gate, "Message task is done, but future task is invalid");
 			}
 			msgTask.reset();
-			if (EGateState::bootup != g_GateState.GetState())
-				g_GateState.Idle();
-			else if (voiceQueue.Empty())
+			if ((EGateState::bootup != g_GateState.GetState()) or voiceQueue.Empty())
 				g_GateState.Idle();
 		}
 
@@ -482,100 +480,27 @@ void CGateway::processModem()
 	while (keep_running)
 	{
 		auto p = Modem2Gate.PopWaitFor(40);
-		if (not p)
-			continue; // Modem2Gate timeout
-		const CCallsign dst(p->GetCDstAddress());
-		if (EPacketType::packet == p->GetType()) { // process packet data
-			switch (mlink.state)
-			{
-			case ELinkState::linked:
-				if ((dst == mlink.cs) or (not dst.IsReflector())) { // is the destination the linked reflector?
-					sendPacket2Dest(std::move(p));
-				} else {
-					Log(EUnit::gate, "Destination is %s but you are already linked to %s\n", dst.c_str(), mlink.cs.c_str());
-				}
-				break;
-			case ELinkState::linking:
-				if (dst == mlink.cs) {
-					Log(EUnit::gate, "%s is not yet linked", dst.c_str());
-				} else {
-					Log(EUnit::gate, "Destination is %s but you are linking to %s\n", dst.c_str(), mlink.cs.c_str());
-				}
-				break;
-			case ELinkState::unlinked:
-				if (dst.IsReflector()) {
-					if (not setDestination(dst))
-					{
-						if (mlink.isReflector)
-							mlink.state = ELinkState::linking;
-						else
-							Log(EUnit::gate, "IP Address for %s found: %s\n", dst.c_str(), mlink.addr.GetAddress());
-					}
-				} else {
-					if (dst == mlink.cs) {
-						sendPacket2Dest(std::move(p));
-					} else {
-						if (not setDestination(dst))
-						{
-							Log(EUnit::gate, "IP Address for %s found: %s\n", dst.c_str(), mlink.addr.GetAddress());
-						}
-					}
-				}
-				break;
-			}
-		} else if (EPacketType::stream == p->GetType()) {
-			switch (dst.GetBase())
-			{
-			case CalcCSCode("E"):
-			case CalcCSCode("ECHO"):
-				doEcho(p);
-				g_GateState.Idle();
-				break;
-			case CalcCSCode("I"):
-			case CalcCSCode("S"):
-			case CalcCSCode("STATUS"):
-				doStatus(p);
-				g_GateState.Idle();
-				break;
-			case CalcCSCode("U"):
-			case CalcCSCode("UNLINK"):
-				doUnlink(p);
-				g_GateState.Idle();
-				break;
-			case CalcCSCode("RECORD"):
-				doRecord(p);
-				g_GateState.Idle();
-				break;
-			case CalcCSCode("PLAY"):
-				doPlay(p);
-				g_GateState.Idle();
-				break;
-			default:
+		if (p) {
+			const CCallsign dst(p->GetCDstAddress());
+			if (EPacketType::packet == p->GetType()) { // process packet data
 				switch (mlink.state)
 				{
 				case ELinkState::linked:
 					if ((dst == mlink.cs) or (not dst.IsReflector())) { // is the destination the linked reflector?
 						sendPacket2Dest(std::move(p));
 					} else {
-						addMessage("repeater is_already_linked");
-						wait4end(p);
 						Log(EUnit::gate, "Destination is %s but you are already linked to %s\n", dst.c_str(), mlink.cs.c_str());
-						g_GateState.Idle();
 					}
 					break;
 				case ELinkState::linking:
-					wait4end(p);
 					if (dst == mlink.cs) {
 						Log(EUnit::gate, "%s is not yet linked", dst.c_str());
 					} else {
-						addMessage("repeater is_already_linking");
 						Log(EUnit::gate, "Destination is %s but you are linking to %s\n", dst.c_str(), mlink.cs.c_str());
 					}
-					g_GateState.Idle();
 					break;
 				case ELinkState::unlinked:
 					if (dst.IsReflector()) {
-						wait4end(p);
 						if (not setDestination(dst))
 						{
 							if (mlink.isReflector)
@@ -583,12 +508,10 @@ void CGateway::processModem()
 							else
 								Log(EUnit::gate, "IP Address for %s found: %s\n", dst.c_str(), mlink.addr.GetAddress());
 						}
-						g_GateState.Idle();
 					} else {
 						if (dst == mlink.cs) {
 							sendPacket2Dest(std::move(p));
 						} else {
-							wait4end(p);
 							if (not setDestination(dst))
 							{
 								Log(EUnit::gate, "IP Address for %s found: %s\n", dst.c_str(), mlink.addr.GetAddress());
@@ -597,17 +520,92 @@ void CGateway::processModem()
 					}
 					break;
 				}
-				break;
+			} else if (EPacketType::stream == p->GetType()) {
+				switch (dst.GetBase())
+				{
+				case CalcCSCode("E"):
+				case CalcCSCode("ECHO"):
+					doEcho(p);
+					g_GateState.Idle();
+					break;
+				case CalcCSCode("I"):
+				case CalcCSCode("S"):
+				case CalcCSCode("STATUS"):
+					doStatus(p);
+					g_GateState.Idle();
+					break;
+				case CalcCSCode("U"):
+				case CalcCSCode("UNLINK"):
+					doUnlink(p);
+					g_GateState.Idle();
+					break;
+				case CalcCSCode("RECORD"):
+					doRecord(p);
+					g_GateState.Idle();
+					break;
+				case CalcCSCode("PLAY"):
+					doPlay(p);
+					g_GateState.Idle();
+					break;
+				default:
+					switch (mlink.state)
+					{
+					case ELinkState::linked:
+						if ((dst == mlink.cs) or (not dst.IsReflector())) { // is the destination the linked reflector?
+							sendPacket2Dest(std::move(p));
+						} else {
+							addMessage("repeater is_already_linked");
+							wait4end(p);
+							Log(EUnit::gate, "Destination is %s but you are already linked to %s\n", dst.c_str(), mlink.cs.c_str());
+							g_GateState.Idle();
+						}
+						break;
+					case ELinkState::linking:
+						wait4end(p);
+						if (dst == mlink.cs) {
+							Log(EUnit::gate, "%s is not yet linked", dst.c_str());
+						} else {
+							addMessage("repeater is_already_linking");
+							Log(EUnit::gate, "Destination is %s but you are linking to %s\n", dst.c_str(), mlink.cs.c_str());
+						}
+						g_GateState.Idle();
+						break;
+					case ELinkState::unlinked:
+						if (dst.IsReflector()) {
+							wait4end(p);
+							if (not setDestination(dst))
+							{
+								if (mlink.isReflector)
+									mlink.state = ELinkState::linking;
+								else
+									Log(EUnit::gate, "IP Address for %s found: %s\n", dst.c_str(), mlink.addr.GetAddress());
+							}
+							g_GateState.Idle();
+						} else {
+							if (dst == mlink.cs) {
+								sendPacket2Dest(std::move(p));
+							} else {
+								wait4end(p);
+								if (not setDestination(dst))
+								{
+									Log(EUnit::gate, "IP Address for %s found: %s\n", dst.c_str(), mlink.addr.GetAddress());
+								}
+							}
+						}
+						break;
+					}
+					break;
+				}
 			}
-		}
-		else
-		{
+		} else {
 			// check for a timeout from the modem
 			if (modemStream.IsOpen() and modemStream.GetLastTime() >= 1.0)
 			{
 				modemStream.CloseStream(true, dataBase); // close the modemStream
 				g_GateState.Idle();
 			}
+			if (g_GateState.SetStateToOnlyIfFrom(EGateState::idle, EGateState::rftimeout))
+				Log(EUnit::gate, "Reset state to idle from RF timeout\n");
 		}
 	}
 }

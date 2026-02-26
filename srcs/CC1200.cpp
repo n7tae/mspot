@@ -1192,7 +1192,6 @@ void CCC1200::rxProcess()
 				//stream frame received
 				else if (sed_str <= 20.0f)
 				{
-					sample_cnt = 0; // packet frame
 					//find L2's minimum
 					uint8_t sample_offset=0;
 					for (uint8_t i=1; i<=2; i++)
@@ -1238,6 +1237,7 @@ void CCC1200::rxProcess()
 					{
 						if (got_lsf) // send this data frame to the gateway
 						{
+							sample_cnt = 0;
 							auto p = std::make_unique<CPacket>();
 							p->Initialize(EPacketType::stream);
 							p->SetStreamId(sid);
@@ -1384,6 +1384,7 @@ void CCC1200::rxProcess()
 					{
 						Log(EUnit::cc12, "RF Timeout\n");
 						rx_state = ERxState::idle; // timeout
+						g_GateState.SetStateToOnlyIfFrom(EGateState::rftimeout, EGateState::modemin);
 						got_lsf = false;
 						sample_cnt = 0;
 						// stream mode reset

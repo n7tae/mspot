@@ -60,6 +60,17 @@ void CGateState::Idle()
 	currentState = EGateState::idle;
 }
 
+bool CGateState::HandleRfCommand(EGateState toState)
+{
+	std::lock_guard<std::mutex> lg(mtx);
+	if (EGateState::modemin==currentState or EGateState::rftimeout==currentState)
+	{
+		currentState = toState;
+		return true;
+	}
+	return false;
+}
+
 // return true if sucessful
 bool CGateState::SetStateToOnlyIfFrom(EGateState tostate, EGateState fromstate)
 {

@@ -127,7 +127,7 @@ private:
 	CSafeMessageQueue voiceQueue;
 	IPFrameFIFO pmQueue;
 	std::unique_ptr<SMessageTask> msgTask;
-	std::queue<CPayload> fifo;
+	std::queue<CPayload> playbackQueue;
 
 	void processGateway();
 	EPacketType validate(uint8_t *in, unsigned length);

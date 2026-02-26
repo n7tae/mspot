@@ -89,6 +89,7 @@ void CGateway::doStatus(std::unique_ptr<CPacket> &p)
 		addMessage("repeater is_linking");
 	else
 		addMessage("repeater is_unlinked");
+	g_GateState.HandleRfCommand(EGateState::idle);
 }
 
 void CGateway::doUnlink(std::unique_ptr<CPacket> &p)
@@ -109,6 +110,7 @@ void CGateway::doUnlink(std::unique_ptr<CPacket> &p)
 		Log(EUnit::gate, "DISConnect packet sent to %s\n", mlink.cs.c_str());
 		// the gateway proccess loop will disconnect when is receives the confirming DISC packet.
 	}
+	g_GateState.HandleRfCommand(EGateState::idle);
 }
 
 void CGateway::doEcho(std::unique_ptr<CPacket> &p)
@@ -136,14 +138,16 @@ void CGateway::doRecord(std::unique_ptr<CPacket> &p)
 void CGateway::doRecord(char c, uint16_t streamID)
 {
 	// record payload in queue
+	while (playbackQueue.size())
+		playbackQueue.pop();
 	uint16_t fn = 0;
 	CSteadyTimer timer;
-	while (true) // record the payloads in fifo
+	while (true) // record the payloads in playbackQueue
 	{
 		auto p = Modem2Gate.PopWaitFor(40);
 		if (nullptr == p)
 			continue;
-		if (timer.time() > 2.0)
+		if (timer.time() > 0.12)	// 3 frames 
 		{
 			Log(EUnit::gate, "Voice Recorder timeout!\n");
 			break;
@@ -155,7 +159,7 @@ void CGateway::doRecord(char c, uint16_t streamID)
 		timer.start();
 		if (++fn < 3000) // only collect up to 2 minutes
 		{
-			fifo.emplace(p->GetPayload());
+			playbackQueue.emplace(p->GetPayload());
 		}
 		if (p->IsLastPacket())
 			break;
@@ -166,8 +170,8 @@ void CGateway::doRecord(char c, uint16_t streamID)
 	}
 	if (fn < 25)
 	{
-		while (not fifo.empty())
-			fifo.pop();
+		while (not playbackQueue.empty())
+			playbackQueue.pop();
 		Log(EUnit::gate, "Only recorded %d milliseconds, not saved\n", 40 * fn);
 		return;
 	}
@@ -192,10 +196,10 @@ void CGateway::doRecord(char c, uint16_t streamID)
 	std::ofstream ofs(pathname, std::ios::binary | std::ios::trunc);
 	if (ofs.is_open())
 	{
-		while (not fifo.empty())
+		while (not playbackQueue.empty())
 		{
-			ofs.write((char *)fifo.front().Data(), 16);
-			fifo.pop();
+			ofs.write((char *)playbackQueue.front().Data(), 16);
+			playbackQueue.pop();
 		}
 		ofs.close();
 	}
@@ -206,21 +210,21 @@ void CGateway::doRecord(char c, uint16_t streamID)
 
 	// after a short wait
 	std::this_thread::sleep_for(std::chrono::milliseconds(500));
-	if (g_GateState.SetStateToOnlyIfFrom(EGateState::gatestreamin, EGateState::modemin))
+	if (g_GateState.HandleRfCommand(EGateState::gatestreamin))
 		doPlay(c);
 	else
-		Log(EUnit::gate, "Could not set state from ModemIn to GateStreamIn\n");
+		Log(EUnit::gate, "doRecord() could not set state for playback. Current state is %s\n", g_GateState.GetStateName());
 }
 
 void CGateway::doPlay(std::unique_ptr<CPacket> &p)
 {
 	wait4end(p);
-	if (g_GateState.SetStateToOnlyIfFrom(EGateState::gatestreamin, EGateState::modemin)) {
+	if (g_GateState.HandleRfCommand(EGateState::gatestreamin)) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(300));
 		CCallsign dst(p->GetCDstAddress());
 		doPlay(dst.GetModule());
 	} else {
-		Log(EUnit::gate, "Could not change state from ModemIn to GateStreamIn\n");
+		Log(EUnit::gate, "doPlay() could not set state for playback. Current state is %s\n", g_GateState.GetStateName());
 	}
 }
 

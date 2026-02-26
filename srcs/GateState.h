@@ -20,7 +20,7 @@
 
 #include <mutex>
 
-enum class EGateState { idle, gatestreamin, gatepacketin, messagein, modemin, bootup };
+enum class EGateState { idle, gatestreamin, gatepacketin, messagein, modemin, rftimeout, bootup };
 
 class CGateState
 {
@@ -30,14 +30,15 @@ public:
 
 	const char *GetStateName();
 	EGateState GetState();
-	void Set2IdleIfGateIn(void);
+	void Set2IdleIfGateIn();
 	void Idle();
 	// return true if sucessful
 	bool SetStateToOnlyIfFrom(EGateState tostate, EGateState fromstate);
-	bool IsRxReady(void);
-	bool IsTxReady(void);
+	bool IsRxReady();
+	bool IsTxReady();
 	// returns true if successful
 	bool TryState(EGateState newstate);
+	bool HandleRfCommand(EGateState toState);
 
 private:
 	std::mutex mtx;
