@@ -177,7 +177,7 @@ $db->close();
 
 <html>
 <head>
-<title><i>mspot</i> <?php echo $inidata['Repeater']['Callsign']; ?> Dashboard</title>
+<title>Mspot <?php echo $inidata['Repeater']['Callsign']; ?> Dashboard</title>
 <meta http-equiv="refresh" content="<?php echo $inidata['Dashboard']['RefreshPeriod'];?>">
 </head>
 <style>
