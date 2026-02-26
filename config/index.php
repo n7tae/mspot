@@ -94,20 +94,11 @@ function SrcLinkToQRZ(string $src)
 }
 
 //example URL: https://www.google.com/maps?q=+32.4090013,-110.9943204
-function Maidenhead(string $maid, float $lat, float $lon)
+function Maidenhead(string $maid, $lat, $lon)
 {
-	$str = trim($maid);
-	if (6 > strlen($str))
+	if (6 > strlen(trim($maid)))
 		return $maid;
-	if ($lat >= 0.0)
-		$slat = '+'.$lat;
-	else
-		$slat = $lat;
-	if ($lon >= 0.0)
-		$slon = '+'.$lon;
-	else
-		$slon = $lon;
-	$str = '<a*target="_blank"*href="https://www.google.com/maps?q='.$slat.','.$slon.'">'.$maid.'</a>';
+	$str = '<a*target="_blank"*href="https://www.google.com/maps?q='.$lat.','.$lon.'">'.$maid.'</a>';
 	return str_replace('*', ' ', $str);
 }
 
