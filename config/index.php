@@ -248,7 +248,7 @@ foreach($showlist as $section) {
 				Td(-1, $lhrow['src']);
 				Td(-1, $lhrow['fromnode']);
 				Td(-1, $lhrow['dst']);
-				Td(0,  $lhrow['framecount']);
+				Td(1,  $lhrow['framecount']);
 				Td(0,  $lhrow['mode']);
 				Td(0,  $lhrow['maidenhead']);
 				Td(1,  $lhrow['lasttime'].' ago');
