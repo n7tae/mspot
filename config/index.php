@@ -250,7 +250,7 @@ foreach($showlist as $section) {
 			echo '</tr>'.PHP_EOL;
 			foreach ($lheard as $lhrow) {
 				echo '<tr>';
-				Td(-1, HardSpace($lhrow['src']));
+				Td(-1, $lhrow['src']);
 				Td(-1, HardSpace($lhrow['fromnode']));
 				Td(-1, HardSpace($lhrow['dst']));
 				Td(1,  $lhrow['framecount']);
