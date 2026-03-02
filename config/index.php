@@ -63,6 +63,11 @@ function GetIP(string $type)
 	return $ip;
 }
 
+function HardSpace(string $str)
+{
+	return str_replace(' ', '&nbsp;', $str);
+}
+
 // other helper functions
 function SecToString(int $sec) {
 	if ($sec >= 86400)
@@ -71,9 +76,9 @@ function SecToString(int $sec) {
 	$sec %= 3600;
 	$min = intdiv($sec, 60);
 	$sec %= 60;
-	if ($hrs) return str_replace(' ', '&nbsp;', sprintf("%2d hr  %2d min", $hrs, $min));
-	if ($min) return str_replace(' ', '&nbsp;', sprintf("%2d min %2d sec", $min, $sec));
-	return str_replace(' ', '&nbsp;', sprintf("%2d sec", $sec));
+	if ($hrs) return HardSpace(sprintf("%2d hr  %2d min", $hrs, $min));
+	if ($min) return HardSpace(sprintf("%2d min %2d sec", $min, $sec));
+	return HardSpace(sprintf("%2d sec", $sec));
 }
 
 function SrcLinkToQRZ(string $src)
@@ -90,7 +95,7 @@ function SrcLinkToQRZ(string $src)
 		$link .= ' ';
 		$len += 1;
 	}
-	return str_replace('*', ' ', str_replace(' ', '&nbsp;', $link));
+	return str_replace('*', ' ', HardSpace($link));
 }
 
 //example URL: https://www.google.com/maps?q=+32.4090013,-110.9943204
@@ -245,9 +250,9 @@ foreach($showlist as $section) {
 			echo '</tr>'.PHP_EOL;
 			foreach ($lheard as $lhrow) {
 				echo '<tr>';
-				Td(-1, $lhrow['src']);
-				Td(-1, $lhrow['fromnode']);
-				Td(-1, $lhrow['dst']);
+				Td(-1, HardSpace($lhrow['src']));
+				Td(-1, HardSpace($lhrow['fromnode']));
+				Td(-1, HardSpace($lhrow['dst']));
 				Td(1,  $lhrow['framecount']);
 				Td(0,  $lhrow['mode']);
 				Td(0,  $lhrow['maidenhead']);
@@ -333,6 +338,6 @@ foreach($showlist as $section) {
 	}
 }
 ?>
-<p><i>mspot</i> Dashboard V# 1.0.0 Copyright &copy; 2026 by Thomas A. Early, N7TAE.</p>
+<p><i>mspot</i> Dashboard V# 1.0.1 Copyright &copy; 2026 by Thomas A. Early, N7TAE.</p>
 </body>
 </html>
