@@ -89,7 +89,7 @@ function SrcLinkToQRZ(string $src)
 			$cs = strstr($cs, $chr, true);
 	}
 	$tail = substr_replace($src, '', 0, strlen($cs));
-	$link = '<a*target="_blank"*href="https://www.qrz.com/db/'.$cs.'">'.$cs.'</a>'.$tail;
+	$link = '<a*target="_blank"*rel="noopener noreferrer"*href="https://www.qrz.com/db/'.$cs.'">'.$cs.'</a>'.$tail;
 	$len = strlen($src);
 	while ($len < 10) {
 		$link .= ' ';
@@ -98,13 +98,12 @@ function SrcLinkToQRZ(string $src)
 	return str_replace('*', ' ', HardSpace($link));
 }
 
-//example URL: https://www.google.com/maps?q=+32.4090013,-110.9943204
 function Maidenhead(string $maid, $lat, $lon)
 {
 	if (6 > strlen(trim($maid)))
 		return $maid;
-	$str = '<a*target="_blank"*href="https://www.google.com/maps?q='.$lat.','.$lon.'">'.$maid.'</a>';
-	return str_replace('*', ' ', $str);
+	//return '<a target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps?q='.$lat.','.$lon.'">'.$maid.'</a>';
+	return '<a href="https://www.openstreetmap.org/?mlat='.$lat.'&mlon='.$lon.'#map=16/'.$lat.'/'.$lon.'" class="pl", target="_blank" rel="noopener noreferrer">'.$maid.'</a>';
 }
 
 // get all the data needed for the page
@@ -338,6 +337,6 @@ foreach($showlist as $section) {
 	}
 }
 ?>
-<p><i>mspot</i> Dashboard V# 1.0.1 Copyright &copy; 2026 by Thomas A. Early, N7TAE.</p>
+<p><i>mspot</i> Dashboard V# 1.0.2 Copyright &copy; 2026 by Thomas A. Early, N7TAE.</p>
 </body>
 </html>
