@@ -84,6 +84,12 @@ You may have noticed that two programs were created at the build stage: *mspot* 
 
 The first time you do this check, you'll see a warning that it could not find the database file.
 
+There are now three voices used for prompts:
+1. A robotic voice in `audio/robotic` based on the now ancient espeak linux text-to-speech utility.
+2. A male voice in `audio/male` is a realistic AI generated voice from the python-based [*piper*](https://github.com/OHF-Voice/piper1-gpl) text to speech package from the [Open Home Foundation](https://www.openhomefoundation.org/).
+3. A female voice in `audio/female` is another AI voice generated from *piper*.
+Make sure your ini file points to the folder of your choice.
+
 ### Start the *mspot* dashboard server
 
 Edit the copy of the `index.php` file. Near the very beginning of the file, the file path to your ini file is defined as `/home/USER/mspot/mspot.ini`. This should point to your copy of `mspot.ini`. This is an ***extremely*** light-weight dashboard. The entire PHP code is contained in this single file. There are no dependencies, except for your .ini file.
