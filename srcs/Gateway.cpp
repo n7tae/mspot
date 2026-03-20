@@ -330,7 +330,7 @@ void CGateway::processGateway()
 			return;
 		}
 
-		uint8_t buf[100];
+		uint8_t buf[MAX_PACKET_SIZE];
 		socklen_t fromlen = sizeof(struct sockaddr_storage);
 		int length = 0;
 
@@ -338,12 +338,12 @@ void CGateway::processGateway()
 		{
 			if (pfds[0].revents & POLLIN)
 			{
-				length = recvfrom(pfds[0].fd, buf, 100, 0, from17k.GetPointer(), &fromlen);
+				length = recvfrom(pfds[0].fd, buf, MAX_PACKET_SIZE, 0, from17k.GetPointer(), &fromlen);
 				pfds[0].revents &= ~POLLIN;
 			}
 			else if (pfds[1].revents & POLLIN)
 			{
-				length = recvfrom(pfds[1].fd, buf, 100, 0, from17k.GetPointer(), &fromlen);
+				length = recvfrom(pfds[1].fd, buf, MAX_PACKET_SIZE, 0, from17k.GetPointer(), &fromlen);
 				pfds[1].revents &= ~POLLIN;
 			}
 
