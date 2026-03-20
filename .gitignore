@@ -14,4 +14,11 @@ cc1200-reset
 
 # local configs
 /mspot.*
-/*Host.txt
+/*Hosts.txt
+/index.php
+/mdash.service
+
+# locally generated dat files
+ECHO
+destination.dat
+repeater.dat
