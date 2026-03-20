@@ -924,14 +924,15 @@ void CCC1200::txProcess()
 					p->CalcCRC();
 				}
 				const auto can = TYPE.GetCan();
-				const unsigned type = *(p->GetCPayload());
+				const unsigned type = p->GetCPayload()[0];
 				
 				Log(EUnit::cc12, "├ DST: %s\n", dst.c_str());
 				Log(EUnit::cc12, "├ SRC: %s\n", src.c_str());
 				Log(EUnit::cc12, "├ CAN: %u\n", unsigned(can));
-				if (type != 5u or *(p->GetCPayload()+p->GetSize()-3)) //assuming 1-byte type specifier
+				if (type != 5u or p->GetCData()[p->GetSize()-3]) //assuming 1-byte type specifier
 				{
 					Log(EUnit::cc12, "└ TYPE: %u\n", unsigned(p->GetCPayload()[0]));
+					Dump("Payload:", p->GetCPayload(), p->GetSize()-34);
 				}
 				else
 				{
