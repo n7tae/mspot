@@ -89,7 +89,7 @@ There are now four voices used for prompts:
 2. A male voice in `audio/male` is a realistic AI generated voice from the python-based [*piper*](https://github.com/OHF-Voice/piper1-gpl) text to speech package from the [Open Home Foundation](https://www.openhomefoundation.org/).
 3. A female voice in `audio/female` is another AI voice generated from *piper*.
 Make sure your ini file points to the folder of your choice.
-4. Another great sounding voice is in `audio/sam`.
+4. Another great sounding *piper* voice is in `audio/sam`. Sam's cadence is rapid and Sam's pronunciation is near perfect.
 
 ### Start the *mspot* dashboard server
 
