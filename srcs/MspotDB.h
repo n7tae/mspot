@@ -25,9 +25,10 @@
 #include <cstdint>
 
 #include "Base.h"
+#include "LineTools.h"
 #include "SockAddress.h"
 
-class CMspotDB : public CBase
+class CMspotDB : public CBase, public CLineTools
 {
 public:
 	CMspotDB() : db(NULL) {}

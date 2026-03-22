@@ -46,38 +46,6 @@ extern IPFrameFIFO Gate2Modem;
 
 static const uint8_t quiet[] { 0x01u, 0x00u, 0x09u, 0x43u, 0x9Cu, 0xE4u, 0x21u, 0x08u };
 
-
-static inline void split(const std::string &s, char delim, std::queue<std::string> &q)
-{
-	std::istringstream iss(s);
-	std::string item;
-	while (std::getline(iss, item, delim))
-		q.push(item);
-}
-
-// trim from start (in place)
-static inline void ltrim(std::string &s)
-{
-    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
-        return !std::isspace(ch);
-    }));
-}
-
-// trim from end (in place)
-static inline void rtrim(std::string &s)
-{
-    s.erase(std::find_if(s.rbegin(), s.rend(), [](int ch) {
-        return !std::isspace(ch);
-    }).base(), s.end());
-}
-
-// trim from both ends (in place)
-static inline void trim(std::string &s)
-{
-    ltrim(s);
-    rtrim(s);
-}
-
 // for calculating switch case values for host command processor
 constexpr uint64_t CalcCSCode(const char *cs)
 {

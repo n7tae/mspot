@@ -33,7 +33,7 @@ mspot : $(OBJS)
 	$(CXX) $(CPPFLAGS) $(OBJS) /usr/local/lib/libm17.a $(LIBS) -o $@
 
 inicheck : srcs/Configure.h srcs/Configure.cpp srcs/JsonKeys.h
-	$(CXX) $(CPPFLAGS) -DINICHECK srcs/Configure.cpp -o $@
+	$(CXX) $(CPPFLAGS) -DINICHECK srcs/Configure.cpp srcs/LineTools.o -o $@
 
 cc1200-reset : tools/cc1200-reset.c
 	gcc -o $@ tools/cc1200-reset.c -lgpiod

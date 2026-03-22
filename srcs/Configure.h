@@ -25,6 +25,7 @@
 #include <regex>
 
 #include "JsonKeys.h"
+#include "LineTools.h"
 
 extern SJsonKeys g_Keys;
 
@@ -33,7 +34,7 @@ enum class ESection { none, repeater, modem, gateway, dashboard };
 
 #define IS_TRUE(a) ((a)=='t' || (a)=='T' || (a)=='1')
 
-class CConfigure
+class CConfigure : public CLineTools
 {
 public:
 	CConfigure();

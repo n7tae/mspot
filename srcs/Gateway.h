@@ -31,6 +31,7 @@
 #include "SockAddress.h"
 #include "Configure.h"
 #include "UDPSocket.h"
+#include "LineTools.h"
 #include "Callsign.h"
 #include "MspotDB.h"
 #include "Packet.h"
@@ -100,7 +101,7 @@ using SMessageTask = struct message_tag
 	std::atomic<bool> isDone;
 };
 
-class CGateway : public CBase
+class CGateway : public CBase, public CLineTools
 {
 public:
 	bool Start();

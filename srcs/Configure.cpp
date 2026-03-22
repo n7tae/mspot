@@ -34,37 +34,6 @@
 // the global definition
 SJsonKeys  g_Keys;
 
-static inline void split(const std::string &s, char delim, std::vector<std::string> &v)
-{
-	std::istringstream iss(s);
-	std::string item;
-	while (std::getline(iss, item, delim))
-		v.push_back(item);
-}
-
-// trim from start (in place)
-static inline void ltrim(std::string &s)
-{
-    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
-        return !std::isspace(ch);
-    }));
-}
-
-// trim from end (in place)
-static inline void rtrim(std::string &s)
-{
-    s.erase(std::find_if(s.rbegin(), s.rend(), [](int ch) {
-        return !std::isspace(ch);
-    }).base(), s.end());
-}
-
-// trim from both ends (in place)
-static inline void trim(std::string &s)
-{
-    ltrim(s);
-    rtrim(s);
-}
-
 CConfigure::CConfigure()
 {
 	MoreCS  = std::regex("^[0-9]?[A-Z]{1,2}[0-9]{1,2}[A-Z]{1,4}([./-][0-9A-Z])?[ ]*$", std::regex::extended);
