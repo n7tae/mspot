@@ -36,20 +36,20 @@ void CBase::Log(EUnit unit, const char* fmt, ...) const
 		endc++;
 
 #ifndef NO_TS
-	// print a timeStame if a color esc sequence was provided
 	timeStamp();
 #endif
 
 	switch (unit)
 	{
-		case EUnit::call: printf("Callsign, "); break;
-		case EUnit::cc12: printf("Modem, ");    break;
-		case EUnit::gate: printf("Gateway, ");  break;
-		case EUnit::host: printf("HostMap, ");  break;
-		case EUnit::sock: printf("SockAddr, "); break;
-		case EUnit::udp:  printf("UDP, ");      break;
-		case EUnit::db:   printf("SQLite, ");   break;
-		case EUnit::null: default:              break;
+		case EUnit::target: printf("Target, ");   break;
+		case EUnit::call:   printf("Callsign, "); break;
+		case EUnit::cc12:   printf("Modem, ");    break;
+		case EUnit::gate:   printf("Gateway, ");  break;
+		case EUnit::host:   printf("HostMap, ");  break;
+		case EUnit::sock:   printf("SockAddr, "); break;
+		case EUnit::udp:    printf("UDP, ");      break;
+		case EUnit::db:     printf("SQLite, ");   break;
+		case EUnit::null:   default:              break;
 	}
 
 	// now print a variable list of things

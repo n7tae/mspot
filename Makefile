@@ -2,7 +2,7 @@
 #                                                              #
 #            mspot - An M17-only Hotspot/Repeater              #
 #                                                              #
-#         Copyright (c) 2025 by Thomas A. Early N7TAE          #
+#      Copyright (c) 2025-2026 by Thomas A. Early N7TAE        #
 #                                                              #
 # See the LICENSE file for details about the software license. #
 #                                                              #
@@ -11,13 +11,21 @@
 include mspot.mk
 
 ifeq ($(DEBUG), true)
-CPPFLAGS = -ggdb -std=c++17 -Wall -Wextra -Werror -Isrcs
+CPPFLAGS = -ggdb -std=c++17 -Wall -Wextra -Werror -Isrcs -DDEBUG
 else
 CPPFLAGS  = -std=c++17 -Wall -Wextra -Werror -Isrcs
 endif
 
 ifeq ($(USE_TS), false)
 CPPFLAGS += -DNO_TS
+endif
+
+ifeq ($(USE_DHT), true)
+CPPFLAGS += -DDHT
+endif
+
+ifeq ($(USE_DVREF), true)
+CPPFLAGS += -DDVREF
 endif
 
 LIBS    = -pthread -lm -lgpiod -lsqlite3

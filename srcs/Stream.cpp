@@ -23,7 +23,6 @@ void CStream::Initialize(EStreamType t)
 	type = t;
 }
 
-// returns false on success
 void CStream::OpenStream(const std::string &cs, uint16_t sid, const std::string &f)
 {
 	previousid = streamid = sid;

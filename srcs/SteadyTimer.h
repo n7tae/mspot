@@ -36,7 +36,7 @@ public:
 		starttime = std::chrono::steady_clock::now();
 	}
 
-	double time()
+	double time() const
 	{
 		std::chrono::duration<double> elapsed(std::chrono::steady_clock::now() - starttime);
 		return elapsed.count();

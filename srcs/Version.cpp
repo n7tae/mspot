@@ -1,6 +1,6 @@
 /*
-	mspot - an M17 hot-spot using an  M17 CC1200 Raspberry Pi Hat
-				Copyright (C) 2026 Thomas A. Early
+	A usable Version class
+	Copyright (C) 2026 Thomas A. Early, N7TAE
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -20,61 +20,61 @@
 
 #include "Version.h"
 
-void CVersion::mkstring()
+/************************************
+ * The range for major:    0 - 428  *
+ * The range for minor:    0 - 9999 *
+ * The range for revision: 0 - 9999 *
+ ************************************/
+CVersion::CVersion(uint16_t maj, uint16_t min, uint16_t rev)
 {
-	std::stringstream ss;
-	ss << unsigned(maj) << '.' << unsigned(min) << '.' << unsigned(rev);
-	vstr.assign(ss.str());
-}
-
-CVersion::CVersion(const CVersion &v) : maj(v.GetMajor()), min(v.GetMinor()), rev(v.GetRevision())
-{
-	mkstring();
-}
-
-CVersion::CVersion(uint8_t a, uint8_t b, uint16_t c) : maj(a), min(b), rev(c)
-{
-	mkstring();
-}
-
-CVersion &CVersion::operator=(const CVersion &v) 
-{
-	maj=v.maj; 
-	min=v.min; 
-	rev=v.rev; 
-	vstr.assign(v.vstr);
-	return *this;
-}
-
-
-unsigned CVersion::GetMajor(void) const
-{
-	return maj;
-}
-
-unsigned CVersion::GetMinor(void) const
-{
-	return min;
-}
-
-unsigned CVersion::GetRevision(void) const
-{
-	return rev;
+	checkInput(major,    "major",    maj,  428u);
+	checkInput(minor,    "minor",    min, 9999u);
+	checkInput(revision, "revision", rev, 9999u);
 }
 
 unsigned CVersion::GetVersion() const
 {
-	return (maj<<24) | (min<<16) | rev;
+	return 100000000u * major + 10000u * minor + revision;
+}
+
+void CVersion::checkInput(uint16_t &val, const std::string &label, unsigned proposed, unsigned maximum)
+{
+	if (proposed > maximum)
+	{
+		std::cout << "CVersion WARNING: Value for " << label << ", " << proposed << ", is too large. Resetting to " << maximum << std::endl;
+		proposed = maximum;
+	}
+	val = proposed;
 }
 
 const char *CVersion::c_str() const
 {
-	return vstr.c_str();
+	std::stringstream ss;
+	ss << major << '.' << minor << '.' << revision;
+#ifdef DHT
+	ss << "-dht";
+#endif
+#ifdef DVR
+	ss << "-dvref";
+#endif
+#ifdef DEBUG
+	ss << "-debug";
+#endif
+	return ss.str().c_str();
 }
 
 // output
 std::ostream &operator <<(std::ostream &os, const CVersion &v)
 {
-	os << v.c_str();
+	os << v.major << '.' << v.minor << '.' << v.revision;
+#ifdef DHT
+	os << "-dht";
+#endif
+#ifdef DVR
+	os << "-dvref";
+#endif
+#ifdef DEBUG
+	os << "-debug";
+#endif
 	return os;
 };

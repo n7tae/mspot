@@ -15,7 +15,10 @@
 	You should have received a copy of the GNU General Public License
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-
+#ifdef DVREF
+#include <curl/curl.h>
+#include <sys/stat.h>
+#endif
 #include <poll.h>
 #include <string>
 #include <sstream>
@@ -32,9 +35,14 @@
 #include "Configure.h"
 #include "GateState.h"
 #include "Position.h"
+#include "Version.h"
+#include "MspotDB.h"
 #include "Gateway.h"
 #include "Random.h"
 #include "CRC.h"
+#ifdef DHT
+#include "dht-values.h"
+#endif
 
 extern CCRC        g_Crc;
 extern CRandom     g_RNG;
@@ -43,6 +51,7 @@ extern CGateState  g_GateState;
 extern IPFrameFIFO Modem2Gate;
 extern IPFrameFIFO Gate2Modem;
 
+CMspotDB g_DataBase;
 
 static const uint8_t quiet[] { 0x01u, 0x00u, 0x09u, 0x43u, 0x9Cu, 0xE4u, 0x21u, 0x08u };
 
@@ -92,6 +101,9 @@ constexpr uint64_t CalcCSCode(const char *cs)
 
 void CGateway::Stop()
 {
+	#ifdef DHT
+	stopDHT();
+	#endif
 	Log(EUnit::gate, "stopping the Gateway...\n");
 	keep_running = false;
 	if (gateFuture.valid())
@@ -106,20 +118,37 @@ void CGateway::Stop()
 
 bool CGateway::Start()
 {
-	if (dataBase.Open(g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.dbPath).c_str()))
+	// Prepare the sqlite3 database
+	if (g_DataBase.Open(g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.dbPath).c_str()))
 		return true;
-	auto hosts = g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.hostPath);
-	auto n = dataBase.FillGW(hosts.c_str());
+	#ifdef DHT
+	if (startDHT())
+		return true;
+	#endif
+	// Get the hostfiles.refcheck.radio path, and maybe update the file, and then parse it and add it to the database
+	int n;
+	#ifdef DVREF
+	std::filesystem::path jsonPath(g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.jsonHostPath));
+	updateJsonHostFile(jsonPath);
+	n = g_DataBase.ParseJsonFile(jsonPath.c_str());
+	Log(EUnit::gate, "Read %d reflectors from %s\n", n, jsonPath.c_str());
+	#endif
+	// Get the personal gateway pathname and add it to the database
 	auto myhosts = g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.myHostPath);
-	n += dataBase.FillGW(myhosts.c_str());
-	Log(EUnit::gate, "Loaded %d targets from %s and %s\n", n, hosts.c_str(), myhosts.c_str());
-		
+	n = g_DataBase.FillGW(myhosts.c_str());
+	Log(EUnit::gate, "Read %d targets from %s\n", n, myhosts.c_str());
+	#ifdef DVREF
+	Log(EUnit::gate, "There are now %d targets defined in the database\n", g_DataBase.Count("targets"));
+	#endif
+
+	// create the callsign for the hotspot
 	std::string cs(g_Cfg.GetString(g_Keys.repeater.section, g_Keys.repeater.callsign));
 	cs.resize(8, ' ');
 	cs.append(1, g_Cfg.GetString(g_Keys.repeater.section, g_Keys.repeater.module).at(0));
 	thisCS.CSIn(cs);
 	Log(EUnit::gate, "Station Callsign: %s\n", cs.c_str());
 
+	// Get the h/s stack support and report it
 	if (g_Cfg.GetBoolean(g_Keys.gateway.section, g_Keys.gateway.ipv4))
 	{
 		internetType = g_Cfg.GetBoolean(g_Keys.gateway.section, g_Keys.gateway.ipv6) ? EInternetType::both : EInternetType::ipv4only;
@@ -146,6 +175,7 @@ bool CGateway::Start()
 		break;
 	}
 
+	// If config'ed, open the IPV4 port, then the IPv6 port
 	if (EInternetType::ipv6only != internetType)
 	{
 		CSockAddress addr;
@@ -153,7 +183,7 @@ bool CGateway::Start()
 			return true;
 		if (ipv4.Open(addr))
 			return true;
-		Log(EUnit::gate, "Gateway listening on %s:%u\n", addr.GetAddress(), ipv4.GetPort());
+		Log(EUnit::gate, "Gateway listening on %s\n", addr.GetFullAddress());
 	}
 	if (EInternetType::ipv4only != internetType)
 	{
@@ -162,31 +192,37 @@ bool CGateway::Start()
 			return true;
 		if (ipv6.Open(addr))
 			return true;
-		Log(EUnit::gate, "Gateway listening on [%s]:%u\n", addr.GetAddress(), ipv6.GetPort());
+		Log(EUnit::gate, "Gateway listening on %s\n", addr.GetFullAddress());
 	}
 
+	// Set the channel access number
 	can = g_Cfg.GetUnsigned(g_Keys.repeater.section, g_Keys.repeater.can);
 	Log(EUnit::gate, "CAN = %u\n", unsigned(can));
+	// Set the TYPE format for the h/s transmitter
 	radioTypeIsV3 = g_Cfg.GetBoolean(g_Keys.repeater.section, g_Keys.repeater.radioTypeIsV3);
-	Log(EUnit::gate, "Radio is using %s TYPE values\n", radioTypeIsV3 ? "V#3" : "Legacy");
+	Log(EUnit::gate, "Radio is using %s TYPE values\n", radioTypeIsV3 ? "V#3" : "V#2");
 
-	mlink.state = ELinkState::unlinked;
 	keep_running = true;
 	gateStream.Initialize(EStreamType::gate);
 	modemStream.Initialize(EStreamType::modem);
-	mlink.maintainLink = g_Cfg.GetBoolean(g_Keys.gateway.section, g_Keys.gateway.maintainLink);
-	Log(EUnit::gate, "Gateway will%s try to re-establish a dropped link\n", mlink.maintainLink ? "" : " NOT");
+	warnOnEncrypted    = g_Cfg.GetBoolean(g_Keys.gateway.section, g_Keys.gateway.warnIfEncrypted);
+	warnOnNoTranscoder = g_Cfg.GetBoolean(g_Keys.gateway.section, g_Keys.gateway.warnNoTranscoder);
+	// set up link on boot up
 	if (g_Cfg.IsString(g_Keys.gateway.section, g_Keys.gateway.startupLink))
 	{
 		setDestination(g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.startupLink));
 	}
 
+	// set the audio path
 	audioPath.assign(g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.audioFolder));
 	Log(EUnit::gate, "Audio folder is at %s\n", audioPath.c_str());
-
+	// make the repeater cs encoded audio
 	makeCSData(thisCS, "repeater.dat");
 
+	// add the startup message
 	addMessage("welcome repeater");
+
+	// Launch the processGateway() thread
 	gateFuture = std::async(std::launch::async, &CGateway::processGateway, this);
 	if (not gateFuture.valid())
 	{
@@ -195,6 +231,7 @@ bool CGateway::Start()
 		return true;
 	}
 
+	// Launch the processModem() thread
 	modemFuture = std::async(std::launch::async, &CGateway::processModem, this);
 	if (not modemFuture.valid())
 	{
@@ -207,8 +244,10 @@ bool CGateway::Start()
 	return false;
 }
 
+// this thread reads packets from the internet and acts on them
 void CGateway::processGateway()
 {
+	// Setup poll for the IPv4 and IPv6 gateway input
 	struct pollfd pfds[2];
 	for (unsigned i=0; i<2; i++)
 	{
@@ -220,25 +259,23 @@ void CGateway::processGateway()
 	while (keep_running)
 	{
 		// do link maintenance
-		switch (mlink.state)
+		switch (target.GetState())
 		{
 		case ELinkState::linked:
-			if (mlink.receivePingTimer.time() > 30.0) // is the reflector okay?
+			if (target.TimedOut()) // is the reflector okay?
 			{
-				// looks like we lost contact
+				// looks like we lost contact, TIMEOUT
 				addMessage("repeater was_disconnected_from destination");
-				Log(EUnit::gate, "Disconnected from %s, TIMEOUT...\n", mlink.cs.c_str());
-				mlink.state = ELinkState::unlinked;
-				dataBase.ClearTable("linkstatus");
-				if (not mlink.maintainLink)
-					mlink.addr.Clear();
+				Log(EUnit::gate, "Disconnected from %s, TIMEOUT...\n", target.GetCS().c_str());
+				target.ChangeState(ELinkState::unlinked);
+				g_DataBase.ClearTable("linkstatus");
 			}
 			break;
 		case ELinkState::linking:
 			if (linkingTime.time() >= 30.0)
 			{
-				Log(EUnit::gate, "Link request to %s timeout.\n", mlink.cs.c_str());
-				mlink.state = ELinkState::unlinked;
+				Log(EUnit::gate, "Link request to %s timeout.\n", target.GetCS().c_str());
+				target.ChangeState(ELinkState::unlinked);
 			}
 			else
 			{
@@ -247,9 +284,9 @@ void CGateway::processGateway()
 			}
 			break;
 		case ELinkState::unlinked:
-			if (not mlink.addr.AddressIsZero())
+			if (target.HasAddress())
 			{
-				if (mlink.isReflector)
+				if (ERefType::none != target.GetType())
 				{
 					linkingTime.start();
 					sendLinkRequest();
@@ -294,7 +331,7 @@ void CGateway::processGateway()
 		auto rval = poll(pfds, 2, 10);
 		if (0 > rval)
 		{
-			Log(EUnit::gate, "gateway poll() error: %s\n", strerror(errno));
+			Log(EUnit::gate, "Gateway poll() error: %s\n", strerror(errno));
 			return;
 		}
 
@@ -306,57 +343,52 @@ void CGateway::processGateway()
 		{
 			if (pfds[0].revents & POLLIN)
 			{
+				// get the IPv4 Packet and remove POLLIN from revents
 				length = recvfrom(pfds[0].fd, buf, MAX_PACKET_SIZE, 0, from17k.GetPointer(), &fromlen);
 				pfds[0].revents &= ~POLLIN;
+				if (pfds[0].revents)
+				{
+					Log(EUnit::gate, "poll() returned revents %d from IPv4 port\n", pfds[0].revents);
+					return;
+				}
 			}
 			else if (pfds[1].revents & POLLIN)
 			{
+				// get the IPv6 Packet and remove POLLIN from revents
 				length = recvfrom(pfds[1].fd, buf, MAX_PACKET_SIZE, 0, from17k.GetPointer(), &fromlen);
 				pfds[1].revents &= ~POLLIN;
-			}
-
-			for (unsigned i=0; i<2; i++)	// check for errors
-			{
-				if (pfds[i].revents)
+				if (pfds[1].revents)
 				{
-					Log(EUnit::gate, "poll() returned revents %d from IPv%s port\n", pfds[i].revents, i ? '6' : '4');
+					Log(EUnit::gate, "poll() returned revents %d from IPv6 port\n", pfds[1].revents);
 					return;
 				}
 			}
 		}
 
-		if (length)
+		if (length) // we have a packet
 		{
 			switch (length)	// process known packets
 			{
 			case 4:  				// DISC, ACKN or NACK
-				if ((ELinkState::unlinked != mlink.state) and (from17k == mlink.addr))
-				{
+				if ((ELinkState::unlinked != target.GetState()) and (from17k == target.GetAddress()))
+				{	// the current state in not unlinked and the packet is from the link target
 					if (0 == memcmp(buf, "ACKN", 4))
 					{
-						mlink.state = ELinkState::linked;
-						makeCSData(mlink.cs, "destination.dat");
+						target.ChangeState(ELinkState::linked);
+						makeCSData(target.GetCS(), "destination.dat");
 						addMessage("repeater is_linked_to destination");
-						Log(EUnit::gate, "Connected to %s at %s\n", mlink.cs.c_str(), mlink.addr.GetAddress());
-						mlink.receivePingTimer.start();
-						dataBase.UpdateLS(mlink.addr.GetAddress(), mlink.addr.GetPort(), mlink.cs.c_str());
 					}
 					else if (0 == memcmp(buf, "NACK", 4))
 					{
 						addMessage("link_refused");
-						Log(EUnit::gate, "Connection request refused from %s\n", mlink.cs.c_str());
-						mlink.cs.Clear();
-						mlink.addr.Clear();
-						mlink.state = ELinkState::unlinked;
+						Log(EUnit::gate, "Connection request refused from %s\n", target.GetCS().c_str());
+						target.ChangeState(ELinkState::unlinked);
 					}
 					else if (0 == memcmp(buf, "DISC", 4))
 					{
 						addMessage("repeater is_unlinked");
-						Log(EUnit::gate, "Disconnected from %s at %s\n", mlink.cs.c_str(), mlink.addr.GetAddress());
-						mlink.addr.Clear(); // initiated with UNLINK, so don't try to reconnect
-						mlink.cs.Clear();   // ^^^^^^^^^ ^^^^ ^^^^^^
-						dataBase.ClearTable("linkstatus");
-						mlink.state = ELinkState::unlinked;
+						Log(EUnit::gate, "Disconnected from %s at %s\n", target.GetCS().c_str(), target.GetAddress().GetAddress());
+						target.ChangeState(ELinkState::unlinked);
 					}
 					else
 					{
@@ -371,27 +403,23 @@ void CGateway::processGateway()
 				}
 				break;
 			case 10: 				// PING or DISC
-				if ((ELinkState::linked == mlink.state) and (from17k == mlink.addr))
+				if ((ELinkState::linked == target.GetState()) and (from17k == target.GetAddress()))
 				{
 					if (0 == memcmp(buf, "PING", 4))
 					{
-						sendPacket(mlink.pongPacket.magic, 10, mlink.addr);
-						mlink.receivePingTimer.start();
+						sendPacket(target.GetPongPacket(), 10, target.GetAddress());
 					}
 					else if (0 == memcmp(buf, "DISC", 4))
 					{
 						const CCallsign from(buf+4);
-						if (from == mlink.cs)
+						if (from == target.GetCS())
 						{
 							addMessage("repeater was_disconnected_from destination");
-							mlink.state = ELinkState::unlinked;
-							if (not mlink.maintainLink)
-								mlink.addr.Clear();
-							dataBase.ClearTable("linkstatus");
 							Log(EUnit::gate, "%s initiated a disconnect\n", from.GetCS().c_str());
+							target.ChangeState(ELinkState::unlinked);
 						}
 						else
-							Log(EUnit::gate, "Got a bogus disconnect from '%s' @ %s\n", from.GetCS().c_str(), from17k.GetAddress());
+							Log(EUnit::gate, "Got a bogus disconnect from '%s' @ %s\n", from.GetCS().c_str(), from17k.GetFullAddress());
 					}
 					else
 					{
@@ -401,12 +429,13 @@ void CGateway::processGateway()
 				}
 				break;
 			default:
-				auto t = validate(buf, length);
+				auto t = validate(buf, length);	// what kind of a packet is it?
 				if (EPacketType::none == t)
 				{
 					Log(EUnit::gate, "Unknown Packet:\n");
 					Dump(nullptr, buf, length);
-				} else {
+				} else { // it's either a PM or SM data packet
+					// allocate a new packet with the default constructor and initialize it
 					auto p = std::make_unique<CPacket>();
 					p->Initialize(t, buf, length);
 					if (p->CheckCRC())
@@ -417,9 +446,11 @@ void CGateway::processGateway()
 						const CCallsign dst(p->GetCDstAddress());
 						if (dst == thisCS)
 						{
+							// the DST is this h/s, readdress to @ALL
 							memset(p->GetDstAddress(), 0xffu, 6);
 							p->CalcCRC();
 						}
+						// Send it on!!!!!!!!
 						sendPacket2Modem(std::move(p));
 					}
 				}
@@ -430,7 +461,7 @@ void CGateway::processGateway()
 		// check for a stream timeout
 		if (gateStream.IsOpen() and gateStream.GetLastTime() >= 1.6)
 		{
-			gateStream.CloseStream(true, dataBase);
+			gateStream.CloseStream(true, g_DataBase);
 			g_GateState.Idle();
 		}
 
@@ -450,39 +481,38 @@ void CGateway::processModem()
 		auto p = Modem2Gate.PopWaitFor(40);
 		if (p) {
 			const CCallsign dst(p->GetCDstAddress());
+			const auto eReflectorType = dst.GetReflectorType();
 			if (EPacketType::packet == p->GetType()) { // process packet data
-				switch (mlink.state)
+				switch (target.GetState())
 				{
 				case ELinkState::linked:
-					if ((dst == mlink.cs) or (not dst.IsReflector())) { // is the destination the linked reflector?
-						sendPacket2Dest(std::move(p));
-					} else {
-						Log(EUnit::gate, "Destination is %s but you are already linked to %s\n", dst.c_str(), mlink.cs.c_str());
-					}
+					sendPacket2Dest(std::move(p));
 					break;
 				case ELinkState::linking:
-					if (dst == mlink.cs) {
-						Log(EUnit::gate, "%s is not yet linked", dst.c_str());
-					} else {
-						Log(EUnit::gate, "Destination is %s but you are linking to %s\n", dst.c_str(), mlink.cs.c_str());
-					}
+					addMessage("repeater is_already_linking");
+					Log(EUnit::gate, "%s is not yet linked, the packet was not sent", thisCS.c_str());
 					break;
 				case ELinkState::unlinked:
-					if (dst.IsReflector()) {
-						if (not setDestination(dst))
-						{
-							if (mlink.isReflector)
-								mlink.state = ELinkState::linking;
-							else
-								Log(EUnit::gate, "IP Address for %s found: %s\n", dst.c_str(), mlink.addr.GetAddress());
-						}
-					} else {
-						if (dst == mlink.cs) {
+					if (ERefType::none != eReflectorType) {
+						#ifdef DHT
+						get(dst.GetCS(ERefType::m17==eReflectorType ? 7 : 6));
+						#endif
+						if (setDestination(dst)) {
+							target.ChangeState(ELinkState::linking);
+							Log(EUnit::gate, "IP Address for %s found: %s\n", dst.c_str(), target.GetAddress().GetFullAddress());
 							sendPacket2Dest(std::move(p));
 						} else {
-							if (not setDestination(dst))
-							{
-								Log(EUnit::gate, "IP Address for %s found: %s\n", dst.c_str(), mlink.addr.GetAddress());
+							Log(EUnit::gate, "Reflector %s not found\n", dst.c_str());
+						}
+					} else {
+						if (dst == target.GetCS()) {
+							sendPacket2Dest(std::move(p));
+						} else {
+							if (setDestination(dst)) {
+								sendPacket2Dest(std::move(p));
+								Log(EUnit::gate, "IP Address for %s found: %s\n", dst.c_str(), target.GetAddress().GetFullAddress());
+							} else {
+								Log(EUnit::gate, "Target %s not found\n", dst.c_str());
 							}
 						}
 					}
@@ -516,47 +546,48 @@ void CGateway::processModem()
 					g_GateState.Idle();
 					break;
 				default:
-					switch (mlink.state)
+					switch (target.GetState())
 					{
 					case ELinkState::linked:
-						if ((dst == mlink.cs) or (not dst.IsReflector())) { // is the destination the linked reflector?
+						if ((dst == target.GetCS()) or (ERefType::none == eReflectorType)) { // is the destination the linked reflector?
 							sendPacket2Dest(std::move(p));
 						} else {
 							addMessage("repeater is_already_linked");
 							wait4end(p);
-							Log(EUnit::gate, "Destination is %s but you are already linked to %s\n", dst.c_str(), mlink.cs.c_str());
+							Log(EUnit::gate, "Destination is %s but you are already linked to %s\n", dst.c_str(), target.GetCS().c_str());
 							g_GateState.Idle();
 						}
 						break;
 					case ELinkState::linking:
 						wait4end(p);
-						if (dst == mlink.cs) {
+						if (dst == target.GetCS()) {
 							Log(EUnit::gate, "%s is not yet linked", dst.c_str());
 						} else {
 							addMessage("repeater is_already_linking");
-							Log(EUnit::gate, "Destination is %s but you are linking to %s\n", dst.c_str(), mlink.cs.c_str());
+							Log(EUnit::gate, "Destination is %s but you are linking to %s\n", dst.c_str(), target.GetCS().c_str());
 						}
 						g_GateState.Idle();
 						break;
 					case ELinkState::unlinked:
-						if (dst.IsReflector()) {
+						if (ERefType::none != eReflectorType) {
 							wait4end(p);
-							if (not setDestination(dst))
+							#ifdef DHT
+							get(dst.GetCS(ERefType::m17 == eReflectorType ? 7 : 6));
+							#endif
+							if (setDestination(dst))
 							{
-								if (mlink.isReflector)
-									mlink.state = ELinkState::linking;
-								else
-									Log(EUnit::gate, "IP Address for %s found: %s\n", dst.c_str(), mlink.addr.GetAddress());
+								target.ChangeState(ELinkState::linking);
+								Log(EUnit::gate, "IP Address for %s found: %s\n", dst.c_str(), target.GetAddress().GetFullAddress());
 							}
 							g_GateState.Idle();
 						} else {
-							if (dst == mlink.cs) {
+							if (dst == target.GetCS()) {
 								sendPacket2Dest(std::move(p));
 							} else {
 								wait4end(p);
-								if (not setDestination(dst))
+								if (setDestination(dst))
 								{
-									Log(EUnit::gate, "IP Address for %s found: %s\n", dst.c_str(), mlink.addr.GetAddress());
+									Log(EUnit::gate, "IP Address for %s found: %s\n", dst.c_str(), target.GetAddress().GetFullAddress());
 								}
 							}
 						}
@@ -569,7 +600,7 @@ void CGateway::processModem()
 			// check for a timeout from the modem
 			if (modemStream.IsOpen() and modemStream.GetLastTime() >= 1.0)
 			{
-				modemStream.CloseStream(true, dataBase); // close the modemStream
+				modemStream.CloseStream(true, g_DataBase); // close the modemStream
 				g_GateState.Idle();
 			}
 			if (g_GateState.SetStateToOnlyIfFrom(EGateState::idle, EGateState::rftimeout))
@@ -584,16 +615,13 @@ void CGateway::sendLinkRequest()
 	SM17RefPacket conn;
 	memcpy(conn.magic, "CONN", 4);
 	thisCS.CodeOut(conn.cscode);
-	conn.mod = mlink.cs.GetModule();
-	// go ahead and make the pong packet
-	memcpy(mlink.pongPacket.magic, "PONG", 4);
-	thisCS.CodeOut(mlink.pongPacket.cscode);
+	conn.mod = target.GetCS().GetModule();
 	// send the link request
-	sendPacket(conn.magic, 11, mlink.addr);
-	Log(EUnit::gate, "Link request sent to %s at %s on port %u\n", mlink.cs.c_str(), mlink.addr.GetAddress(), mlink.addr.GetPort());
+	sendPacket(conn.magic, 11, target.GetAddress());
+	Log(EUnit::gate, "Link request sent to %s at %s\n", target.GetCS().c_str(), target.GetAddress().GetFullAddress());
 	// finish up
 	lastLinkSent.start();
-	mlink.state = ELinkState::linking;
+	target.ChangeState(ELinkState::linking);
 }
 
 // this also opens and closes the gateStream
@@ -604,27 +632,32 @@ void CGateway::sendPacket2Modem(std::unique_ptr<CPacket> p)
 		p.reset();
 		return; // drop the packet unit we're done booting up
 	}
+
+	// act on a PM packet
 	if (EPacketType::packet == p->GetType())
 	{
 		const CCallsign dst(p->GetCDstAddress());
 		const CCallsign src(p->GetCSrcAddress());
 		std::string from;
-		if (from17k == mlink.addr)
-			from.assign(mlink.cs.c_str());
+		if (from17k == target.GetAddress())
+			from.assign(target.GetCS().c_str());
 		else
 			from.assign("Direct");
 		unsigned fc = p->GetSize()-34u;
 		fc = fc / 25 + ((fc % 25) ? 2 : 1);
-		dataBase.UpdateLH(src.c_str(), dst.c_str(), false, from.c_str(), fc);
+		g_DataBase.UpdateLH(src.c_str(), dst.c_str(), false, from.c_str(), fc);
 		if (g_GateState.TryState(EGateState::gatepacketin))
 			Gate2Modem.Push(p);
 		else
 		{
 			// save this for sending later;
+			Log(EUnit::gate, "Got Packet from %s, saving for later\n", src.c_str());
 			pmQueue.Push(p);
 		}
 		return;
 	}
+
+	// process a Stream data packet
 	const auto sid = p->GetStreamId();
 	if (gateStream.IsOpen())	// is the stream open?
 	{
@@ -637,7 +670,7 @@ void CGateway::sendPacket2Modem(std::unique_ptr<CPacket> p)
 				auto maidenhead = position.GetPosition(la, lo);
 				if (maidenhead) {
 					const CCallsign src(p->GetCSrcAddress());
-					dataBase.UpdatePosition(src.c_str(), maidenhead, la, lo);
+					g_DataBase.UpdatePosition(src.c_str(), maidenhead, la, lo);
 					//Log(EUnit::cc12, "Position for %s: lat=%.5f lon=%.5f Station=%s Source=%s\n", src.c_str(), la, lo, position.GetStation(), position.GetSource());
 				}
 			}
@@ -647,7 +680,7 @@ void CGateway::sendPacket2Modem(std::unique_ptr<CPacket> p)
 			if (islast)
 			{
 				std::this_thread::sleep_for(std::chrono::milliseconds(2));
-				gateStream.CloseStream(false, dataBase); // close the stream
+				gateStream.CloseStream(false, g_DataBase); // close the stream
 			}
 		}
 	}
@@ -672,13 +705,18 @@ void CGateway::sendPacket2Modem(std::unique_ptr<CPacket> p)
 		{
 			const CCallsign src(p->GetCSrcAddress());
 			const CCallsign dst(p->GetCDstAddress());
-			if (from17k == mlink.addr) {
-				gateStream.OpenStream(src.c_str(), sid, mlink.cs.c_str());
-				dataBase.UpdateLH(src.c_str(), dst.c_str(), true, mlink.cs.c_str());
-			} else {
-				dataBase.UpdateGW(src.GetCS(), from17k);
-				gateStream.OpenStream(src.c_str(), sid, from17k.GetAddress());
-				dataBase.UpdateLH(src.c_str(), dst.c_str(), true, "Direct");
+			if (from17k == target.GetAddress()) {
+				gateStream.OpenStream(src.c_str(), sid, target.GetCS().c_str());
+				g_DataBase.UpdateLH(src.c_str(), dst.c_str(), true, target.GetCS().c_str());
+			} else if (ELinkState::unlinked == target.GetState() and target.GetAddress().AddressIsZero()) {
+				if (setDestination(dst)) {
+					Log(EUnit::gate, "Direct routing from %s!\n", src.c_str());
+				} else {
+					if (p->IsLastPacket())
+						Log(EUnit::gate, "Detected direct routing from %s, but could not find an address for that\n", src.c_str());
+					g_GateState.Idle();
+					return;
+				}
 			}
 			Gate2Modem.Push(p);
 			gateStream.CountnTouch();
@@ -705,9 +743,9 @@ void CGateway::sendPacket2Dest(std::unique_ptr<CPacket> p)
 		const CCallsign dst(p->GetCDstAddress());
 		const CCallsign src(p->GetCSrcAddress());
 		auto fc = p->GetSize();
-		sendPacket(p->GetCData(), fc, mlink.addr);
+		sendPacket(p->GetCData(), fc, target.GetAddress());
 		fc = fc / 25 + ((fc % 25) ? 2 : 1);
-		dataBase.UpdateLH(src.c_str(), dst.c_str(), false, "CC1200", fc);
+		g_DataBase.UpdateLH(src.c_str(), dst.c_str(), false, "CC1200", fc);
 		g_GateState.Idle();
 		return;
 	}
@@ -726,15 +764,15 @@ void CGateway::sendPacket2Dest(std::unique_ptr<CPacket> p)
 				auto maidenhead = position.GetPosition(la, lo);
 				if (maidenhead) {
 					const CCallsign src(p->GetCSrcAddress());
-					dataBase.UpdatePosition(src.c_str(), maidenhead, la, lo);
+					g_DataBase.UpdatePosition(src.c_str(), maidenhead, la, lo);
 					//Log(EUnit::cc12, "Pos'tion for %s: lat=%.5f lon=%.5f Station=%s Source=%s\n", src.c_str(), la, lo, position.GetStation(), position.GetSource());
 				}
 			}
-			sendPacket(p->GetCData(), p->GetSize(), mlink.addr);
+			sendPacket(p->GetCData(), p->GetSize(), target.GetAddress());
 			modemStream.CountnTouch();
 			if (islast)
 			{
-				modemStream.CloseStream(false, dataBase);
+				modemStream.CloseStream(false, g_DataBase);
 				g_GateState.Idle();
 			}
 		}
@@ -757,8 +795,8 @@ void CGateway::sendPacket2Dest(std::unique_ptr<CPacket> p)
 		const CCallsign dst(p->GetCDstAddress());
 		const CCallsign src(p->GetCSrcAddress());
 		modemStream.OpenStream(src.c_str(), framesid, "CC1200");
-		sendPacket(p->GetCData(), p->GetSize(), mlink.addr);
-		dataBase.UpdateLH(src.c_str(), dst.c_str(), true, "CC1200");
+		sendPacket(p->GetCData(), p->GetSize(), target.GetAddress());
+		g_DataBase.UpdateLH(src.c_str(), dst.c_str(), true, "CC1200");
 		modemStream.CountnTouch();
 	}
 }
@@ -771,34 +809,42 @@ void CGateway::sendPacket(const void *buf, const size_t size, const CSockAddress
 		ipv6.Write(buf, size, addr);
 }
 
-// returns false if successful
-bool CGateway::setDestination(const std::string &callsign)
+// returns true on success
+bool CGateway::setDestination(const CCallsign &callsign)
 {
-	const CCallsign cs(callsign);
-	return setDestination(cs);
-}
-
-// returns true on error
-bool CGateway::setDestination(const CCallsign &cs)
-{
-	char target[9] { 0 };
-	memcpy(target, cs.c_str(), 8); // don't want the module
-	unsigned pos = 7;
-	while ((' ' == target[pos]) and pos)
-		target[pos--] = 0;
-	std::string address, mods, smods;
-	uint16_t port;
-	if (dataBase.GetTarget(target, address, mods, smods, port))
+	std::string csstr;
+	const auto eRefType = callsign.GetReflectorType();
+	const auto module   = callsign.GetModule();
+	if (ERefType::none == eRefType)
+		csstr.assign(callsign.c_str());
+	else
+		csstr.assign(callsign.c_str(), ERefType::m17==eRefType ? 7 : 6);
+	EDataType dType;
+	ETypeVersion tVersion;
+	std::string mods, smods;
+	CSockAddress addr;
+	if (g_DataBase.GetTarget(csstr.c_str(), dType, tVersion, mods, smods, addr))
 	{
-		mlink.addr.Initialize(address, port);
-		mlink.cs = cs;
-		mlink.mods.assign(mods);
-		mlink.smods.assign(smods);
-		mlink.isReflector = cs.IsReflector();
-		return false;
+		if (ERefType::none != eRefType)
+		{
+			if (std::string::npos == mods.find(module))
+			{
+				Log(EUnit::gate, "Reflector %s doesn't have a module %c\n", csstr.c_str(), module);
+				return false;
+			}
+			if (ERefType::m17 == eRefType) {
+				if (warnOnEncrypted and (std::string::npos != smods.find(module)))
+					Log(EUnit::gate, "WARNING: Reflector module %s is encrypted\n", callsign.c_str());
+			} else {
+				if (warnOnNoTranscoder and (std::string::npos == smods.find(module)))
+					Log(EUnit::gate, "WARNING: Reflector module %s is not transcoded\n", callsign.c_str());
+			}
+		}
+		target.TargetInit(callsign, eRefType, dType, tVersion, mods, smods, addr, thisCS);
+		return true;
 	}
-	Log(EUnit::gate, "Host '%s' not found\n", cs.c_str());
-	return true;
+	Log(EUnit::gate, "Host '%s' not found\n", csstr.c_str());
+	return false;
 }
 
 void CGateway::addMessage(const std::string &message)
@@ -1096,3 +1142,203 @@ EPacketType CGateway::validate(uint8_t *in, unsigned length)
 	}
 	return EPacketType::none;
 }
+
+#ifdef DVREF
+// callback function writes data to a std::ostream
+static size_t data_write(void* buf, size_t size, size_t nmemb, void* userp)
+{
+	if(userp)
+	{
+		std::ostream& os = *static_cast<std::ostream*>(userp);
+		std::streamsize len = size * nmemb;
+		if(os.write(static_cast<char*>(buf), len))
+			return len;
+	}
+	return 0;
+}
+
+// timeout is in seconds
+static CURLcode curl_read(const std::string& url, std::ostream& os, long timeout = 30)
+{
+	CURLcode code(CURLE_FAILED_INIT);
+	CURL* curl = curl_easy_init();
+
+	if(curl)
+	{
+		if(CURLE_OK == (code = curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &data_write))
+		&& CURLE_OK == (code = curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L))
+		&& CURLE_OK == (code = curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L))
+		&& CURLE_OK == (code = curl_easy_setopt(curl, CURLOPT_FILE, &os))
+		&& CURLE_OK == (code = curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout))
+		&& CURLE_OK == (code = curl_easy_setopt(curl, CURLOPT_USERAGENT, "mvoice/1.0"))
+		&& CURLE_OK == (code = curl_easy_setopt(curl, CURLOPT_URL, url.c_str())))
+		{
+			code = curl_easy_perform(curl);
+		}
+		curl_easy_cleanup(curl);
+	}
+	return code;
+}
+
+void CGateway::updateJsonHostFile(std::filesystem::path &jsonHostPath)
+{
+    if (std::filesystem::exists(jsonHostPath)) {
+		struct stat fa;
+		if (stat(jsonHostPath.c_str(), &fa))
+		{
+			Log(EUnit::gate, "ERROR: stat() of %s returned: %s\n", jsonHostPath.c_str(), strerror(errno));
+			return;
+		}
+		time_t now = time(nullptr);
+		if (now - fa.st_mtime < 2*24*60*60)
+		{
+			Log(EUnit::gate, "%s is not old\n", jsonHostPath.c_str());
+			return;
+		}
+    }
+
+	curl_global_init(CURL_GLOBAL_ALL);
+
+	std::stringstream ss;
+	const std::string url("https://hostfiles.refcheck.radio/M17Hosts.json");
+	if(CURLE_OK == curl_read(url, ss))
+	{
+		Log(EUnit::gate, "Refreshing %s\n", jsonHostPath.c_str());
+		std::ofstream bkup(jsonHostPath.c_str(), std::fstream::trunc);
+		if (bkup.is_open())
+		{
+			bkup << ss.rdbuf();
+			bkup.close();
+		}
+		else
+		{
+			Log(EUnit::gate, "ERROR: Could not open %s\n", jsonHostPath.c_str());
+		}
+	}
+	curl_global_cleanup();
+}
+#endif
+
+#ifdef DHT
+void CGateway::get(const std::string &cs)
+{
+	static std::time_t ts;
+	ts = 0;
+	dht::Where w;
+	if (0 == cs.compare(0, 4, "M17-"))
+		w.id(toUType(EMrefdValueID::Config));
+	else if (0 == cs.compare(0, 3, "URF"))
+		w.id(toUType(EUrfdValueID::Config));
+	else
+	{
+		// std::cerr << "Unknown callsign '" << cs << "' for node.get()" << std::endl;
+		return;
+	}
+	static auto iType = internetType;
+	node.get(
+		dht::InfoHash::get(cs),
+		[](const std::shared_ptr<dht::Value> &v) {
+			if (0 == v->user_type.compare(MREFD_CONFIG_1))
+			{
+				auto rdat = dht::Value::unpack<SMrefdConfig1>(*v);
+				if (rdat.timestamp > ts)
+				{
+					ts = rdat.timestamp;
+					if (iType!=EInternetType::ipv4only and rdat.ipv6addr.size())
+						g_DataBase.UpdateGW(rdat.callsign, rdat.version, rdat.modules, rdat.encryptedmods, rdat.ipv6addr, rdat.port, rdat.url);
+					else if (iType!=EInternetType::ipv6only and rdat.ipv4addr.size())
+						g_DataBase.UpdateGW(rdat.callsign, rdat.version, rdat.modules, rdat.encryptedmods, rdat.ipv4addr, rdat.port, rdat.url);
+				}
+			}
+			else if (0 == v->user_type.compare(URFD_CONFIG_1))
+			{
+				auto rdat = dht::Value::unpack<SUrfdConfig1>(*v);
+				if (rdat.timestamp > ts)
+				{
+					ts = rdat.timestamp;
+					if (iType!=EInternetType::ipv4only and rdat.ipv6addr.size())
+						g_DataBase.UpdateGW(rdat.callsign, rdat.version, rdat.modules, rdat.transcodedmods, rdat.ipv6addr, rdat.port[toUType(EUrfdPorts::m17)], rdat.url);
+					else if (iType!=EInternetType::ipv6only and rdat.ipv4addr.size())
+						g_DataBase.UpdateGW(rdat.callsign, rdat.version, rdat.modules, rdat.transcodedmods, rdat.ipv4addr, rdat.port[toUType(EUrfdPorts::m17)], rdat.url);
+				}
+			}
+			else
+			{
+				std::cerr << "Found the data, but it has an unknown user_type: " << v->user_type << std::endl;
+			}
+			return true;
+		},
+		[](bool success) {
+			if (not success)
+				std::cout << "node.get() was unsuccessful!" << std::endl;
+		},
+		{}, // empty filter
+		w
+	);
+}
+
+bool CGateway::startDHT()
+{
+	// start the dht instance
+	try {
+		node.run(17171, dht::crypto::generateIdentity(thisCS.c_str()), true, 59973);
+	} catch (const std::exception &e) {
+		Log(EUnit::gate, "Could not start the Ham-network: %s\n", e.what());
+		return true;
+	}
+
+	// bootstrap the DHT from either saved nodes from a previous run,
+	// or from the configured node
+	std::string path(g_Cfg.GetString(g_Keys.dht.section, g_Keys.dht.dhtSavePath));
+	std::string bs(g_Cfg.GetString(g_Keys.dht.section, g_Keys.dht.bootStrap));
+	// Try to import nodes from binary file
+	std::ifstream myfile(path, std::ios::binary|std::ios::ate);
+	if (myfile.is_open())
+	{
+		msgpack::unpacker pac;
+		auto size = myfile.tellg();
+		myfile.seekg (0, std::ios::beg);
+		pac.reserve_buffer(size);
+		myfile.read (pac.buffer(), size);
+		pac.buffer_consumed(size);
+		// Import nodes
+		msgpack::object_handle oh;
+		while (pac.next(oh)) {
+			auto imported_nodes = oh.get().as<std::vector<dht::NodeExport>>();
+			Log(EUnit::gate, "Importing %u ham-dht nodes from %s\n", imported_nodes.size(), path.c_str());
+			node.bootstrap(imported_nodes);
+		}
+		myfile.close();
+	}
+	else if (bs.size())
+	{
+		Log(EUnit::gate, "Bootstrapping from %s\n", bs.c_str());
+		node.bootstrap(bs, "17171");
+	}
+	else
+	{
+		Log(EUnit::gate, "ERROR: Could not bootstrap the Ham-DHT network!\n");
+		return true;
+	}
+	return false;
+}
+
+void CGateway::stopDHT()
+{
+	auto exnodes = node.exportNodes();
+	if (exnodes.size() > 1)
+	{
+		std::string path(g_Cfg.GetString(g_Keys.dht.section, g_Keys.dht.dhtSavePath));
+		std::ofstream myfile(path, std::ios::binary | std::ios::trunc);
+		if (myfile.is_open())
+		{
+			Log(EUnit::gate, "Saving %u nodes to %s\n", exnodes.size(), path.c_str());
+			msgpack::pack(myfile, exnodes);
+			myfile.close();
+		}
+		else
+			Log(EUnit::gate, "ERROR opening %s\n", path.c_str());
+	}
+	node.join();
+}
+#endif

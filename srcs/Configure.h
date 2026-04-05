@@ -30,7 +30,9 @@
 extern SJsonKeys g_Keys;
 
 enum class ErrorLevel { fatal, mild };
-enum class ESection { none, repeater, modem, gateway, dashboard };
+enum class ESection { none, repeater, modem, gateway, dht, dashboard };
+enum class EIPType { ipv4, ipv6, none };
+enum class ERefType { m17, urf, none };
 
 #define IS_TRUE(a) ((a)=='t' || (a)=='T' || (a)=='1')
 
@@ -47,6 +49,8 @@ public:
 	int GetInt(const std::string &section, const std::string &key) const;
 	bool GetBoolean(const std::string &section, const std::string &key) const;
 	bool IsString(const std::string &section, const std::string &key) const;
+	EIPType GetIPType(const std::string &addr) const;
+	ERefType GetReflectorType(const std::string &cs) const;
 
 	const nlohmann::json &GetData() { return data; }
 

@@ -23,6 +23,7 @@
 #include <cstring>
 
 #include "Base.h"
+#include "Configure.h"
 
 class CCallsign : public CBase
 {
@@ -43,7 +44,7 @@ public:
 	bool operator!=(const CCallsign &rhs) const;
 	char GetModule(void) const;
 	void SetModule(char m);
-	bool IsReflector(void) const;
+	ERefType GetReflectorType(void) const;
 private:
 	uint64_t coded;
 	char cs[10];	// big enough to hold a 9-char callsign with a trailling nullptr

@@ -1,6 +1,6 @@
 /*
-	mspot - an M17 hot-spot using an  M17 CC1200 Raspberry Pi Hat
-				Copyright (C) 2026 Thomas A. Early
+	A usable Version class
+	Copyright (C) 2026 Thomas A. Early, N7TAE
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -20,33 +20,27 @@
 
 #include <cstdint>
 #include <iostream>
-#include <string>
 
 class CVersion
 {
 public:
 	// constructor
 	CVersion() = delete;
-	CVersion(const CVersion &v);
-	CVersion(uint8_t a, uint8_t b, uint16_t c);
-	CVersion &operator=(const CVersion &v);
+	CVersion(uint16_t a, uint16_t b, uint16_t c);
 	~CVersion() {}
 
 	// get
-	unsigned GetMajor(void) const;
-	unsigned GetMinor(void) const;
-	unsigned GetRevision(void) const;
 	unsigned GetVersion(void) const;
+
 	const char *c_str(void) const;
 
 	// output
 	friend std::ostream &operator <<(std::ostream &os, const CVersion &v);
 
 
-protected:
-	void mkstring();
+private:
+	void checkInput(uint16_t &val, const std::string &label, unsigned proposed, unsigned max);
+
 	// data
-	std::string vstr;
-	uint8_t maj, min;
-	uint16_t rev;
+	uint16_t major, minor, revision;
 };

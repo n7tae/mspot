@@ -19,6 +19,7 @@
 #pragma once
 
 #include <iostream>
+#include <sstream>
 #include <cstring>
 
 #include <strings.h>
@@ -116,7 +117,7 @@ public:
 		return false;
 	}
 
-	CSockAddress &operator=(const CSockAddress &from)
+	void operator=(const CSockAddress &from)
 	{
 		Clear();
 		if (AF_INET == from.addr.ss_family)
@@ -124,7 +125,6 @@ public:
 		else
 			memcpy(&addr, &from.addr, sizeof(struct sockaddr_in6));
 		strcpy(straddr, from.straddr);
-		return *this;
 	}
 
 	bool operator==(const CSockAddress &rhs) const	// doesn't compare ports, only addresses and families
@@ -187,6 +187,13 @@ public:
 			}
 			return true;
 		}
+	}
+
+	const char *GetFullAddress() const
+	{
+		std::stringstream ss;
+		ss << *this;
+		return ss.str().c_str();
 	}
 
 	const char *GetAddress() const

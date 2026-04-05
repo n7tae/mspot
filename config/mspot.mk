@@ -1,4 +1,4 @@
-# Copyright (c) 2022 by Thomas A. Early N7TAE
+# Copyright (c) 2026 by Thomas A. Early N7TAE
 
 # BINDIR defines where the binary will be installed.
 # If you change this and running mspot using mspot.service, you'll need to update your mspot.service file.
@@ -9,9 +9,17 @@ BINDIR = /usr/local/bin
 # in the mdash.service file
 WWWDIR = /usr/local/www
 
-# If you don't want mspot to print the timestamp with each message, set USE_TS to false.
-# For example, if you are planning to use systemd to run mspot, set USE_TS to false.
-USE_TS = true
+# If you want mspot to print the timestamp with each message, set USE_TS to true.
+# For example, if you are planning to run mspot from the command line, set USE_TS to true.
+USE_TS = false
+
+# Do you want to find IP addresses for URF and M17 reflectors using the M17Host.json file
+# from hostfiles.refcheck.radio? Reflectors are registered at DVRef.com.
+USE_DVREF = false
+
+# If want to IP address (and other important info) for URF and M17 reflectors to come from
+# the Ham-DHT, then make sure you have installed the OpenDht library, and set this to true.
+USE_DHT = false
 
 # DEBUG is for software debugging support.
 # if mspot is crashing or locking up, set this to true and run it manually.

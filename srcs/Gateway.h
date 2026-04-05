@@ -25,6 +25,9 @@
 #include <vector>
 #include <mutex>
 #include <queue>
+#ifdef DHT
+#include <opendht.h>
+#endif
 
 #include "SafePacketQueue.h"
 #include "SteadyTimer.h"
@@ -33,36 +36,18 @@
 #include "UDPSocket.h"
 #include "LineTools.h"
 #include "Callsign.h"
-#include "MspotDB.h"
+#include "Target.h"
 #include "Packet.h"
 #include "Stream.h"
 #include "Base.h"
-
-enum class ELinkState { unlinked, linking, linked };
-enum class EInternetType { ipv4only, ipv6only, both };
 
 class CPayload
 {
 private:
 	uint8_t data[16];
 public:
-	CPayload(uint8_t *f)
-	{
-		memcpy(data, f, 16);
-	}
+	CPayload(uint8_t *f) { memcpy(data, f, 16); }
 	uint8_t *Data() { return data; }
-};
-
-using SM17Link = struct sm17link_tag
-{
-	SM17RefPacket pongPacket;
-	CSockAddress addr;
-	CCallsign cs;
-	std::string mods, smods;
-	std::atomic<ELinkState> state;
-	bool maintainLink;
-	CSteadyTimer receivePingTimer;
-	bool isReflector;
 };
 
 class CSafeMessageQueue
@@ -107,7 +92,7 @@ public:
 	bool Start();
 	void Stop();
 	void SetName(const std::string &name) { progName.assign(name); }
-	const CCallsign &GetLink() { return mlink.cs; }
+	const CCallsign &GetLink() { return target.GetCS(); }
 	const std::string &GetName() { return progName; }
 
 private:
@@ -116,20 +101,31 @@ private:
 	uint16_t can;
 	std::string audioPath;
 	bool radioTypeIsV3;
+	bool warnOnNoTranscoder, warnOnEncrypted;
 	EInternetType internetType;
 	std::atomic<bool> keep_running;
 	CUDPSocket ipv4, ipv6;
-	SM17Link mlink;
+	CTarget target;
 	CSteadyTimer linkingTime, lastLinkSent;
 	CStream gateStream, modemStream;
 	CSockAddress from17k;
-	CMspotDB dataBase;
 	std::future<void> gateFuture, modemFuture;
 	CSafeMessageQueue voiceQueue;
 	IPFrameFIFO pmQueue;
 	std::unique_ptr<SMessageTask> msgTask;
 	std::queue<CPayload> playbackQueue;
+	// dht
+	#ifdef DHT
+	dht::DhtRunner node;
+	dht::Value nodeValue;
+	void get(const std::string &cs);
+	bool startDHT(void);
+	void stopDHT(void);
+	#endif
 
+	#ifdef DVREF
+	void updateJsonHostFile(std::filesystem::path &jsonFile);
+	#endif
 	void processGateway();
 	EPacketType validate(uint8_t *in, unsigned length);
 	void sendPacket(const void *buf, const size_t size, const CSockAddress &addr) const;
@@ -137,9 +133,6 @@ private:
 	void sendPacket2Dest(std::unique_ptr<CPacket>);
 	void processModem();
 	void sendLinkRequest();
-	// returns true on error
-	bool setDestination(const std::string &cs);
-	// returns true on error
 	bool setDestination(const CCallsign &cs);
 	void addMessage(const std::string &message);
 	void makeCSData(const CCallsign &cs, const std::string &ofileName);

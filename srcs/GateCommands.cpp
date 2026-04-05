@@ -83,9 +83,9 @@ void CGateway::wait4end(std::unique_ptr<CPacket> &p)
 void CGateway::doStatus(std::unique_ptr<CPacket> &p)
 {
 	wait4end(p);
-	if (ELinkState::linked == mlink.state)
+	if (ELinkState::linked == target.GetState())
 		addMessage("repeater is_linked_to destination");
-	else if (ELinkState::linking == mlink.state)
+	else if (ELinkState::linking == target.GetState())
 		addMessage("repeater is_linking");
 	else
 		addMessage("repeater is_unlinked");
@@ -95,7 +95,7 @@ void CGateway::doStatus(std::unique_ptr<CPacket> &p)
 void CGateway::doUnlink(std::unique_ptr<CPacket> &p)
 {
 	wait4end(p);
-	if (ELinkState::unlinked == mlink.state)
+	if (ELinkState::unlinked == target.GetState())
 	{
 		addMessage("repeater is_already_unlinked");
 		Log(EUnit::gate, "%s is already unlinked\n", thisCS.c_str());
@@ -106,8 +106,8 @@ void CGateway::doUnlink(std::unique_ptr<CPacket> &p)
 		SM17RefPacket disc;
 		memcpy(disc.magic, "DISC", 4);
 		thisCS.CodeOut(disc.cscode);
-		sendPacket(disc.magic, 10, mlink.addr);
-		Log(EUnit::gate, "DISConnect packet sent to %s\n", mlink.cs.c_str());
+		sendPacket(disc.magic, 10, target.GetAddress());
+		Log(EUnit::gate, "DISConnect packet sent to %s\n", target.GetCS().c_str());
 		// the gateway proccess loop will disconnect when is receives the confirming DISC packet.
 	}
 	g_GateState.HandleRfCommand(EGateState::idle);

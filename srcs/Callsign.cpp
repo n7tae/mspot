@@ -17,7 +17,10 @@
 */
 
 #include <ctype.h>
+
 #include "Callsign.h"
+
+extern CConfigure g_Cfg;
 
 const std::string m17_alphabet(" ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/.");
 
@@ -189,7 +192,7 @@ void CCallsign::SetModule(char m)
 	CSIn(call);
 }
 
-bool CCallsign::IsReflector() const
+ERefType CCallsign::GetReflectorType() const
 {
-	return (0 == memcmp(cs, "M17-", 4)) or (0 == memcmp(cs, "URF", 3));
+	return g_Cfg.GetReflectorType(cs);
 }

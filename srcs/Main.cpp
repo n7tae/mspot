@@ -32,7 +32,7 @@
 #include "CRC.h"
 
 // global defs
-CVersion   g_Version(1, 0, 1);
+CVersion   g_Version(1, 5, 0);
 CConfigure g_Cfg;
 CCRC       g_Crc;
 CGateway   g_Gateway;

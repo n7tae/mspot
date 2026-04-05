@@ -83,6 +83,8 @@ bool CConfigure::ReadData(const std::string &path)
 				section = ESection::modem;
 			else if (0 == hname.compare(g_Keys.gateway.section))
 				section = ESection::gateway;
+			else if (0 == hname.compare(g_Keys.dht.section))
+				section = ESection::dht;
 			else if (0 == hname.compare(g_Keys.dashboard.section))
 				section = ESection::dashboard;
 			else
@@ -166,22 +168,30 @@ bool CConfigure::ReadData(const std::string &path)
 					data[g_Keys.gateway.section][g_Keys.gateway.ipv4] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.gateway.ipv6))
 					data[g_Keys.gateway.section][g_Keys.gateway.ipv6] = IS_TRUE(value[0]);
+				else if (0 == key.compare(g_Keys.gateway.warnNoTranscoder))
+					data[g_Keys.gateway.section][g_Keys.gateway.warnNoTranscoder] = IS_TRUE(value[0]);
+				else if (0 == key.compare(g_Keys.gateway.warnIfEncrypted))
+					data[g_Keys.gateway.section][g_Keys.gateway.warnIfEncrypted] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.gateway.startupLink))
 					data[g_Keys.gateway.section][g_Keys.gateway.startupLink] = getString(value, g_Keys.gateway.startupLink, rval);
-				else if (0 == key.compare(g_Keys.gateway.maintainLink))
-					data[g_Keys.gateway.section][g_Keys.gateway.maintainLink] = IS_TRUE(value[0]);
-				else if (0 == key.compare(g_Keys.gateway.hostPath))
-					data[g_Keys.gateway.section][g_Keys.gateway.hostPath] = getString(value, g_Keys.gateway.hostPath, rval);
+				else if (0 == key.compare(g_Keys.gateway.jsonHostPath))
+					data[g_Keys.gateway.section][g_Keys.gateway.jsonHostPath] = getString(value, g_Keys.gateway.jsonHostPath, rval);
 				else if (0 == key.compare(g_Keys.gateway.myHostPath))
 					data[g_Keys.gateway.section][g_Keys.gateway.myHostPath] = getString(value, g_Keys.gateway.myHostPath, rval);
 				else if (0 == key.compare(g_Keys.gateway.dbPath))
 					data[g_Keys.gateway.section][g_Keys.gateway.dbPath] = getString(value, g_Keys.gateway.dbPath, rval);
-				else if (0 == key.compare(g_Keys.gateway.allowNotTranscoded))
-					data[g_Keys.gateway.section][g_Keys.gateway.allowNotTranscoded] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.gateway.audioFolder))
 					data[g_Keys.gateway.section][g_Keys.gateway.audioFolder] = getString(value, g_Keys.gateway.audioFolder, rval);
 				else
 					badParam(g_Keys.gateway.section, key);
+				break;
+			case ESection::dht:
+				if (0 == key.compare(g_Keys.dht.bootStrap))
+					data[g_Keys.dht.section][g_Keys.dht.bootStrap] = getString(value, g_Keys.dht.bootStrap, rval);
+				else if (0 == key.compare(g_Keys.dht.dhtSavePath))
+					data[g_Keys.dht.section][g_Keys.dht.dhtSavePath] = getString(value, g_Keys.dht.dhtSavePath, rval);
+				else
+					badParam(g_Keys.dht.section, key);
 				break;
 			case ESection::dashboard:
 				if (0 == key.compare(g_Keys.dashboard.refresh))
@@ -273,7 +283,8 @@ bool CConfigure::ReadData(const std::string &path)
 	// Gateway section
 	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.ipv4, rval);
 	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.ipv6, rval);
-	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.maintainLink, rval);
+	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.warnIfEncrypted, rval);
+	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.warnNoTranscoder, rval);
 	if (data[g_Keys.gateway.section].contains(g_Keys.gateway.startupLink))
 	{
 		const auto ref = GetString(g_Keys.gateway.section, g_Keys.gateway.startupLink);
@@ -282,11 +293,13 @@ bool CConfigure::ReadData(const std::string &path)
 			std::cout << "WARNING: [" << g_Keys.gateway.section << "]" << g_Keys.gateway.startupLink << "doesn't look like a reflector module" << std::endl;
 		}
 	}
-	if (isDefined(ErrorLevel::mild, g_Keys.gateway.section, g_Keys.gateway.hostPath, rval))
+	#ifdef DVREF
+	if (isDefined(ErrorLevel::mild, g_Keys.gateway.section, g_Keys.gateway.jsonHostPath, rval))
 	{
-		const auto path = GetString(g_Keys.gateway.section, g_Keys.gateway.hostPath);
-		checkPath(g_Keys.gateway.section, g_Keys.gateway.hostPath, path, std::filesystem::file_type::regular);
+		const auto path = GetString(g_Keys.gateway.section, g_Keys.gateway.jsonHostPath);
+		checkPath(g_Keys.gateway.section, g_Keys.gateway.jsonHostPath, path, std::filesystem::file_type::regular);
 	}
+	#endif
 	if (isDefined(ErrorLevel::mild, g_Keys.gateway.section, g_Keys.gateway.myHostPath, rval))
 	{
 		const auto path = GetString(g_Keys.gateway.section, g_Keys.gateway.myHostPath);
@@ -303,6 +316,16 @@ bool CConfigure::ReadData(const std::string &path)
 		const auto path = GetString(g_Keys.gateway.section, g_Keys.gateway.audioFolder);
 		checkPath(g_Keys.gateway.section, g_Keys.gateway.audioFolder, path, std::filesystem::file_type::directory);
 	}
+
+	// DHT sectopm
+	#ifdef DHT
+	isDefined(ErrorLevel::fatal, g_Keys.dht.section, g_Keys.dht.bootStrap, rval);
+	if (isDefined(ErrorLevel::fatal, g_Keys.dht.section, g_Keys.dht.dhtSavePath, rval))
+	{
+		const auto path = GetString(g_Keys.dht.section, g_Keys.dht.dhtSavePath);
+		checkPath(g_Keys.dht.section, g_Keys.dht.dhtSavePath, path, std::filesystem::file_type::regular);
+	}
+	#endif
 
 	// dashboard section
 	isDefined(ErrorLevel::fatal, g_Keys.dashboard.section, g_Keys.dashboard.lhcount, rval);
@@ -491,10 +514,10 @@ void CConfigure::checkPath(const std::string &section, const std::string &key, c
 			std::cout << "is a regular file";
 			break;
 		case std::filesystem::file_type::socket:
-			std::cout << "a socket";
+			std::cout << "is a socket";
 			break;
 		default:
-			std::cout << "ia an expected file type";
+			std::cout << "is an expected file type";
 			break;
 		}
 		std::cout << std::endl;
@@ -622,6 +645,26 @@ bool CConfigure::IsString(const std::string &section, const std::string &key) co
 		return data[section][key].is_string();
 	}
 	return false;
+}
+
+EIPType CConfigure::GetIPType(const std::string &addr) const
+{
+	if (std::regex_match(addr, IPv4RegEx))
+		return EIPType::ipv4;
+	else if (std::regex_match(addr, IPv6RegEx))
+		return EIPType::ipv6;
+	else
+		return EIPType::none;
+}
+
+ERefType CConfigure::GetReflectorType(const std::string &cs) const
+{
+	if (std::regex_match(cs, MrefdCS))
+		return ERefType::m17;
+	else if (std::regex_match(cs, UrfdCS))
+		return ERefType::urf;
+	else
+		return ERefType::none;
 }
 
 #ifdef INICHECK
