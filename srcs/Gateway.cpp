@@ -133,13 +133,23 @@ bool CGateway::Start()
 	n = g_DataBase.ParseJsonFile(jsonPath.c_str());
 	Log(EUnit::gate, "Read %d reflectors from %s\n", n, jsonPath.c_str());
 	#endif
-	// Get the personal gateway pathname and add it to the database
+	// Get the M17 reflector pathname and add it to the database
+	auto m17hosts = g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.m17HostPath);
+	n = g_DataBase.FillGW(m17hosts.c_str());
+	Log(EUnit::gate, "Read %d targets from %s\n", n, m17hosts.c_str());
+	// Get the personal target pathname and add it to the database
 	auto myhosts = g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.myHostPath);
 	n = g_DataBase.FillGW(myhosts.c_str());
 	Log(EUnit::gate, "Read %d targets from %s\n", n, myhosts.c_str());
-	#ifdef DVREF
-	Log(EUnit::gate, "There are now %d targets defined in the database\n", g_DataBase.Count("targets"));
+	n = g_DataBase.Count("targets");
+	Log(EUnit::gate, "There are now %d targets defined in the database\n", n);
+	#ifndef DHT
+	if (0 == n) {
+		Log(EUnit::gate, "ERROR: Without any targets, mspot must die!\n");
+		return true;
+	}
 	#endif
+
 
 	// create the callsign for the hotspot
 	std::string cs(g_Cfg.GetString(g_Keys.repeater.section, g_Keys.repeater.callsign));

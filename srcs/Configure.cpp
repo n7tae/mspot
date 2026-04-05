@@ -176,6 +176,8 @@ bool CConfigure::ReadData(const std::string &path)
 					data[g_Keys.gateway.section][g_Keys.gateway.startupLink] = getString(value, g_Keys.gateway.startupLink, rval);
 				else if (0 == key.compare(g_Keys.gateway.jsonHostPath))
 					data[g_Keys.gateway.section][g_Keys.gateway.jsonHostPath] = getString(value, g_Keys.gateway.jsonHostPath, rval);
+				else if (0 == key.compare(g_Keys.gateway.m17HostPath))
+					data[g_Keys.gateway.section][g_Keys.gateway.m17HostPath] = getString(value, g_Keys.gateway.m17HostPath, rval);
 				else if (0 == key.compare(g_Keys.gateway.myHostPath))
 					data[g_Keys.gateway.section][g_Keys.gateway.myHostPath] = getString(value, g_Keys.gateway.myHostPath, rval);
 				else if (0 == key.compare(g_Keys.gateway.dbPath))
@@ -300,6 +302,11 @@ bool CConfigure::ReadData(const std::string &path)
 		checkPath(g_Keys.gateway.section, g_Keys.gateway.jsonHostPath, path, std::filesystem::file_type::regular);
 	}
 	#endif
+	if (isDefined(ErrorLevel::mild, g_Keys.gateway.section, g_Keys.gateway.m17HostPath, rval))
+	{
+		const auto path = GetString(g_Keys.gateway.section, g_Keys.gateway.m17HostPath);
+		checkPath(g_Keys.gateway.section, g_Keys.gateway.m17HostPath, path, std::filesystem::file_type::regular);
+	}
 	if (isDefined(ErrorLevel::mild, g_Keys.gateway.section, g_Keys.gateway.myHostPath, rval))
 	{
 		const auto path = GetString(g_Keys.gateway.section, g_Keys.gateway.myHostPath);

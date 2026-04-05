@@ -44,11 +44,11 @@ struct SJsonKeys
 
 	struct GATEWAY
 	{
-		const std::string section, ipv4, ipv6, warnNoTranscoder, warnIfEncrypted, startupLink, jsonHostPath, myHostPath, dbPath, audioFolder;
+		const std::string section, ipv4, ipv6, warnNoTranscoder, warnIfEncrypted, startupLink, jsonHostPath, m17HostPath, myHostPath, dbPath, audioFolder;
 	}
 	gateway
 	{
-		"Gateway", "EnableIPv4", "EnableIPv6", "WarnNoTranscoder", "WarnIfEncrypted", "StartupLink", "JsonHostPath", "MyHostPath", "DBPath", "AudioFolderPath"
+		"Gateway", "EnableIPv4", "EnableIPv6", "WarnNoTranscoder", "WarnIfEncrypted", "StartupLink", "JsonHostPath", "M17HostPath", "MyHostPath", "DBPath", "AudioFolderPath"
 	};
 
 	struct DHT
