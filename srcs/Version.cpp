@@ -60,7 +60,8 @@ const char *CVersion::c_str() const
 #ifdef DEBUG
 	ss << "-debug";
 #endif
-	return ss.str().c_str();
+	static std::string vstr(ss.str());
+	return vstr.c_str();
 }
 
 // output
