@@ -277,15 +277,14 @@ void CGateway::processGateway()
 				// looks like we lost contact, TIMEOUT
 				addMessage("repeater was_disconnected_from destination");
 				Log(EUnit::gate, "Disconnected from %s, TIMEOUT...\n", target.GetCS().c_str());
-				target.ChangeState(ELinkState::unlinked);
-				g_DataBase.ClearTable("linkstatus");
+				target.Unlinked();
 			}
 			break;
 		case ELinkState::linking:
 			if (linkingTime.time() >= 30.0)
 			{
 				Log(EUnit::gate, "Link request to %s timeout.\n", target.GetCS().c_str());
-				target.ChangeState(ELinkState::unlinked);
+				target.Unlinked();
 			}
 			else
 			{
@@ -384,7 +383,7 @@ void CGateway::processGateway()
 				{	// the current state in not unlinked and the packet is from the link target
 					if (0 == memcmp(buf, "ACKN", 4))
 					{
-						target.ChangeState(ELinkState::linked);
+						target.Linked();
 						makeCSData(target.GetCS(), "destination.dat");
 						addMessage("repeater is_linked_to destination");
 					}
@@ -392,13 +391,13 @@ void CGateway::processGateway()
 					{
 						addMessage("link_refused");
 						Log(EUnit::gate, "Connection request refused from %s\n", target.GetCS().c_str());
-						target.ChangeState(ELinkState::unlinked);
+						target.Unlinked();
 					}
 					else if (0 == memcmp(buf, "DISC", 4))
 					{
 						addMessage("repeater is_unlinked");
 						Log(EUnit::gate, "Disconnected from %s at %s\n", target.GetCS().c_str(), target.GetAddress().GetAddress());
-						target.ChangeState(ELinkState::unlinked);
+						target.Unlinked();
 					}
 					else
 					{
@@ -426,7 +425,7 @@ void CGateway::processGateway()
 						{
 							addMessage("repeater was_disconnected_from destination");
 							Log(EUnit::gate, "%s initiated a disconnect\n", from.GetCS().c_str());
-							target.ChangeState(ELinkState::unlinked);
+							target.Unlinked();
 						}
 						else
 							Log(EUnit::gate, "Got a bogus disconnect from '%s' @ %s\n", from.GetCS().c_str(), from17k.GetAddress());
@@ -508,7 +507,7 @@ void CGateway::processModem()
 						get(dst.GetCS(ERefType::m17==eReflectorType ? 7 : 6));
 						#endif
 						if (setDestination(dst)) {
-							target.ChangeState(ELinkState::linking);
+							target.Linking();
 							sendPacket2Dest(std::move(p));
 						} else {
 							Log(EUnit::gate, "Reflector %s not found\n", dst.c_str());
@@ -584,7 +583,7 @@ void CGateway::processModem()
 							#endif
 							if (setDestination(dst))
 							{
-								target.ChangeState(ELinkState::linking);
+								target.Linking();
 							}
 							g_GateState.Idle();
 						} else {
@@ -625,7 +624,7 @@ void CGateway::sendLinkRequest()
 	Log(EUnit::gate, "Link request sent to %s at %s on port %u\n", target.GetCS().c_str(), target.GetAddress().GetAddress(), target.GetAddress().GetPort());
 	// finish up
 	lastLinkSent.start();
-	target.ChangeState(ELinkState::linking);
+	target.Linking();
 }
 
 // this also opens and closes the gateStream

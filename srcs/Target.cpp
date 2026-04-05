@@ -38,24 +38,29 @@ void CTarget::TargetInit(const CCallsign &callsign, ERefType eRef, EDataType typ
 	}
 }
 
-void CTarget::ChangeState(ELinkState newstate)
+void CTarget::Linked()
 {
-	state = newstate;
-	switch (state)
-	{
-		case ELinkState::unlinked:
-			addr.Clear();
-			cs.Clear();
-			g_DataBase.ClearTable("linkstatus");
-			break;
-		case ELinkState::linking:
-			break;
-		case ELinkState::linked:
-			receivePingTimer.start();
-			Log(EUnit::target, "Connected to %s at %s\n", cs.c_str(), addr.GetAddress());
-			g_DataBase.UpdateLS(addr.GetAddress(), addr.GetPort(), cs.c_str());
-			break;
-	}
+	state = ELinkState::linked;
+	receivePingTimer.start();
+	Log(EUnit::target, "Connected to %s at %s\n", cs.c_str(), addr.GetAddress());
+	g_DataBase.UpdateLS(addr.GetAddress(), addr.GetPort(), cs.c_str());
+}
+
+void CTarget::Linking()
+{
+	state = ELinkState::linking;
+}
+
+void CTarget::Unlinked()
+{
+	state = ELinkState::unlinked;
+	addr.Clear();
+	cs.Clear();
+	g_DataBase.ClearTable("linkstatus");
+	addr.Clear();
+	cs.Clear();
+	mods.clear();
+	smods.clear();
 }
 
 const SM17RefPacket *CTarget::GetPongPacket(void)

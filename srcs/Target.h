@@ -44,7 +44,9 @@ public:
 	bool TimedOut(void) const { return receivePingTimer.time() > 30.0; }
 
 	// change state
-	void ChangeState(ELinkState newstate);
+	void Linked(void);
+	void Linking(void);
+	void Unlinked(void);
 
 private:
 	SM17RefPacket pongPacket;
