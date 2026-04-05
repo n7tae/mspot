@@ -102,7 +102,7 @@ bool CMspotDB::Init()
 		"smods TEXT DEFAULT '', "
 		"ipaddress TEXT NOT NULL, "
 		"port INT NOT NULL, "
-		"url TEXT DEFAULT '', "
+		"url TEXT DEFAULT ''"
 		") WITHOUT ROWID;");
 	if (execSqlCmd(sql, here))
 		return true;
