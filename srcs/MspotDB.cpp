@@ -50,7 +50,7 @@ bool CMspotDB::execSqlCmd(const std::string &cmd, const std::string &where)
 	char *eMsg;
 	if (SQLITE_OK != sqlite3_exec(db, cmd.c_str(), NULL, 0, &eMsg))
 	{
-		Log(EUnit::db, "%s [%s] error: %s\n", where, cmd.c_str(), eMsg);
+		Log(EUnit::db, "%s [%s] ERROR: %s\n", where.c_str(), cmd.c_str(), eMsg);
 		sqlite3_free(eMsg);
 		return true;
 	}
@@ -101,7 +101,7 @@ bool CMspotDB::Init()
 		"mods TEXT DEFAULT '', "
 		"smods TEXT DEFAULT '', "
 		"ipaddress TEXT NOT NULL, "
-		"port INT NOT NULL"
+		"port INT NOT NULL, "
 		"url TEXT DEFAULT '', "
 		") WITHOUT ROWID;");
 	if (execSqlCmd(sql, here))
