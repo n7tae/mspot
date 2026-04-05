@@ -100,7 +100,7 @@ bool CMspotDB::Init()
 		"capabilities TEXT DEFAULT '', "
 		"mods TEXT DEFAULT '', "
 		"smods TEXT DEFAULT '', "
-		"ipaddress TEXT NOT NULL, "
+		"address TEXT NOT NULL, "
 		"port INT NOT NULL, "
 		"url TEXT DEFAULT ''"
 		") WITHOUT ROWID;");
