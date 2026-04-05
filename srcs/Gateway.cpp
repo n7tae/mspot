@@ -193,7 +193,7 @@ bool CGateway::Start()
 			return true;
 		if (ipv4.Open(addr))
 			return true;
-		Log(EUnit::gate, "Gateway listening on %s\n", addr.GetFullAddress());
+		Log(EUnit::gate, "Gateway listening on %s\n", addr.GetAddress());
 	}
 	if (EInternetType::ipv4only != internetType)
 	{
@@ -202,7 +202,7 @@ bool CGateway::Start()
 			return true;
 		if (ipv6.Open(addr))
 			return true;
-		Log(EUnit::gate, "Gateway listening on %s\n", addr.GetFullAddress());
+		Log(EUnit::gate, "Gateway listening on %s\n", addr.GetAddress());
 	}
 
 	// Set the channel access number
@@ -429,7 +429,7 @@ void CGateway::processGateway()
 							target.ChangeState(ELinkState::unlinked);
 						}
 						else
-							Log(EUnit::gate, "Got a bogus disconnect from '%s' @ %s\n", from.GetCS().c_str(), from17k.GetFullAddress());
+							Log(EUnit::gate, "Got a bogus disconnect from '%s' @ %s\n", from.GetCS().c_str(), from17k.GetAddress());
 					}
 					else
 					{
@@ -509,7 +509,6 @@ void CGateway::processModem()
 						#endif
 						if (setDestination(dst)) {
 							target.ChangeState(ELinkState::linking);
-							Log(EUnit::gate, "IP Address for %s found: %s\n", dst.c_str(), target.GetAddress().GetFullAddress());
 							sendPacket2Dest(std::move(p));
 						} else {
 							Log(EUnit::gate, "Reflector %s not found\n", dst.c_str());
@@ -520,7 +519,6 @@ void CGateway::processModem()
 						} else {
 							if (setDestination(dst)) {
 								sendPacket2Dest(std::move(p));
-								Log(EUnit::gate, "IP Address for %s found: %s\n", dst.c_str(), target.GetAddress().GetFullAddress());
 							} else {
 								Log(EUnit::gate, "Target %s not found\n", dst.c_str());
 							}
@@ -587,7 +585,6 @@ void CGateway::processModem()
 							if (setDestination(dst))
 							{
 								target.ChangeState(ELinkState::linking);
-								Log(EUnit::gate, "IP Address for %s found: %s\n", dst.c_str(), target.GetAddress().GetFullAddress());
 							}
 							g_GateState.Idle();
 						} else {
@@ -595,10 +592,7 @@ void CGateway::processModem()
 								sendPacket2Dest(std::move(p));
 							} else {
 								wait4end(p);
-								if (setDestination(dst))
-								{
-									Log(EUnit::gate, "IP Address for %s found: %s\n", dst.c_str(), target.GetAddress().GetFullAddress());
-								}
+								setDestination(dst);
 							}
 						}
 						break;
@@ -628,7 +622,7 @@ void CGateway::sendLinkRequest()
 	conn.mod = target.GetCS().GetModule();
 	// send the link request
 	sendPacket(conn.magic, 11, target.GetAddress());
-	Log(EUnit::gate, "Link request sent to %s at %s\n", target.GetCS().c_str(), target.GetAddress().GetFullAddress());
+	Log(EUnit::gate, "Link request sent to %s at %s on port %u\n", target.GetCS().c_str(), target.GetAddress().GetAddress(), target.GetAddress().GetPort());
 	// finish up
 	lastLinkSent.start();
 	target.ChangeState(ELinkState::linking);
@@ -835,6 +829,23 @@ bool CGateway::setDestination(const CCallsign &callsign)
 	CSockAddress addr;
 	if (g_DataBase.GetTarget(csstr.c_str(), dType, tVersion, mods, smods, addr))
 	{
+		std::string datatype, versiontype;
+		switch (dType)
+		{
+			case EDataType::pkt_only: datatype.assign("Pkt-only");  break;
+			case EDataType::str_only: datatype.assign("Str-only");  break;
+			default:                  datatype.assign("Pkt & Str"); break;
+		}
+		switch (tVersion)
+		{
+			case ETypeVersion::deprecated: versiontype.assign("Legacy-only");  break;
+			case ETypeVersion::v3:         versiontype.assign("V#3-only");     break;
+			default:                       versiontype.assign("Legacy & V#3"); break;
+		}
+		Log(EUnit::gate, "Found %s with IP adress %s on port %u\n", csstr.c_str(), addr.GetAddress(), addr.GetPort());
+		Log(EUnit::gate, "Capabilites for %s: Data Handling: %s TYPE Handling: %s\n", csstr.c_str(), datatype.c_str(), versiontype.c_str());
+		if (not mods.empty())
+			Log(EUnit::gate, "%s Modules: '%s' Special-Modules: '%s'\n", csstr.c_str(), mods.c_str(), smods.c_str());
 		if (ERefType::none != eRefType)
 		{
 			if (std::string::npos == mods.find(module))

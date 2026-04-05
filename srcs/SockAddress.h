@@ -189,13 +189,6 @@ public:
 		}
 	}
 
-	const char *GetFullAddress() const
-	{
-		std::stringstream ss;
-		ss << *this;
-		return ss.str().c_str();
-	}
-
 	const char *GetAddress() const
 	{
 		if (straddr[0])
