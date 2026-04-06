@@ -619,12 +619,14 @@ void CGateway::sendLinkRequest()
 {
 	// make a CONN packet
 	SM17RefPacket conn;
-	memcpy(conn.magic, "CONN", 4);
+	memcpy(conn.magic, "CON", 3);
+	conn.magic[3] = (ETypeVersion::deprecated == target.GetTypeVersion()) ? 'N' : '3';
 	thisCS.CodeOut(conn.cscode);
 	conn.mod = target.GetCS().GetModule();
 	// send the link request
 	sendPacket(conn.magic, 11, target.GetAddress());
-	Log(EUnit::gate, "Link request sent to %s at %s on port %u\n", target.GetCS().c_str(), target.GetAddress().GetAddress(), target.GetAddress().GetPort());
+
+	Log(EUnit::gate, "CON%c request sent to %s at %s on port %u\n", char(conn.magic[3]), target.GetCS().c_str(), target.GetAddress().GetAddress(), target.GetAddress().GetPort());
 	// finish up
 	lastLinkSent.start();
 }
@@ -733,14 +735,21 @@ void CGateway::sendPacket2Modem(std::unique_ptr<CPacket> p)
 // this also opens and closes the modemStream
 void CGateway::sendPacket2Dest(std::unique_ptr<CPacket> p)
 {
-	// There are only legacy destinations out there, so for now this will work
-	// TODO: -----------------------------------------------------------------
-	// The HostMap returned version needs to be in mlink so we can set the correct TYPE!
 	CFrameType TYPE(p->GetFrameType());
 	if (EVersionType::v3 == TYPE.GetVersion())
 	{
-		p->SetFrameType(TYPE.GetFrameType(EVersionType::legacy));
-		p->CalcCRC();
+		if (ETypeVersion::deprecated == target.GetTypeVersion()) {
+			// the target requires legacy type
+			p->SetFrameType(TYPE.GetFrameType(EVersionType::legacy));
+			p->CalcCRC();
+		} 
+	} else {
+		// the packet is using Legacy type
+		if (ETypeVersion::deprecated != target.GetTypeVersion()) {
+			// the target needs V3 TYPE
+			p->SetFrameType(TYPE.GetFrameType(EVersionType::v3));
+			p->CalcCRC();
+		}
 	}
 	// TODO: -----------------------------------------------------------------
 	if (EPacketType::packet == p->GetType())

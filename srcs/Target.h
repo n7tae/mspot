@@ -35,11 +35,14 @@ public:
 	// initialization
 	void TargetInit(const CCallsign &cs, ERefType eRef, EDataType dType, ETypeVersion tVersion, const std::string m, const std::string ms, CSockAddress &sa, const CCallsign &mspot);
 	// get various target data
-	ELinkState GetState(void) const { return state; }
 	const CCallsign &GetCS(void) const { return cs; }
+	ETypeVersion GetTypeVersion(void) const { return eTypeVersion; }
+	EDataType GetDataType(void) const { return eDataType; }
+	ELinkState GetState(void) const { return state; }
 	ERefType GetType(void) const { return eRefType; }
 	const CSockAddress &GetAddress(void) const { return addr; }
 	const SM17RefPacket *GetPongPacket(void);
+	// some states for the target
 	bool HasAddress(void) const { return not addr.AddressIsZero(); }
 	bool TimedOut(void) const { return receivePingTimer.time() > 30.0; }
 
