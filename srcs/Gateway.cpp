@@ -489,9 +489,10 @@ void CGateway::processModem()
 	{
 		auto p = Modem2Gate.PopWaitFor(40);
 		if (p) {
+			const auto ptype = p->GetType();
 			const CCallsign dst(p->GetCDstAddress());
 			const auto eReflectorType = dst.GetReflectorType();
-			if (EPacketType::packet == p->GetType()) { // process packet data
+			if (EPacketType::packet == ptype) { // process packet data
 				switch (target.GetState())
 				{
 				case ELinkState::linked:
@@ -507,8 +508,9 @@ void CGateway::processModem()
 						get(dst.GetCS(ERefType::m17==eReflectorType ? 7 : 6));
 						#endif
 						if (setDestination(dst)) {
+							linkingTime.start();
 							target.Linking();
-							sendPacket2Dest(std::move(p));
+							// the packet is not used, it will die here
 						} else {
 							Log(EUnit::gate, "Reflector %s not found\n", dst.c_str());
 						}
@@ -525,7 +527,7 @@ void CGateway::processModem()
 					}
 					break;
 				}
-			} else if (EPacketType::stream == p->GetType()) {
+			} else if (EPacketType::stream == ptype) {
 				switch (dst.GetBase())
 				{
 				case CalcCSCode("E"):
@@ -583,6 +585,7 @@ void CGateway::processModem()
 							#endif
 							if (setDestination(dst))
 							{
+								linkingTime.start();
 								target.Linking();
 							}
 							g_GateState.Idle();
@@ -624,7 +627,6 @@ void CGateway::sendLinkRequest()
 	Log(EUnit::gate, "Link request sent to %s at %s on port %u\n", target.GetCS().c_str(), target.GetAddress().GetAddress(), target.GetAddress().GetPort());
 	// finish up
 	lastLinkSent.start();
-	target.Linking();
 }
 
 // this also opens and closes the gateStream
