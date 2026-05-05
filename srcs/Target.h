@@ -41,7 +41,7 @@ public:
 	ELinkState GetState(void) const { return state; }
 	ERefType GetType(void) const { return eRefType; }
 	const CSockAddress &GetAddress(void) const { return addr; }
-	const SM17RefPacket *GetPongPacket(void);
+	const SM17RefPacket *GetPingPacket(void);
 	// some states for the target
 	bool HasAddress(void) const { return not addr.AddressIsZero(); }
 	bool TimedOut(void) const { return receivePingTimer.time() > 30.0; }
@@ -52,7 +52,7 @@ public:
 	void Unlinked(void);
 
 private:
-	SM17RefPacket pongPacket;
+	SM17RefPacket pingPacket;
 	CSockAddress addr;
 	CCallsign cs;
 

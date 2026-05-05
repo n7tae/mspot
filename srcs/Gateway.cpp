@@ -416,7 +416,7 @@ void CGateway::processGateway()
 				{
 					if (0 == memcmp(buf, "PING", 4))
 					{
-						sendPacket(target.GetPongPacket(), 10, target.GetAddress());
+						sendPacket(target.GetPingPacket(), 10, target.GetAddress());
 					}
 					else if (0 == memcmp(buf, "DISC", 4))
 					{
