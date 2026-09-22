@@ -1,7 +1,8 @@
 # #################### Reflectors ###########################
 #
-# This is either for "overrides" where you are providing new, correct data for
-# an unknown version string, or fixing a url, or some other parameter.
+# This is either for "overrides" where you are providing new, correct data, or
+# an unknown version string, or fixing a url, or some other parameter for a
+# reflector that is registered at DVref.com.
 #
 # It might also be a place to define the connection to a reflector that is
 # not registered at DVref.com.
@@ -15,12 +16,22 @@
 # ################## Direct Routing Targets ##################
 #
 # You do not link to these target, but you load them the same way you link to a reflector:
-# Put the destination in DST and quick-key.
-# Capabilities: 2 chars:
-# 1. Data handling:
+#     Put the destination in DST and quick-key.
+# Fields:
+# 1. Destination: Callsign of Target
+# 2. Capabilities (stream;packet;both): 1 char:
 #    'S' if only stream data is processed
 #    'P' if only packet data is processed
 #    'B' if both packet and stream data is processed
+# 3. IPv4 address
+# 4. IPv6 address
+# 5. UDP Port
 # The example shows that N0CALL will only receive Stream data at 44.46.48.201:17100
 # NOCALL:S;44.46.48.201;;17100
 # Destination;Capabilities;IPv4Address;IPv6Address;Port
+
+# ################## HamDHT Targets ##################
+#
+# If you and the target are using the DHT, you don't need to specify anything else!
+# Destination(or or Callsign)
+M17-M17
