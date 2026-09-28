@@ -415,7 +415,7 @@ void CGateway::processGateway()
 				{
 					if (0 == memcmp(buf, "PING", 4))
 					{
-						sendPacket(target.GetPingPacket(), 10, target.GetAddress());
+						sendPacket(target.GetPongPacket(), 10, target.GetAddress());
 					}
 					else if (0 == memcmp(buf, "DISC", 4))
 					{
@@ -624,7 +624,7 @@ void CGateway::sendLinkRequest()
 	// send the link request
 	sendPacket(conn.magic, 11, target.GetAddress());
 
-	Log(EUnit::gate, "CON%c request sent to %s at %s on port %u\n", char(conn.magic[3]), target.GetCS().c_str(), target.GetAddress().GetAddress(), target.GetAddress().GetPort());
+	Log(EUnit::gate, "CONN request sent to %s at %s on port %u\n", target.GetCS().c_str(), target.GetAddress().GetAddress(), target.GetAddress().GetPort());
 	// finish up
 	lastLinkSent.start();
 }

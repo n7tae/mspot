@@ -32,8 +32,8 @@ void CTarget::TargetInit(const CCallsign &callsign, ERefType eRef, EDataType typ
 	addr = sa;
 	if (ERefType::none != eRef)
 	{
-		memcpy(pingPacket.magic, "PONG", 4);
-		mspot.CodeOut(pingPacket.cscode);
+		memcpy(pongPacket.magic, "PONG", 4);
+		mspot.CodeOut(pongPacket.cscode);
 	}
 }
 
@@ -62,8 +62,8 @@ void CTarget::Unlinked()
 	smods.clear();
 }
 
-const SM17RefPacket *CTarget::GetPingPacket(void)
+const SM17RefPacket *CTarget::GetPongPacket(void)
 {
 	receivePingTimer.start();
-	return &pingPacket;
+	return &pongPacket;
 }
