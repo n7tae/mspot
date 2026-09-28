@@ -16,6 +16,8 @@ else
 CPPFLAGS  = -std=c++17 -Wall -Wextra -Werror -Isrcs
 endif
 
+LIBS = -pthread -lm -lgpiod -lsqlite3
+
 ifeq ($(USE_TS), false)
 CPPFLAGS += -DNO_TS
 endif
@@ -26,9 +28,9 @@ endif
 
 ifeq ($(USE_DVREF), false)
 CPPFLAGS += -DNO_DVREF
+else
+LIBS += -lcurl
 endif
-
-LIBS = -pthread -lm -lgpiod -lsqlite3
 
 SRCS = $(wildcard srcs/*.cpp)
 OBJS = $(SRCS:.cpp=.o)
