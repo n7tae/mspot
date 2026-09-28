@@ -503,10 +503,12 @@ int CMspotDB::ParseJsonFile(const std::string &filepath)
 			}
 		}
 		std::cout << "Loaded " << mcount << " M17 and " << ucount << " URF reflectors from " << filepath << std::endl;
+		return ucount + mcount;
 	}
 	else
 	{
 		std::cerr << "ERROR: No M17 reflectors found at " << filepath << std::endl;
 	}
+	return -1;
 }
 #endif
