@@ -1177,8 +1177,9 @@ void CCC1200::rxProcess()
 								fn = 0;
 								sid = g_RNG.Get();
 							}
-						} else if (cfg.debug)
-							Log(EUnit::cc12, "Could not obtain GateState modemin lock\n");
+						} else {
+							Log(EUnit::gate, "LOST RF LSF! GateState: %s\n", g_GateState.GetStateName());
+						}
 					}
 				}
 
@@ -1238,12 +1239,15 @@ void CCC1200::rxProcess()
 							p->SetFrameNumber(fn);
 							memcpy(p->GetPayload(), frame_data, 16);
 							p->CalcCRC();
-							if (g_GateState.TryState(EGateState::modemin))
-								Modem2Gate.Push(p);
-
 							if ((cfg.debug and (fn%12u==11u)) or (fn>>15))
 							{
 								Log(EUnit::cc12, "RF Stream Frame: FN:%04X ED^2:%5.2f MER:%4.1f%%\n", fn, sed_str, float(e)*escale);
+							}
+							if (g_GateState.TryState(EGateState::modemin))
+							{
+								Modem2Gate.Push(p);
+							} else {
+								Log(EUnit::gate, "LOST RF frame! GateState: %s\n", g_GateState.GetStateName());
 							}
 						}
 
@@ -1275,7 +1279,7 @@ void CCC1200::rxProcess()
 											const CCallsign src(rxlsf.GetCSrcAddress());
 											Log(EUnit::cc12, "LICH LSF: DST: %s SRC: %s TYPE: %04X CAN: %d\n", dst.c_str(), src.c_str(), rxlsf.GetFrameType(), rxType.GetCan());
 										} else {
-											Log(EUnit::cc12, "Got LICH LSF, but could not obtain GateLock\n");
+											Log(EUnit::gate, "LOST LICH LSF! GateState: %s\n", g_GateState.GetStateName());
 											Dump(nullptr, lsf_b, 30);
 										}
 									}
