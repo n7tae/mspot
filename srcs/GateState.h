@@ -45,4 +45,6 @@ public:
 private:
 	std::mutex mtx;
 	EGateState currentState;
+
+	const char *getStateName();
 };

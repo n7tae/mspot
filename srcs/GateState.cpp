@@ -18,7 +18,9 @@
 
 #include "GateState.h"
 
+#ifndef DEBUG
 #define DEBUG
+#endif
 
 // the one and only Tx/Rx state
 CGateState g_GateState;
@@ -26,6 +28,11 @@ CGateState g_GateState;
 const char *CGateState::GetStateName()
 {
 	std::lock_guard<std::mutex> lg(mtx);
+	return getStateName();
+}
+
+const char *CGateState::getStateName()
+{
 	switch (currentState)
 	{
 		case EGateState::gatestreamin:
@@ -77,7 +84,7 @@ bool CGateState::HandleRfCommand(EGateState toState)
 	{
 		currentState = toState;
 #ifdef DEBUG
-		Log(EUnit::nounit, "CGateState::HandleRfCommand(): %s\n", GetStateName());
+		Log(EUnit::nounit, "CGateState::HandleRfCommand(): %s\n", getStateName());
 #endif
 		return true;
 	}
@@ -90,10 +97,10 @@ bool CGateState::SetStateToOnlyIfFrom(EGateState tostate, EGateState fromstate)
 	std::lock_guard<std::mutex> lg(mtx);
 	if (fromstate == currentState)
 	{
-		const char *fromState = GetStateName();
+		const char *fromState = getStateName();
 		currentState = tostate;
 #ifdef DEBUG
-		Log(EUnit::nounit, "CGateState::SetStateToOnlyIfFrom(%s): %s\n", fromState, GetStateName());
+		Log(EUnit::nounit, "CGateState::SetStateToOnlyIfFrom(%s): %s\n", fromState, getStateName());
 #endif
 		return true;
 	}
@@ -135,7 +142,7 @@ bool CGateState::TryState(EGateState newstate)
 	{
 		currentState = newstate;
 #ifdef DEBUG
-		Log(EUnit::nounit, "CGateState::TryState(): %s\n", GetStateName());
+		Log(EUnit::nounit, "CGateState::TryState(): %s\n", getStateName());
 #endif
 		return true;
 	}
