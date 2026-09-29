@@ -1304,7 +1304,7 @@ void CCC1200::rxProcess()
 						rx_state = ERxState::idle; // last stream frame
 						got_lsf = false;
 						lich_parts = 0;
-						last_fn = 0xfffu;
+						last_fn = 0xffffu;
 						first_frame = true;
 					}
 				}
