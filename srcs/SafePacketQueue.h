@@ -34,11 +34,12 @@ public:
 
 	~CSafePacketQueue(void) {}
 
-	void Push(T &t)
+	unsigned Push(T &t)
 	{
 		std::lock_guard<std::mutex> lock(m);
 		q.push(std::move(t));
 		c.notify_one();
+		return q.size();
 	}
 
 	// If the queue is empty, wait until an element is available.
