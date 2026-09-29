@@ -1192,7 +1192,7 @@ void CCC1200::rxProcess()
 				}
 
 				//stream frame received
-				else if (sed_str <= 20.0f)
+				else if (sed_str <= 25.0f)
 				{
 					//find L2's minimum
 					uint8_t sample_offset=0;
