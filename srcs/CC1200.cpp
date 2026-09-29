@@ -1299,13 +1299,8 @@ void CCC1200::rxProcess()
 							}
 						}
 						last_fn = fn;
-					} else {
-						if (cfg.debug)
-						{
-							Log(EUnit::nounit, "fn=%u last_fn=%u frame_count=%u\n", fn, last_fn, frame_count);
-						}
 					}
-
+					
 					if (fn >> 15) // is this the last frame?
 					{
 						// this is the last packet
