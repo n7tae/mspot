@@ -1247,7 +1247,8 @@ void CCC1200::rxProcess()
 							p->SetFrameNumber(fn);
 							memcpy(p->GetPayload(), frame_data, 16);
 							p->CalcCRC();
-							if ((cfg.debug and (fn%12u==11u)) or (fn>>15))
+							//if ((cfg.debug and (fn%12u==11u)) or (fn>>15))
+							if (cfg.debug)
 							{
 								Log(EUnit::cc12, "RF Stream Frame: FN:%04X ED^2:%5.2f MER:%4.1f%%\n", fn, sed_str, float(e)*escale);
 							}
