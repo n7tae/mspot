@@ -30,16 +30,16 @@ void CStream::OpenStream(const std::string &cs, uint16_t sid, const std::string 
 	from.assign(f);
 	src.assign(cs);
 	if ((EStreamType::gate == type)) {
-		Log(EUnit::null, "G-way stream id=%04x from %s / %s is Opened\n", streamid, src.c_str(), from.c_str());
+		Log(EUnit::nounit, "G-way stream id=%04x from %s / %s is Opened\n", streamid, src.c_str(), from.c_str());
 	 } else {
-		Log(EUnit::null, "Modem stream id=%04x from %s is Opened\n", sid, src.c_str());
+		Log(EUnit::nounit, "Modem stream id=%04x from %s is Opened\n", sid, src.c_str());
 	 }
 }
 
 void CStream::CloseStream(bool istimeout, CMspotDB &db)
 {
 	const std::string name((EStreamType::gate == type) ? "G-way" : "Modem");
-	Log(EUnit::null, "%s stream id=%04x %.2f sec %s\n", name.c_str(), streamid, 0.04f * ++count, (istimeout ? "Timed out" : "Closed"));
+	Log(EUnit::nounit, "%s stream id=%04x %.2f sec %s\n", name.c_str(), streamid, 0.04f * ++count, (istimeout ? "Timed out" : "Closed"));
 	streamid = 0u;
 	db.UpdateLH(src.c_str(), count);
 }

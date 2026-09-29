@@ -18,7 +18,7 @@
 
 #pragma once
 
-enum class EUnit { null, target, call, cc12, gate, host, sock, udp, db };
+enum class EUnit { null, nounit, target, call, cc12, gate, host, sock, udp, db };
 
 class CBase
 {

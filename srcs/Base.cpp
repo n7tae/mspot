@@ -45,7 +45,7 @@ void CBase::Log(EUnit unit, const char* fmt, ...) const
 		case EUnit::sock:   printf("SockAddr, "); break;
 		case EUnit::udp:    printf("UDP, ");      break;
 		case EUnit::db:     printf("SQLite, ");   break;
-		case EUnit::null:   default:              break;
+		default:                                  break;
 	}
 
 	// now print a variable list of things
