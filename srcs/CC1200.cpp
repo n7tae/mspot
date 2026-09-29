@@ -334,7 +334,7 @@ void CCC1200::gpioCleanup()
 	}
 	if (gpio_chip)
 		gpiod_chip_close(gpio_chip);
-	Log(EUnit::cc12, "GPIO lines set to low and resources released\n");
+	Log(EUnit::null, "GPIO lines set to low and resources released\n");
 }
 
 bool CCC1200::readDev(void *vbuf, int size)
@@ -1192,7 +1192,7 @@ void CCC1200::rxProcess()
 				}
 
 				//stream frame received
-				else if (sed_str <= 20.0f)
+				else if (sed_str <= 25.0f)
 				{
 					//find L2's minimum
 					uint8_t sample_offset=0;
@@ -1247,7 +1247,8 @@ void CCC1200::rxProcess()
 							p->SetFrameNumber(fn);
 							memcpy(p->GetPayload(), frame_data, 16);
 							p->CalcCRC();
-							if ((cfg.debug and (fn%12u==11u)) or (fn>>15))
+							//if ((cfg.debug and (fn%12u==11u)) or (fn>>15))
+							if (cfg.debug)
 							{
 								Log(EUnit::cc12, "RF Stream Frame: FN:%04X ED^2:%5.2f MER:%4.1f%%\n", fn, sed_str, float(e)*escale);
 							}

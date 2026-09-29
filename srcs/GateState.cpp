@@ -97,7 +97,9 @@ bool CGateState::SetStateToOnlyIfFrom(EGateState tostate, EGateState fromstate)
 	std::lock_guard<std::mutex> lg(mtx);
 	if (fromstate == currentState)
 	{
+#ifdef DEBUG
 		const char *fromState = getStateName();
+#endif
 		currentState = tostate;
 #ifdef DEBUG
 		Log(EUnit::nounit, "CGateState::SetStateToOnlyIfFrom(%s): %s\n", fromState, getStateName());
