@@ -20,9 +20,11 @@
 
 #include <mutex>
 
+#include "Base.h"
+
 enum class EGateState { idle, gatestreamin, gatepacketin, messagein, modemin, rftimeout, bootup };
 
-class CGateState
+class CGateState : CBase
 {
 public:
 	CGateState() : currentState(EGateState::bootup) {}

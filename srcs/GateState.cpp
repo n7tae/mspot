@@ -18,6 +18,8 @@
 
 #include "GateState.h"
 
+#define DEBUG
+
 // the one and only Tx/Rx state
 CGateState g_GateState;
 
@@ -51,12 +53,20 @@ void CGateState::Set2IdleIfGateIn(void)
 {
 	std::lock_guard<std::mutex> lg(mtx);
 	if (EGateState::messagein==currentState or EGateState::gatestreamin==currentState or EGateState::gatepacketin==currentState)
+	{
 		currentState = EGateState::idle;
+#ifdef DEBUG
+		Log(EUnit::nounit, "CGateState::Set2IdleIfGateIn(): idle\n");
+#endif
+	}
 }
 
 void CGateState::Idle()
 {
 	std::lock_guard<std::mutex> lg(mtx);
+#ifdef DEBUG
+	if (EGateState::idle != currentState) Log(EUnit::nounit, "CGateState::Idle(): idle\n");
+#endif
 	currentState = EGateState::idle;
 }
 
@@ -66,6 +76,9 @@ bool CGateState::HandleRfCommand(EGateState toState)
 	if (EGateState::modemin==currentState or EGateState::rftimeout==currentState)
 	{
 		currentState = toState;
+#ifdef DEBUG
+		Log(EUnit::nounit, "CGateState::HandleRfCommand(): %s\n", GetStateName());
+#endif
 		return true;
 	}
 	return false;
@@ -77,7 +90,11 @@ bool CGateState::SetStateToOnlyIfFrom(EGateState tostate, EGateState fromstate)
 	std::lock_guard<std::mutex> lg(mtx);
 	if (fromstate == currentState)
 	{
+		const char *fromState = GetStateName();
 		currentState = tostate;
+#ifdef DEBUG
+		Log(EUnit::nounit, "CGateState::SetStateToOnlyIfFrom(%s): %s\n", fromState, GetStateName());
+#endif
 		return true;
 	}
 	return false;
@@ -117,6 +134,9 @@ bool CGateState::TryState(EGateState newstate)
 	if (EGateState::idle == currentState)
 	{
 		currentState = newstate;
+#ifdef DEBUG
+		Log(EUnit::nounit, "CGateState::TryState(): %s\n", GetStateName());
+#endif
 		return true;
 	}
 	return false;
