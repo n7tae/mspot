@@ -1297,10 +1297,13 @@ void CCC1200::rxProcess()
 							}
 						}
 						last_fn = fn;
+					} else {
+						Log(EUnit::cc12, "(last_fn+1)(%04X) != frame_count(%04X)\n", fn+1, frame_count);
 					}
 
 					if (fn >> 15) // is this the last frame?
 					{
+						Log(EUnit::cc12, "Got Last Packet fn=%04X\n", fn);
 						// this is the last packet
 						rx_state = ERxState::idle; // last stream frame
 						got_lsf = false;
