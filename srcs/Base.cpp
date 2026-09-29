@@ -29,14 +29,10 @@ void CBase::Log(EUnit unit, const char* fmt, ...) const
 {
 	if (nullptr == fmt)
 		return;	// this should never happen
-	
-	// find the end of the format string
-	const char *endc = fmt;
-	while(*(endc+1))
-		endc++;
 
 #ifndef NO_TS
-	timeStamp();
+	if (EUnit::null != unit)
+		timeStamp();
 #endif
 
 	switch (unit)
@@ -61,9 +57,7 @@ void CBase::Log(EUnit unit, const char* fmt, ...) const
 	va_end(ap);
 
 	fputs(str, stdout);
-	// flush the buffer if the last character is a newline
-	if ('\n' == *endc)
-		fflush(stdout);
+	fflush(stdout);
 }
 
 #ifndef NO_TS
