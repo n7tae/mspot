@@ -16,6 +16,12 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#define DEBUG
+
+#ifdef DEBUG
+#include <stdio.h>
+#endif
+
 #include "GateState.h"
 
 // the one and only Tx/Rx state
@@ -51,11 +57,20 @@ void CGateState::Set2IdleIfGateIn(void)
 {
 	std::lock_guard<std::mutex> lg(mtx);
 	if (EGateState::messagein==currentState or EGateState::gatestreamin==currentState or EGateState::gatepacketin==currentState)
+	{
 		currentState = EGateState::idle;
+		#ifdef DEBUG
+		printf("GateState: Idle\n");
+		#endif
+	}
 }
 
 void CGateState::Idle()
 {
+	#ifdef DEBUG
+	if (EGateState::idle != currentState)
+		printf("GateState: Idle\n");
+	#endif
 	std::lock_guard<std::mutex> lg(mtx);
 	currentState = EGateState::idle;
 }
@@ -66,6 +81,9 @@ bool CGateState::HandleRfCommand(EGateState toState)
 	if (EGateState::modemin==currentState or EGateState::rftimeout==currentState)
 	{
 		currentState = toState;
+		#ifdef DEBUG
+		printf("GateState: %s", GetStateName());
+		#endif
 		return true;
 	}
 	return false;
@@ -78,6 +96,9 @@ bool CGateState::SetStateToOnlyIfFrom(EGateState tostate, EGateState fromstate)
 	if (fromstate == currentState)
 	{
 		currentState = tostate;
+		#ifdef DEBUG
+		printf("GateState: %s", GetStateName());
+		#endif
 		return true;
 	}
 	return false;
@@ -117,6 +138,9 @@ bool CGateState::TryState(EGateState newstate)
 	if (EGateState::idle == currentState)
 	{
 		currentState = newstate;
+		#ifdef DEBUG
+		printf("GateState: %s", GetStateName());
+		#endif
 		return true;
 	}
 	return false;
