@@ -536,7 +536,7 @@ bool CCC1200::setTxPower(float power) //powr in dBm
 void CCC1200::startRx(void)
 {
 	if (cfg.debug)
-		Log(EUnit::cc12, "Changing to Receive mode!\n");
+		Log(EUnit::cc12, "Changing to Receive mode...");
 	uart_lock = true;
 	while (txrxControl(CMD_TX_START, 0, "stop_tx"))
 		usleep(40000);
@@ -544,12 +544,14 @@ void CCC1200::startRx(void)
 	while(txrxControl(CMD_RX_START, 1, "start_rx"))
 		usleep(40000);
 	uart_lock = false;
+	if (cfg.debug)
+		Log(EUnit::null, "Done\n");
 }
 
 void CCC1200::startTx(void)
 {
 	if (cfg.debug)
-		Log(EUnit::cc12, "Changing to Transmit mode!\n");
+		Log(EUnit::cc12, "Changing to Transmit mode...");
 	uart_lock = true;
 	while (txrxControl(CMD_RX_START, 0, "stop_rx"))
 		usleep(40000);
@@ -557,6 +559,8 @@ void CCC1200::startTx(void)
 	while (txrxControl(CMD_TX_START, 1, "start_tx"))
 		usleep(40000);
 	uart_lock = false;
+	if (cfg.debug)
+		Log(EUnit::null, "Done\n");
 }
 
 err_t CCC1200::txrxControl(uint8_t cid, uint8_t onoff, const char *what)
