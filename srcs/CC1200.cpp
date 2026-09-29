@@ -1255,7 +1255,7 @@ void CCC1200::rxProcess()
 							{
 								auto qs = Modem2Gate.Push(p);
 								if (qs > 2)
-									Log(EUnit::nounit, "Modem2Gate Size: %u", qs);
+									Log(EUnit::nounit, "Modem2Gate Size: %u\n", qs);
 							} else {
 								Log(EUnit::gate, "LOST RF frame! GateState: %s\n", g_GateState.GetStateName());
 							}
