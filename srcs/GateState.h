@@ -20,11 +20,17 @@
 
 #include <mutex>
 
+#ifdef DEBUG
 #include "Base.h"
+#endif
 
 enum class EGateState { idle, gatestreamin, gatepacketin, messagein, modemin, rftimeout, bootup };
 
+#ifdef DEBUG
 class CGateState : CBase
+#else
+class CGateState
+#endif
 {
 public:
 	CGateState() : currentState(EGateState::bootup) {}
