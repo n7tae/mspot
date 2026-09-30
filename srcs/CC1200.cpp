@@ -1295,7 +1295,6 @@ void CCC1200::rxProcess()
 								lich_parts = 0;
 							}
 						}
-						last_fn = fn;
 						if (fn >> 15) // is this the last frame?
 						{
 							// this is the last packet
@@ -1304,6 +1303,8 @@ void CCC1200::rxProcess()
 							lich_parts = 0;
 							last_fn = 0xffffu;
 							first_frame = true;
+						} else {
+							last_fn = fn;
 						}
 					}
 
