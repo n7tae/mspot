@@ -1291,18 +1291,18 @@ void CCC1200::rxProcess()
 								lich_parts = 0;
 							}
 						}
-						last_fn = fn;
+						if (fn >> 15) {    // is this the last frame?
+							// this is the last packet
+							rx_state = ERxState::idle; // last stream frame
+							got_lsf = false;
+							lich_parts = 0;
+							last_fn = 0xfffu;
+							first_frame = true;
+						} else {
+							last_fn = fn;
+						}
 					}
 
-					if (fn >> 15) // is this the last frame?
-					{
-						// this is the last packet
-						rx_state = ERxState::idle; // last stream frame
-						got_lsf = false;
-						lich_parts = 0;
-						last_fn = 0xfffu;
-						first_frame = true;
-					}
 				}
 
 				//TODO: handle packet mode reception over RF
