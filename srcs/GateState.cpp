@@ -18,10 +18,6 @@
 
 #include "GateState.h"
 
-#ifndef DEBUG
-#define DEBUG
-#endif
-
 // the one and only Tx/Rx state
 CGateState g_GateState;
 

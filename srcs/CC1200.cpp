@@ -1247,8 +1247,7 @@ void CCC1200::rxProcess()
 							p->SetFrameNumber(fn);
 							memcpy(p->GetPayload(), frame_data, 16);
 							p->CalcCRC();
-							//if ((cfg.debug and (fn%12u==11u)) or (fn>>15))
-							if (cfg.debug)
+							if ((cfg.debug and (fn%12u==11u)) or (fn>>15))
 							{
 								Log(EUnit::cc12, "RF Stream Frame: FN:%04X ED^2:%5.2f MER:%4.1f%%\n", fn, sed_str, float(e)*escale);
 							}
@@ -1297,20 +1296,17 @@ void CCC1200::rxProcess()
 							}
 						}
 						last_fn = fn;
-					} else {
-						Log(EUnit::cc12, "(last_fn+1)(%04X) != frame_count(%04X)\n", fn+1, frame_count);
+						if (fn >> 15) // is this the last frame?
+						{
+							// this is the last packet
+							rx_state = ERxState::idle; // last stream frame
+							got_lsf = false;
+							lich_parts = 0;
+							last_fn = 0xffffu;
+							first_frame = true;
+						}
 					}
 
-					if (fn >> 15) // is this the last frame?
-					{
-						Log(EUnit::cc12, "Got Last Packet fn=%04X\n", fn);
-						// this is the last packet
-						rx_state = ERxState::idle; // last stream frame
-						got_lsf = false;
-						lich_parts = 0;
-						last_fn = 0xffffu;
-						first_frame = true;
-					}
 				}
 
 				//TODO: handle packet mode reception over RF
