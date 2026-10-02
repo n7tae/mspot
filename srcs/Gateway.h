@@ -100,7 +100,6 @@ private:
 	std::string progName;
 	uint16_t can;
 	std::string audioPath;
-	bool radioTypeIsV3;
 	bool warnOnNoTranscoder, warnOnEncrypted;
 	EInternetType internetType;
 	std::atomic<bool> keep_running;

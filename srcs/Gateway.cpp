@@ -208,8 +208,6 @@ bool CGateway::Start()
 	// Set the channel access number
 	can = g_Cfg.GetUnsigned(g_Keys.repeater.section, g_Keys.repeater.can);
 	Log(EUnit::gate, "CAN = %u\n", unsigned(can));
-	// Set the TYPE format for the h/s transmitter
-	Log(EUnit::gate, "Radio is using %s TYPE values\n", radioTypeIsV3 ? "V#3" : "V#2");
 
 	keep_running = true;
 	gateStream.Initialize(EStreamType::gate);
