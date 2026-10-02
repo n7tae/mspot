@@ -42,7 +42,7 @@ public:
 	const SM17RefPacket *GetPongPacket(void);
 	// some states for the target
 	bool HasAddress(void) const { return not addr.AddressIsZero(); }
-	bool TimedOut(void) const { return receivePingTimer.time() > 30.0; }
+	bool TimedOut(void) const { return receivePingTimer.time() > 30000; }
 
 	// change state
 	void Linked(void);

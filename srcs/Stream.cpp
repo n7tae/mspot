@@ -49,7 +49,7 @@ bool CStream::IsOpen()
 	return streamid != 0u;
 }
 
-double CStream::GetLastTime()
+long CStream::GetLastTime()
 {
 	return lastPacketTime.time();
 }

@@ -74,7 +74,7 @@ void CGateway::wait4end(std::unique_ptr<CPacket> &p)
 			}
 			ptime.start();
 		}
-		if (ptime.time() > 0.5)
+		if (ptime.time() > 500)
 			break; // a timeout!
 	}
 	return;
@@ -147,7 +147,7 @@ void CGateway::doRecord(char c, uint16_t streamID)
 		auto p = Modem2Gate.PopWaitFor(40);
 		if (nullptr == p)
 			continue;
-		if (timer.time() > 0.12)	// 3 frames 
+		if (timer.time() > 120)	// 3 frames 
 		{
 			Log(EUnit::gate, "Voice Recorder timeout!\n");
 			break;

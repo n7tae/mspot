@@ -36,9 +36,9 @@ public:
 		starttime = std::chrono::steady_clock::now();
 	}
 
-	double time() const
+	long time() const noexcept
 	{
-		std::chrono::duration<double> elapsed(std::chrono::steady_clock::now() - starttime);
+		auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - starttime);
 		return elapsed.count();
 	}
 

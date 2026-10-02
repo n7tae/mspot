@@ -37,7 +37,7 @@ public:
 	void OpenStream(const std::string &src, uint16_t id, const std::string &from);
 	void CloseStream(bool isTimeout, CMspotDB &db);
 	bool IsOpen();
-	double GetLastTime();
+	long GetLastTime();
 	uint16_t GetStreamID();
 	uint16_t GetPreviousID();
 	void CountnTouch();

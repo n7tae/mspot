@@ -41,6 +41,7 @@
 #include <m17.h>
 
 #include <SafePacketQueue.h>
+#include <SteadyTimer.h>
 #include "Configure.h"
 #include "GateState.h"
 #include "Gateway.h"
@@ -101,23 +102,6 @@ enum cmd_t
 // 64 is `CFM_TX_DATA_IN` register value for max. F_DEV
 
 //debug printf
-
-uint32_t CCC1200::getMS(void)
-{
-	struct timespec spec;
-
-	clock_gettime(CLOCK_REALTIME, &spec);
-
-	time_t s = spec.tv_sec;
-	uint32_t ms = roundf(spec.tv_nsec/1.0e6); //convert nanoseconds to milliseconds
-	if (ms>999)
-	{
-		s++;
-		ms=0;
-	}
-
-	return s*1000 + ms;
-}
 
 speed_t CCC1200::getBaud(unsigned baud)
 {
@@ -789,7 +773,7 @@ void CCC1200::Stop()
 
 void CCC1200::txProcess()
 {
-	uint32_t tx_timer = 0;
+	CSteadyTimer msTimer;
 	ETxState tx_state = ETxState::idle;
 	SLSF txlsf;
 	CFrameType txType;
@@ -913,7 +897,7 @@ void CCC1200::txProcess()
 
 					tx_state = ETxState::idle;
 				}
-				tx_timer = getMS();
+				msTimer.start();
 			}
 
 			//M17 packet data - "Packet Mode IP Packet"
@@ -1009,13 +993,13 @@ void CCC1200::txProcess()
 				startRx();
 
 				g_GateState.Set2IdleIfGateIn();
-				tx_timer = getMS();
+				msTimer.start();
 
 				tx_state = ETxState::idle;
 			}
 		}
 		//tx timeout
-		if ((tx_state == ETxState::active) and ((getMS()-tx_timer) > 240)) //240ms timeout
+		if ((tx_state == ETxState::active) and (msTimer.time() > 240)) //240ms timeout
 		{
 			Log(EUnit::cc12, "TX timeout\n");
 			startRx();
@@ -1295,8 +1279,7 @@ void CCC1200::rxProcess()
 								lich_parts = 0;
 							}
 						}
-						if (fn >> 15) // is this the last frame?
-						{
+						if (fn >> 15) {    // is this the last frame?
 							// this is the last packet
 							rx_state = ERxState::idle; // last stream frame
 							got_lsf = false;

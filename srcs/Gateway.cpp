@@ -280,14 +280,14 @@ void CGateway::processGateway()
 			}
 			break;
 		case ELinkState::linking:
-			if (linkingTime.time() >= 30.0)
+			if (linkingTime.time() >= 30000)
 			{
 				Log(EUnit::gate, "Link request to %s timeout.\n", target.GetCS().c_str());
 				target.Unlinked();
 			}
 			else
 			{
-				if (lastLinkSent.time() > 5.0)
+				if (lastLinkSent.time() > 5000)
 					sendLinkRequest();
 			}
 			break;
@@ -298,6 +298,7 @@ void CGateway::processGateway()
 				{
 					linkingTime.start();
 					sendLinkRequest();
+					target.Linking();
 				}
 			}
 			break;
@@ -467,7 +468,7 @@ void CGateway::processGateway()
 		}
 
 		// check for a stream timeout
-		if (gateStream.IsOpen() and gateStream.GetLastTime() >= 1.6)
+		if (gateStream.IsOpen() and gateStream.GetLastTime() >= 1600)
 		{
 			gateStream.CloseStream(true, g_DataBase);
 			g_GateState.Idle();
@@ -603,7 +604,7 @@ void CGateway::processModem()
 			}
 		} else {
 			// check for a timeout from the modem
-			if (modemStream.IsOpen() and modemStream.GetLastTime() >= 1.0)
+			if (modemStream.IsOpen() and modemStream.GetLastTime() >= 1000)
 			{
 				modemStream.CloseStream(true, g_DataBase); // close the modemStream
 				g_GateState.Idle();
@@ -700,7 +701,7 @@ void CGateway::sendPacket2Modem(std::unique_ptr<CPacket> p)
 		// and the last stream closed less than 1 second ago
 		// NOTE: It's theoretically possible that this is actually a new stream that has the same SID.
 		//       In that case, up to a second of the beginning of the stream will be lost. Sorry.
-		if (sid == gateStream.GetPreviousID() and gateStream.GetLastTime() < 1.0)
+		if (sid == gateStream.GetPreviousID() and gateStream.GetLastTime() < 1000)
 		{
 			return;
 		}
@@ -781,7 +782,7 @@ void CGateway::sendPacket2Dest(std::unique_ptr<CPacket> p)
 			return;
 		}
 		// don't open a stream if this packet has the same SID as the last stream
-		if (framesid == modemStream.GetPreviousID() and modemStream.GetLastTime() < 1.0)
+		if (framesid == modemStream.GetPreviousID() and modemStream.GetLastTime() < 1000)
 		{
 			g_GateState.Idle();
 			return;
