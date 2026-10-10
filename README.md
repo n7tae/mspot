@@ -32,6 +32,7 @@ If you are not going to show the IP address on your dashboard, you don't need th
 ## The M17 library, libm17
 
 This library is used by *mspot* and it does all the math calculations needed to convert between the symbols that come to/from the CC1200 and the internet packets that *mspot* uses to send and receive data to or from a reflector or other target. Building this is simple. Start from your home directory:
+
 ```
 git clone https://github.com/M17-Project/libm17.git
 cd libm17
@@ -50,6 +51,7 @@ The user that executes *mspot* needs to be in the `dialout` group! Do a `getent 
 ## Updating the CC1200 firmware
 
 This version of *mspot* supports CC1200 firmware version 2.2. You don't need to compile the firmware, but you do need a few things to flash the CC1200 if it's not already running 2.2. Here is how to install that version:
+
 ```
 sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi
 git clone https://github.com/M17-Project/CC1200_HAT-fw.git
@@ -64,7 +66,7 @@ It will take several seconds to do the flashing and when it's all done, you'll s
 
 First copy this repo: `git clone https://github.com/n7tae/mspot.git`
 
-Move to the *mspot* folder: `cd mspot`, then copy the configuration file to this folder (don't forget the period at the end!): `cp config/* .`
+Move to the *mspot* folder: `cd mspot`, then copy all the configuration files to this folder (don't forget the period at the end!): `cp config/* .`
 
 Then you can use your favorite text editor to modify these files to your needs. Comments within these files will help you decide what you need to do.
 
@@ -74,7 +76,16 @@ Use your favorite editor to edit your new copy of *mspot.mk*.
 
 If you are planning on automatically launching *mspot* when your Pi boots up, you should set both `DEBUG` and `USE_TS` to `false`. If you want to run *mspot* manually, then you should set `USE_TS` is `true`.
 
-Once you're done editing this file, you can then build *mspot*: `make`
+There are three ways *mspot* can get information needed to connect to known M17-capable reflectors:
+1. The included M17Hosts.txt file. This file ultimately uses information from M17 reflectors successfully registered and confirmed at DVRef.com. There **are** reflectors that either aren't registered at DVRef.com, or reflectors that are registered, but haven't been confirmed. This file is updated infrequently, but if this file contains all the reflectors you are interested in, using just this will result in the smallest *mspot* executable. If you don't want this file, delete it: `rm ./M17Hosts.txt`
+2. A json file, `M17Hosts.json`, of currently registered and confirmed M17-capable reflectors from DVRef.com. This file will be copied from the frequently updated M17 Project server, and *mspot* will make a copy of it. If you start *mspot* and it can't reach the M17 Project server, it will use this copy instead. To enable this, set `USE_DVREF` to `true`.
+3. Approximately half of the known M17-capable reflectors publish their connection information on the *Ham-DHT*. This is the most reliable way to get current connection information about a reflector, whether it has been registered at DVRef.com or not. To use the *HamDHT*, set `USE_DHT` to `true` and then install the needed library:
+
+```
+sudo apt install opendht/libopendht-dev_4.4.0_arm.deb
+```
+
+Once you're done editing the `mspot.mk` file, you can then build *mspot*: `make`
 
 ### Setting run-time options
 

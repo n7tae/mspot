@@ -490,7 +490,7 @@ void CGateway::processModem()
 			const auto ptype = p->GetType();
 			const CCallsign dst(p->GetCDstAddress());
 			const auto eReflectorType = dst.GetReflectorType();
-			if (EPacketType::packet == ptype) { // process packet data
+			if (EPacketType::packet == ptype) { // process Packet data
 				switch (target.GetState())
 				{
 				case ELinkState::linked:
@@ -503,7 +503,7 @@ void CGateway::processModem()
 				case ELinkState::unlinked:
 					if (ERefType::none != eReflectorType) {
 						#ifndef NO_DHT
-						get(dst.GetCS(ERefType::m17==eReflectorType ? 7 : 6));
+						GetDHT(dst.GetCS(ERefType::m17==eReflectorType ? 7 : 6));
 						#endif
 						if (setDestination(dst)) {
 							linkingTime.start();
@@ -579,7 +579,7 @@ void CGateway::processModem()
 						if (ERefType::none != eReflectorType) {
 							wait4end(p);
 							#ifndef NO_DHT
-							get(dst.GetCS(ERefType::m17 == eReflectorType ? 7 : 6));
+							GetDHT(dst.GetCS(ERefType::m17 == eReflectorType ? 7 : 6));
 							#endif
 							if (setDestination(dst))
 							{
@@ -1225,7 +1225,7 @@ void CGateway::updateJsonHostFile(std::filesystem::path &jsonHostPath)
 #endif
 
 #ifndef NO_DHT
-void CGateway::get(const std::string &cs)
+void CGateway::GetDHT(const std::string &cs)
 {
 	static std::time_t ts;
 	ts = 0;

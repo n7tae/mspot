@@ -2,7 +2,7 @@
 Description=mspot
 Requires=network.target
 After=network-online.target
-Requires=systemd-user-session.service network.target
+Requires=systemd-user-sessions.service network.target
 
 [Service]
 Type=simple

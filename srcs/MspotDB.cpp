@@ -23,8 +23,10 @@
 
 #include "MspotDB.h"
 #include "Configure.h"
+#include "Gateway.h"
 
 extern CConfigure g_Cfg;
+extern CGateway   g_Gateway;
 
 bool CMspotDB::Open(const char *name)
 {
@@ -351,6 +353,10 @@ int CMspotDB::FillGW(const char *pname)
 						added++;
 				} else
 					Log(EUnit::db, "Target %s at line %u does not have a compatible IP address\n", elem[0].c_str(), lineno);
+#ifndef NO_DHT
+			} else if (elem.size() == 1) {
+				g_Gateway.GetDHT(elem[0]);
+#endif
 			}
 		}
 		file.close();

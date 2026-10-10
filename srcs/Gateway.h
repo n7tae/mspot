@@ -94,6 +94,7 @@ public:
 	void SetName(const std::string &name) { progName.assign(name); }
 	const CCallsign &GetLink() { return target.GetCS(); }
 	const std::string &GetName() { return progName; }
+	void GetDHT(const std::string &cs);
 
 private:
 	CCallsign thisCS;
@@ -117,7 +118,6 @@ private:
 	#ifndef NO_DHT
 	dht::DhtRunner node;
 	dht::Value nodeValue;
-	void get(const std::string &cs);
 	bool startDHT(void);
 	void stopDHT(void);
 	#endif

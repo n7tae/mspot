@@ -24,6 +24,8 @@ endif
 
 ifeq ($(USE_DHT), false)
 CPPFLAGS += -DNO_DHT
+else
+LIBS += -lopendht
 endif
 
 ifeq ($(USE_DVREF), false)
