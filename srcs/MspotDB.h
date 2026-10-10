@@ -45,9 +45,6 @@ public:
 	void UpdateGW(const std::string &cs, const std::string &capabilities, const CSockAddress &addr);
 	bool UpdateGW(const std::string &name, const std::string &version, const std::string &mods, const std::string &smods, const std::string &ipaddress, uint16_t port, const std::string &url);
 	int FillGW(const char *pathname);
-	#ifndef NO_DVREF
-	int ParseJsonFile(const std::string &path);
-	#endif
 	int Count(const char *table);
 
 private:

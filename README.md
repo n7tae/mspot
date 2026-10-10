@@ -76,11 +76,6 @@ Use your favorite editor to edit your new copy of *mspot.mk*.
 
 If you are planning on automatically launching *mspot* when your Pi boots up, you should set both `DEBUG` and `USE_TS` to `false`. If you want to run *mspot* manually, then you should set `USE_TS` is `true`.
 
-There are three ways *mspot* can get information needed to connect to known M17-capable reflectors:
-1. The included M17Hosts.txt file. This file ultimately uses information from M17 reflectors successfully registered and confirmed at DVRef.com. There **are** reflectors that either aren't registered at DVRef.com, or reflectors that are registered, but haven't been confirmed. This file is updated infrequently, but if this file contains all the reflectors you are interested in, using just this will result in the smallest *mspot* executable. If you don't want this file, delete it: `rm ./M17Hosts.txt`
-2. A json file, `M17Hosts.json`, of currently registered and confirmed M17-capable reflectors from DVRef.com. This file will be copied from the frequently updated M17 Project server, and *mspot* will make a copy of it. If you start *mspot* and it can't reach the M17 Project server, it will use this copy instead. To enable this, set `USE_DVREF` to `true`.
-3. Approximately half of the known M17-capable reflectors publish their connection information on the *Ham-DHT*. This is the most reliable way to get current connection information about a reflector, whether it has been registered at DVRef.com or not. To use the *HamDHT*, set `USE_DHT` to `true` and then install the needed library:
-
 ```
 sudo apt install opendht/libopendht-dev_4.4.0_arm.deb
 ```

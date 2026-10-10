@@ -15,10 +15,7 @@
 	You should have received a copy of the GNU General Public License
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef NO_DVREF
-#include <curl/curl.h>
-#include <sys/stat.h>
-#endif
+
 #include <poll.h>
 #include <string>
 #include <sstream>
@@ -40,9 +37,6 @@
 #include "Gateway.h"
 #include "Random.h"
 #include "CRC.h"
-#ifndef NO_DHT
-#include "dht-values.h"
-#endif
 
 extern CCRC        g_Crc;
 extern CRandom     g_RNG;
@@ -101,9 +95,6 @@ constexpr uint64_t CalcCSCode(const char *cs)
 
 void CGateway::Stop()
 {
-	#ifndef NO_DHT
-	stopDHT();
-	#endif
 	Log(EUnit::gate, "stopping the Gateway...\n");
 	keep_running = false;
 	if (gateFuture.valid())
@@ -121,18 +112,8 @@ bool CGateway::Start()
 	// Prepare the sqlite3 database
 	if (g_DataBase.Open(g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.dbPath).c_str()))
 		return true;
-	#ifndef NO_DHT
-	if (startDHT())
-		return true;
-	#endif
 	// Get the hostfiles.refcheck.radio path, and maybe update the file, and then parse it and add it to the database
 	int n;
-	#ifndef NO_DVREF
-	std::filesystem::path jsonPath(g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.jsonHostPath));
-	updateJsonHostFile(jsonPath);
-	n = g_DataBase.ParseJsonFile(jsonPath.c_str());
-	Log(EUnit::gate, "Read %d reflectors from %s\n", n, jsonPath.c_str());
-	#endif
 	// Get the M17 reflector pathname and add it to the database
 	auto m17hosts = g_Cfg.GetString(g_Keys.gateway.section, g_Keys.gateway.m17HostPath);
 	n = g_DataBase.FillGW(m17hosts.c_str());
@@ -143,13 +124,6 @@ bool CGateway::Start()
 	Log(EUnit::gate, "Read %d targets from %s\n", n, myhosts.c_str());
 	n = g_DataBase.Count("targets");
 	Log(EUnit::gate, "There are now %d targets defined in the database\n", n);
-	#ifndef DHT
-	if (0 == n) {
-		Log(EUnit::gate, "ERROR: Without any targets, mspot must die!\n");
-		return true;
-	}
-	#endif
-
 
 	// create the callsign for the hotspot
 	std::string cs(g_Cfg.GetString(g_Keys.repeater.section, g_Keys.repeater.callsign));
@@ -502,9 +476,6 @@ void CGateway::processModem()
 					break;
 				case ELinkState::unlinked:
 					if (ERefType::none != eReflectorType) {
-						#ifndef NO_DHT
-						GetDHT(dst.GetCS(ERefType::m17==eReflectorType ? 7 : 6));
-						#endif
 						if (setDestination(dst)) {
 							linkingTime.start();
 							target.Linking();
@@ -578,9 +549,6 @@ void CGateway::processModem()
 					case ELinkState::unlinked:
 						if (ERefType::none != eReflectorType) {
 							wait4end(p);
-							#ifndef NO_DHT
-							GetDHT(dst.GetCS(ERefType::m17 == eReflectorType ? 7 : 6));
-							#endif
 							if (setDestination(dst))
 							{
 								linkingTime.start();
@@ -1147,203 +1115,3 @@ EPacketType CGateway::validate(uint8_t *in, unsigned length)
 	}
 	return EPacketType::none;
 }
-
-#ifndef NO_DVREF
-// callback function writes data to a std::ostream
-static size_t data_write(void* buf, size_t size, size_t nmemb, void* userp)
-{
-	if(userp)
-	{
-		std::ostream& os = *static_cast<std::ostream*>(userp);
-		std::streamsize len = size * nmemb;
-		if(os.write(static_cast<char*>(buf), len))
-			return len;
-	}
-	return 0;
-}
-
-// timeout is in seconds
-static CURLcode curl_read(const std::string& url, std::ostream& os, long timeout = 30)
-{
-	CURLcode code(CURLE_FAILED_INIT);
-	CURL* curl = curl_easy_init();
-
-	if(curl)
-	{
-		if(CURLE_OK == (code = curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &data_write))
-		&& CURLE_OK == (code = curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L))
-		&& CURLE_OK == (code = curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L))
-		&& CURLE_OK == (code = curl_easy_setopt(curl, CURLOPT_FILE, &os))
-		&& CURLE_OK == (code = curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout))
-		&& CURLE_OK == (code = curl_easy_setopt(curl, CURLOPT_USERAGENT, "mvoice/1.0"))
-		&& CURLE_OK == (code = curl_easy_setopt(curl, CURLOPT_URL, url.c_str())))
-		{
-			code = curl_easy_perform(curl);
-		}
-		curl_easy_cleanup(curl);
-	}
-	return code;
-}
-
-void CGateway::updateJsonHostFile(std::filesystem::path &jsonHostPath)
-{
-    if (std::filesystem::exists(jsonHostPath)) {
-		struct stat fa;
-		if (stat(jsonHostPath.c_str(), &fa))
-		{
-			Log(EUnit::gate, "ERROR: stat() of %s returned: %s\n", jsonHostPath.c_str(), strerror(errno));
-			return;
-		}
-		time_t now = time(nullptr);
-		if (now - fa.st_mtime < 2*24*60*60)
-		{
-			Log(EUnit::gate, "%s is not old\n", jsonHostPath.c_str());
-			return;
-		}
-    }
-
-	curl_global_init(CURL_GLOBAL_ALL);
-
-	std::stringstream ss;
-	const std::string url("https://m17-project.github.io/hostfiles/M17Hosts.json");
-	if(CURLE_OK == curl_read(url, ss))
-	{
-		Log(EUnit::gate, "Refreshing %s\n", jsonHostPath.c_str());
-		std::ofstream bkup(jsonHostPath.c_str(), std::fstream::trunc);
-		if (bkup.is_open())
-		{
-			bkup << ss.rdbuf();
-			bkup.close();
-		}
-		else
-		{
-			Log(EUnit::gate, "ERROR: Could not open %s\n", jsonHostPath.c_str());
-		}
-	}
-	curl_global_cleanup();
-}
-#endif
-
-#ifndef NO_DHT
-void CGateway::GetDHT(const std::string &cs)
-{
-	static std::time_t ts;
-	ts = 0;
-	dht::Where w;
-	if (0 == cs.compare(0, 4, "M17-"))
-		w.id(toUType(EMrefdValueID::Config));
-	else if (0 == cs.compare(0, 3, "URF"))
-		w.id(toUType(EUrfdValueID::Config));
-	else
-	{
-		// std::cerr << "Unknown callsign '" << cs << "' for node.get()" << std::endl;
-		return;
-	}
-	static auto iType = internetType;
-	node.get(
-		dht::InfoHash::get(cs),
-		[](const std::shared_ptr<dht::Value> &v) {
-			if (0 == v->user_type.compare(MREFD_CONFIG_1))
-			{
-				auto rdat = dht::Value::unpack<SMrefdConfig1>(*v);
-				if (rdat.timestamp > ts)
-				{
-					ts = rdat.timestamp;
-					if (iType!=EInternetType::ipv4only and rdat.ipv6addr.size())
-						g_DataBase.UpdateGW(rdat.callsign, rdat.version, rdat.modules, rdat.encryptedmods, rdat.ipv6addr, rdat.port, rdat.url);
-					else if (iType!=EInternetType::ipv6only and rdat.ipv4addr.size())
-						g_DataBase.UpdateGW(rdat.callsign, rdat.version, rdat.modules, rdat.encryptedmods, rdat.ipv4addr, rdat.port, rdat.url);
-				}
-			}
-			else if (0 == v->user_type.compare(URFD_CONFIG_1))
-			{
-				auto rdat = dht::Value::unpack<SUrfdConfig1>(*v);
-				if (rdat.timestamp > ts)
-				{
-					ts = rdat.timestamp;
-					if (iType!=EInternetType::ipv4only and rdat.ipv6addr.size())
-						g_DataBase.UpdateGW(rdat.callsign, rdat.version, rdat.modules, rdat.transcodedmods, rdat.ipv6addr, rdat.port[toUType(EUrfdPorts::m17)], rdat.url);
-					else if (iType!=EInternetType::ipv6only and rdat.ipv4addr.size())
-						g_DataBase.UpdateGW(rdat.callsign, rdat.version, rdat.modules, rdat.transcodedmods, rdat.ipv4addr, rdat.port[toUType(EUrfdPorts::m17)], rdat.url);
-				}
-			}
-			else
-			{
-				std::cerr << "Found the data, but it has an unknown user_type: " << v->user_type << std::endl;
-			}
-			return true;
-		},
-		[](bool success) {
-			if (not success)
-				std::cout << "node.get() was unsuccessful!" << std::endl;
-		},
-		{}, // empty filter
-		w
-	);
-}
-
-bool CGateway::startDHT()
-{
-	// start the dht instance
-	try {
-		node.run(17171, dht::crypto::generateIdentity(thisCS.c_str()), true, 59973);
-	} catch (const std::exception &e) {
-		Log(EUnit::gate, "Could not start the Ham-network: %s\n", e.what());
-		return true;
-	}
-
-	// bootstrap the DHT from either saved nodes from a previous run,
-	// or from the configured node
-	std::string path(g_Cfg.GetString(g_Keys.dht.section, g_Keys.dht.dhtSavePath));
-	std::string bs(g_Cfg.GetString(g_Keys.dht.section, g_Keys.dht.bootStrap));
-	// Try to import nodes from binary file
-	std::ifstream myfile(path, std::ios::binary|std::ios::ate);
-	if (myfile.is_open())
-	{
-		msgpack::unpacker pac;
-		auto size = myfile.tellg();
-		myfile.seekg (0, std::ios::beg);
-		pac.reserve_buffer(size);
-		myfile.read (pac.buffer(), size);
-		pac.buffer_consumed(size);
-		// Import nodes
-		msgpack::object_handle oh;
-		while (pac.next(oh)) {
-			auto imported_nodes = oh.get().as<std::vector<dht::NodeExport>>();
-			Log(EUnit::gate, "Importing %u ham-dht nodes from %s\n", imported_nodes.size(), path.c_str());
-			node.bootstrap(imported_nodes);
-		}
-		myfile.close();
-	}
-	else if (bs.size())
-	{
-		Log(EUnit::gate, "Bootstrapping from %s\n", bs.c_str());
-		node.bootstrap(bs, "17171");
-	}
-	else
-	{
-		Log(EUnit::gate, "ERROR: Could not bootstrap the Ham-DHT network!\n");
-		return true;
-	}
-	return false;
-}
-
-void CGateway::stopDHT()
-{
-	auto exnodes = node.exportNodes();
-	if (exnodes.size() > 1)
-	{
-		std::string path(g_Cfg.GetString(g_Keys.dht.section, g_Keys.dht.dhtSavePath));
-		std::ofstream myfile(path, std::ios::binary | std::ios::trunc);
-		if (myfile.is_open())
-		{
-			Log(EUnit::gate, "Saving %u nodes to %s\n", exnodes.size(), path.c_str());
-			msgpack::pack(myfile, exnodes);
-			myfile.close();
-		}
-		else
-			Log(EUnit::gate, "ERROR opening %s\n", path.c_str());
-	}
-	node.join();
-}
-#endif

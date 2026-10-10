@@ -9,16 +9,9 @@ BINDIR = /usr/local/bin
 # in the mdash.service file
 WWWDIR = /usr/local/www
 
-# If you want systemd to start mvoice every time you system boots up, set USE_TS to false
+# If you want systemd to start mspot every time you system boots up, set USE_TS to false
 # because systemd will provide a timestamp for each log entry.
 USE_TS = true
-
-# Do you want to find IP addresses for URF and M17 reflectors that are registered at DVRef.com.
-USE_DVREF = true
-
-# If want IP address (and other important info) for URF and M17 reflectors to come from
-# target reflector, then make sure you have installed the OpenDHT library, and set this to true.
-USE_DHT = true
 
 # DEBUG is for software debugging support.
 # if mspot is crashing or locking up, set this to true and run it manually.

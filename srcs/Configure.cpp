@@ -83,8 +83,6 @@ bool CConfigure::ReadData(const std::string &path)
 				section = ESection::modem;
 			else if (0 == hname.compare(g_Keys.gateway.section))
 				section = ESection::gateway;
-			else if (0 == hname.compare(g_Keys.dht.section))
-				section = ESection::dht;
 			else if (0 == hname.compare(g_Keys.dashboard.section))
 				section = ESection::dashboard;
 			else
@@ -172,8 +170,6 @@ bool CConfigure::ReadData(const std::string &path)
 					data[g_Keys.gateway.section][g_Keys.gateway.warnIfEncrypted] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.gateway.startupLink))
 					data[g_Keys.gateway.section][g_Keys.gateway.startupLink] = getString(value, g_Keys.gateway.startupLink, rval);
-				else if (0 == key.compare(g_Keys.gateway.jsonHostPath))
-					data[g_Keys.gateway.section][g_Keys.gateway.jsonHostPath] = getString(value, g_Keys.gateway.jsonHostPath, rval);
 				else if (0 == key.compare(g_Keys.gateway.m17HostPath))
 					data[g_Keys.gateway.section][g_Keys.gateway.m17HostPath] = getString(value, g_Keys.gateway.m17HostPath, rval);
 				else if (0 == key.compare(g_Keys.gateway.myHostPath))
@@ -184,14 +180,6 @@ bool CConfigure::ReadData(const std::string &path)
 					data[g_Keys.gateway.section][g_Keys.gateway.audioFolder] = getString(value, g_Keys.gateway.audioFolder, rval);
 				else
 					badParam(g_Keys.gateway.section, key);
-				break;
-			case ESection::dht:
-				if (0 == key.compare(g_Keys.dht.bootStrap))
-					data[g_Keys.dht.section][g_Keys.dht.bootStrap] = getString(value, g_Keys.dht.bootStrap, rval);
-				else if (0 == key.compare(g_Keys.dht.dhtSavePath))
-					data[g_Keys.dht.section][g_Keys.dht.dhtSavePath] = getString(value, g_Keys.dht.dhtSavePath, rval);
-				else
-					badParam(g_Keys.dht.section, key);
 				break;
 			case ESection::dashboard:
 				if (0 == key.compare(g_Keys.dashboard.refresh))
@@ -292,13 +280,6 @@ bool CConfigure::ReadData(const std::string &path)
 			std::cout << "WARNING: [" << g_Keys.gateway.section << "]" << g_Keys.gateway.startupLink << "doesn't look like a reflector module" << std::endl;
 		}
 	}
-	#ifndef NO_DVREF
-	if (isDefined(ErrorLevel::mild, g_Keys.gateway.section, g_Keys.gateway.jsonHostPath, rval))
-	{
-		const auto path = GetString(g_Keys.gateway.section, g_Keys.gateway.jsonHostPath);
-		checkPath(g_Keys.gateway.section, g_Keys.gateway.jsonHostPath, path, std::filesystem::file_type::regular);
-	}
-	#endif
 	if (isDefined(ErrorLevel::mild, g_Keys.gateway.section, g_Keys.gateway.m17HostPath, rval))
 	{
 		const auto path = GetString(g_Keys.gateway.section, g_Keys.gateway.m17HostPath);
@@ -320,16 +301,6 @@ bool CConfigure::ReadData(const std::string &path)
 		const auto path = GetString(g_Keys.gateway.section, g_Keys.gateway.audioFolder);
 		checkPath(g_Keys.gateway.section, g_Keys.gateway.audioFolder, path, std::filesystem::file_type::directory);
 	}
-
-	// DHT sectopm
-	#ifndef NO_DHT
-	isDefined(ErrorLevel::fatal, g_Keys.dht.section, g_Keys.dht.bootStrap, rval);
-	if (isDefined(ErrorLevel::fatal, g_Keys.dht.section, g_Keys.dht.dhtSavePath, rval))
-	{
-		const auto path = GetString(g_Keys.dht.section, g_Keys.dht.dhtSavePath);
-		checkPath(g_Keys.dht.section, g_Keys.dht.dhtSavePath, path, std::filesystem::file_type::regular);
-	}
-	#endif
 
 	// dashboard section
 	isDefined(ErrorLevel::fatal, g_Keys.dashboard.section, g_Keys.dashboard.lhcount, rval);

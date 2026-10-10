@@ -22,18 +22,6 @@ ifeq ($(USE_TS), false)
 CPPFLAGS += -DNO_TS
 endif
 
-ifeq ($(USE_DHT), false)
-CPPFLAGS += -DNO_DHT
-else
-LIBS += -lopendht
-endif
-
-ifeq ($(USE_DVREF), false)
-CPPFLAGS += -DNO_DVREF
-else
-LIBS += -lcurl
-endif
-
 SRCS = $(wildcard srcs/*.cpp)
 OBJS = $(SRCS:.cpp=.o)
 DEPS = $(SRCS:.cpp=.d)

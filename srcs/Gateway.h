@@ -25,9 +25,6 @@
 #include <vector>
 #include <mutex>
 #include <queue>
-#ifndef NO_DHT
-#include <opendht.h>
-#endif
 
 #include "SafePacketQueue.h"
 #include "SteadyTimer.h"
@@ -94,7 +91,6 @@ public:
 	void SetName(const std::string &name) { progName.assign(name); }
 	const CCallsign &GetLink() { return target.GetCS(); }
 	const std::string &GetName() { return progName; }
-	void GetDHT(const std::string &cs);
 
 private:
 	CCallsign thisCS;
@@ -114,17 +110,6 @@ private:
 	IPFrameFIFO pmQueue;
 	std::unique_ptr<SMessageTask> msgTask;
 	std::queue<CPayload> playbackQueue;
-	// dht
-	#ifndef NO_DHT
-	dht::DhtRunner node;
-	dht::Value nodeValue;
-	bool startDHT(void);
-	void stopDHT(void);
-	#endif
-
-	#ifndef NO_DVREF
-	void updateJsonHostFile(std::filesystem::path &jsonFile);
-	#endif
 	void processGateway();
 	EPacketType validate(uint8_t *in, unsigned length);
 	void sendPacket(const void *buf, const size_t size, const CSockAddress &addr) const;
