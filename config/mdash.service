@@ -1,7 +1,6 @@
 [Unit]
 Description=mspot Dashboard
-Requires=network.target
-After=systemd-user-session.service network.target
+After=network-online.target
 
 [Service]
 Type=simple

@@ -52,31 +52,31 @@ install : mspot.service mspot
 	### Installing mspot ###
 	mkdir -p $(SYSTEMDDIR)
 	cp -f mspot.service $(SYSTEMDDIR)
-	systemctl -user enable mspot
-	systemctl -user daemon-reload
-	systemctl -user start mspot
-	sudo loginctr enable-linger $(USER)
+	systemctl --user enable mspot
+	systemctl --user daemon-reload
+	systemctl --user start mspot
+	sudo loginctl enable-linger $(USER)
 
 installdash : index.php
 	### Installing mspot Dashboard ###
 	mkdir -p $(SYSTEMDDIR)
 	/bin/cp -f mdash.service $(SYSTEMDDIR)
-	systemctl -user enable mdash
-	systemctl -user daemon-reload
-	systemctl -user start mdash
-	sudo loginctr enable-linger $(USER)
+	systemctl --user enable mdash
+	systemctl --user daemon-reload
+	systemctl --user start mdash
+	sudo loginctl enable-linger $(USER)
 
 .PHONY : uninstall
 uninstall :
 	### Uninstall mspot ###
-	systemctl -user stop mspot
-	systemctl -user disable mspot
+	systemctl --user stop mspot
+	systemctl --user disable mspot
 	$(RM) $(SYSTEMDDIR)/mspot.service
-	systemctl -user daemon-reload
+	systemctl --user daemon-reload
 
 uninstalldash :
 	### Uninstall mspot Dashboard ###
-	systemctl -user stop mdash
-	systemctl -user disable mdash
+	systemctl --user stop mdash
+	systemctl --user disable mdash
 	/bin/rm -f $(SYSTEMDDIR)/mdash.service
-	systemctl -user daemon-reload
+	systemctl --user daemon-reload

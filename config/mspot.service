@@ -1,7 +1,6 @@
 [Unit]
 Description=mspot
 After=network-online.target
-Requires=systemd-user-sessions.service network.target
 
 [Service]
 Type=simple
