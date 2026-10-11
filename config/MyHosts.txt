@@ -29,9 +29,3 @@
 # The example shows that N0CALL will only receive Stream data at 44.46.48.201:17100
 # NOCALL:S;44.46.48.201;;17100
 # Destination;Capabilities;IPv4Address;IPv6Address;Port
-
-# ################## HamDHT Targets ##################
-#
-# If you and the target are using the DHT, you don't need to specify anything else!
-# Destination(or or Callsign)
-M17-M17

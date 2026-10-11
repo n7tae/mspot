@@ -1,17 +1,10 @@
 # Copyright (c) 2026 by Thomas A. Early N7TAE
 
-# BINDIR defines where the binary will be installed.
-# If you change this and running mspot using mspot.service, you'll need to update your mspot.service file.
-BINDIR = /usr/local/bin
+# SYSTEMDDIR defines where the service will be installed.
+SYSTEMDDIR = $(HOME)/.config/systemd/user/
 
-# WWWDIR defines where the dashboard index.php file will be installed.
-# If you change this, you'll need to also change the working directory for the php miniserver
-# in the mdash.service file
-WWWDIR = /usr/local/www
-
-# If you want systemd to start mspot every time you system boots up, set USE_TS to false
-# because systemd will provide a timestamp for each log entry.
-USE_TS = true
+# If you are going to run mspot from the command line, set USE_TS to true.
+USE_TS = false
 
 # DEBUG is for software debugging support.
 # if mspot is crashing or locking up, set this to true and run it manually.

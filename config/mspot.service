@@ -1,17 +1,15 @@
 [Unit]
 Description=mspot
-Requires=network.target
 After=network-online.target
 Requires=systemd-user-sessions.service network.target
 
 [Service]
 Type=simple
-User=<USER_NAME>
-Group=<GROUP_NAME>
 Restart=on-failure
 RestartSec=3
-ExecStart=/usr/local/bin/mspot <PATH_TO_INI_FILE>
+WorkingDirectory=/home/<USER>/mspot
+ExecStart=/home/<USER>/mspot/mspot mspot.ini
 ExecReload=/bin/kill -HUP $MAINPID
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target

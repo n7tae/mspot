@@ -50,31 +50,33 @@ clean :
 .PHONY : install
 install : mspot.service mspot
 	### Installing mspot ###
-	cp -f mspot $(BINDIR)
-	cp -f mspot.service /etc/systemd/system/
-	systemctl enable mspot
-	systemctl daemon-reload
-	systemctl start mspot
+	mkdir -p $(SYSTEMDDIR)
+	cp -f mspot.service $(SYSTEMDDIR)
+	systemctl -user enable mspot
+	systemctl -user daemon-reload
+	systemctl -user start mspot
+	sudo loginctr enable-linger $(USER)
 
 installdash : index.php
-	mkdir -p $(WWWDIR)
-	/bin/ln -f -s $(shell pwd)/index.php $(WWWDIR)
-	/bin/cp -f mdash.service /etc/systemd/system/
-	systemctl enable mdash.service
-	systemctl daemon-reload
-	systemctl start mdash.service
+	### Installing mspot Dashboard ###
+	mkdir -p $(SYSTEMDDIR)
+	/bin/cp -f mdash.service $(SYSTEMDDIR)
+	systemctl -user enable mdash
+	systemctl -user daemon-reload
+	systemctl -user start mdash
+	sudo loginctr enable-linger $(USER)
 
 .PHONY : uninstall
 uninstall :
-	systemctl stop mspot
-	systemctl disable mspot
-	$(RM) /etc/systemd/system/mspot.service
-	systemctl daemon-reload
-	$(RM) $(BINDIR)/mspot
+	### Uninstall mspot ###
+	systemctl -user stop mspot
+	systemctl -user disable mspot
+	$(RM) $(SYSTEMDDIR)/mspot.service
+	systemctl -user daemon-reload
 
 uninstalldash :
-	systemctl stop mdash.service
-	systemctl disable mdash.service
-	/bin/rm -f /etc/systemd/system/mdash.service
-	systemctl daemon-reload
-	/bin/rm -f $(WWWDIR)/index.php
+	### Uninstall mspot Dashboard ###
+	systemctl -user stop mdash
+	systemctl -user disable mdash
+	/bin/rm -f $(SYSTEMDDIR)/mdash.service
+	systemctl -user daemon-reload

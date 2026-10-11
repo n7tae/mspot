@@ -5,9 +5,9 @@ After=systemd-user-session.service network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/usr/local/www
-ExecStart=/usr/bin/php -S 0.0.0.0:80
+WorkingDirectory=/home/<USER>/mspot
+ExecStart=/usr/bin/php -S 0.0.0.0:8000
 Restart=always
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target
