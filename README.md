@@ -64,68 +64,79 @@ It will take several seconds to do the flashing and when it's all done, you'll s
 
 ## Building *mspot*
 
-First copy this repo: `git clone https://github.com/n7tae/mspot.git`
+First copy this repo and move to it:
 
-Move to the *mspot* folder: `cd mspot`, then copy all the configuration files to this folder (don't forget the period at the end!): `cp config/* .`
+```
+git clone https://github.com/n7tae/mspot.git
+cd mspot
+```
+
+### M17 host files
+
+```
+make M17Hosts.txt
+make MyHosts.txt
+```
+
+`M17_Hosts.txt` contains a list of all M17 and URF reflectors registered at [dvref.com](https://dvref.com/) and contains a time-stamp so you know exactly when it was created. This file also contains additional information about the server if it is using the *Ham-DHT* network. The second, `MyHosts.txt` is a place for you to add other reflectors that aren't registered at dvref.com, or direct routing destinations you might want to use: See the `Direct Call` section below.
 
 Then you can use your favorite text editor to modify these files to your needs. Comments within these files will help you decide what you need to do.
 
-### Setting compile time options
+### mspot.mk
 
-Use your favorite editor to edit your new copy of *mspot.mk*.
+Create your working copy with `make mspot.mk`.
 
-If you are planning on automatically launching *mspot* when your Pi boots up, you should set both `DEBUG` and `USE_TS` to `false`. If you want to run *mspot* manually, then you should set `USE_TS` is `true`.
-
-```
-sudo apt install opendht/libopendht-dev_4.4.0_arm.deb
-```
+This is configured to build *mspot* as a systemd service. If you want to run *mspot* manually, then you should use your favorite editor to set `USE_TS` is `true`. If you are having trouble with *mspot*, it't best set `DEBUG` to true and to run it manually.
 
 Once you're done editing the `mspot.mk` file, you can then build *mspot*: `make`
 
+This will build:
+- *mspot*: the hot-spot program.
+- *inicheck*: a program that parses `mspot.ini` for errors.
+- *cc1200-reset*: can be use if your CC1200 doesn't seem to respond to *mspot*.
+
 ### Setting run-time options
 
-Use your editor to edit your new copy of *mspot.ini*.
+Make a working copy of your ini file: `make mspot.ini`
 
-You may have noticed that two programs were created at the build stage: *mspot* the M17-only repeater/hot-spot, and *inicheck*, a program that will check you initialization file for errors. *inicheck* tries to be very thorough. In addition to making sure that all needed variable are define and have reasonable values, it checks that path names are pointing to existing files on your system, and that those files are the kinds of files they need to be. Do: `./inicheck mspot.ini`. If any errors are identified, *mspot* won't run.
+Then edit this file to set run-time options. Make sure you set your hot-spot callsign and module in the `[Repeater]` section,then do:
 
-The first time you do this check, you'll see a warning that it could not find the database file.
+```
+./inicheck mspot.ini`
+```
 
-There are now four voices used for prompts:
+ In addition to making sure that all needed variable are define and have reasonable values, it checks that path names are pointing to existing files on your system, and that those files are the kinds of files they need to be. If any errors are reported, *mspot* won't run. If any warnings are reported, *mspot* might not run. For example, the first time you do this check, you'll see a warning that it could not find the database file. That warning can be ignored because it will create the database when *mspot* starts.
+
+There are now four different voices you can select to use for prompts:
 1. A robotic voice in `audio/robotic` based on the now ancient espeak linux text-to-speech utility.
 2. A male voice in `audio/male` is a realistic AI generated voice from the python-based [*piper*](https://github.com/OHF-Voice/piper1-gpl) text to speech package from the [Open Home Foundation](https://www.openhomefoundation.org/).
 3. A female voice in `audio/female` is another AI voice generated from *piper*.
-Make sure your ini file points to the folder of your choice.
 4. Another great sounding *piper* voice is in `audio/sam`. Sam's cadence is rapid and Sam's pronunciation is near perfect.
 
-### Start the *mspot* dashboard server
+Make sure your ini file points to the folder of your choice.
 
-Edit the copy of the `index.php` file. Near the very beginning of the file, the file path to your ini file is defined as `/home/USER/mspot/mspot.ini`. This should point to your copy of `mspot.ini`. This is an ***extremely*** light-weight dashboard. The entire PHP code is contained in this single file. There are no dependencies, except for your .ini file.
+## Dashboard
 
-The `mdash.service` file will run the php miniserver on TCP port 80 (HTTP). If you want to use a different port, you can edit this file. You should not use this server if you intend on publishing your dashboard on the WWW.
+To install the dashboard: `make installdash`
 
-The dashboard web server is started with:
-```
-sudo make installdash
-```
+To uninstall the dashboard: `make uninstalldash`
 
-You can uninstall the miniserver with `sudo make uninstalldash`
+In the `Building` section, a few `.txt` files were copied when you copied the contents of the *config* directory. These files are for connection information. 
 
-### Set up any custom destinations
+## Starting *mspot*
 
-In the `Building` section, a few `.txt` files were copied when you copied the contents of the *config* directory. These files are for connection information. `M17_Hosts.txt` contains a list of all M17 and URF reflectors registered at [dvref.com](https://dvref.com/) and contains a time-stamp so you know exactly when it was created. This file also contains additional information about the server if it is using the *Ham-DHT* network. The second, `MyHosts.txt` is a place for you to add other reflectors that aren't registered at dvref.com, or direct routing destinations you might want to use: See the `Direct Call` section below.
+If you are manually starting *mspot*: `./mspot mspot.ini` and the log will be appear. To stop *mspot*: Type `<Control>C`
 
-### Starting *mspot*
+If you want *mspot* to run automatically, whenever you hot-spot is running, do: `make install`, then to stop *mspot*: `make uninstall`.
 
-Edit your new copy of `mspot.service`. Everything in angle brackets, \<>, needs to be replaced with the proper value. If you want run *mspot* as root you can remove the definitions for `[Service]User` and `[Service]Group`. If not, you need to set these. Also make sure the `[Service]ExecStart` specifies the exact file path to your ini file and if you changed `BINDIR` in your *mspot.mk* file that will also have the full path to *mspot* on this same line. Once you have modified this mspot.service file, do:
-```
-sudo make install
-```
-Once running, there are lots of things you can do:
-- `sudo make uninstall` to stop *mspot* and uninstall it. 
-- To view *mspot*'s log in real time: `sudo journalctl -u mspot -f` Type \<Control>C to stop the view.
-- If you want to know all the times you heard a particular callsign, like N0CALL: `sudo journalctl -u mspot | grep NOCALL` See `journalctl --help` for other options/features.
-- To stop *mspot* without uninstalling it: `sudo systemctl stop mspot`. To start it back up: `sudo systemctl start mspot`. See `systemctl --help` for other features.
-- For a quick look at how *mspot* is doing, including the last few lines of it's log: `systemctl status mspot`
+To view *mspot*'s log in real time: `journalctl --user-unit mspot -f`. Type \<Control>C to stop the view.
+
+
+If you want to know all the times you heard a particular callsign, like N0CALL: `journalctl --user-unit mspot | grep NOCALL`. See `journalctl --help` for other options/features.
+
+To stop *mspot* without uninstalling it: `systemctl --user stop mspot`, then, to start it back up: `systemctl --user start mspot`. See `systemctl --help` for other features.
+
+For a quick look at how *mspot* is doing, including the last few lines of it's log: `systemctl --user status mspot`
 
 ## Connecting to a reflector
 
@@ -139,11 +150,7 @@ Finally a quick word about reflector. For legacy reflectors, *i.e.*, all URF ref
 
 ## Direct calls
 
-Direct calls to another destination are supported, but in order for you to hear direct calls, you have to set up you home router to forward UDP port 17000 to the local network address of your Pi.
-
-To place a direct call, you first need to setup the callsign and address of your destination in the MyHosts.txt file. After that, you put that callsign in the destination of your radio and key up once. You should see a message that your destination was found. The next time you key up, your voice packets will be routed to the specified IP address.
-
-If you subsequently link to a reflector, you'll still possible hear incoming direct calls, if *mspot* is idle. If you want to place or return a direct call, you'll have to unlink from the reflector to which you are currently linked, and then set the proper destination in your radio and quick-key before you can reply.
+Not yet implemented.
 
 ## Using *mspot*
 
@@ -173,18 +180,14 @@ The echo and record functions will not record more than two minutes and the reco
 
 ## Updating *mspot*
 
-1. Go to the *mspot* repo directory and stop *mspot* **before** updating.
-2. It is safest to do `make clean` but it's not absolutely necessary if you know what you are doing.
-3. Do `git pull` in the *mspot* repo directory. If you see any `config/*` files being updated, that's a strong clue you that you will need to recopy those updated files to the repo base directory and possibly edit them. To be safe, move your old file before copying them down, for example `mv mspot.{ini,old}` will move `mspot.ini` to `mspot.old`. Then you can copy down the new config file, `cp config/mspot.ini .` to the working directory. Then you can edit the new file.
-4. After you have possibly edited your new mspot.mk file, do `make`.
-5. After you've edited a new mspot.ini file do `./inicheck mspot.ini`
-to make sure there are no errors in your ini file.
-6. If you are starting *mspot* automatically and a new mspot.service file came down, with the "git pull", you'll probably need to create a new mspot.service file.
-7. You are now ready to restart *mspot*.
+Go to the *mspot* repo and do: `git pull`. If any source files are updated, stop or uninstalled *mspot* and then rebuild it: `make`, and then start or reinstall it.
 
-## Packet mode
+If you see any `config/*` files being updated, that's a strong clue you that you will need to recopy those updated files to the repo base directory and possibly edit them.
 
-I don't have a radio that can send or receive PM transmissions yet. The code is there, but it hasn't yet been debugged! *Caveat emptor!*
+- `mspot.ini` - To be safe, move your old file before before creating your working copy, for example `mv mspot.{ini,old}` will move `mspot.ini` to `mspot.old`. Then you can make your working copy, `make mspot.ini`, and then edit the new file and check it with `./inicheck mspot.ini`.
+- `mspot.mk` - Stop or uninstall *mspot*, then make a working copy with `make mspot.mk` and rebuild it with `make clean && make`, then restart or reinstall it.
+- `mspot.service` - Only if you're running *mspot* with systemd, uninstall *mspot*, and then do `make mspot.mk`, edit it, and then remake *mspot*: `make clean && make`, and then reinstall it.
+- `index.php` or `mdash.service` - Uninstall the dashboard, `make uninstalldash`, and the reinstall it, `make installdash`.
 
 ## License
 
@@ -193,8 +196,8 @@ This software is published using the GNU GPU, Version 3. Please see the enclosed
 ## To do
 
 I am working on:
-- Packet mode. I am waiting for OpenRTX to release firmware for my CS7000-M17 radio.
-- Better voices and more voice prompts. See the new generation of voices available in [*mat*](https://github.com/n7tae/mat).
+- Direct routing to another user/hot-spot.
+- Packet mode. I am waiting for OpenRTX to release firmware for my CS7000-M17 radio. The code is there, but it hasn't yet been debugged! *Caveat emptor!*
 
 73 de N7TAE
 

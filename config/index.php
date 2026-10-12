@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <?php
-$ifn = '/home/USER/mspot/mspot.ini';
+$ifn = '/home/<USER>/mspot/mspot.ini';
 $inidata = parse_ini_file($ifn, true);
 if (false === $inidata)
 	die('Could not parse mspot ini file '.$ifn);
