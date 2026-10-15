@@ -33,6 +33,7 @@ enum class ErrorLevel { fatal, mild };
 enum class ESection { none, repeater, modem, gateway, dht, dashboard };
 enum class EIPType { ipv4, ipv6, none };
 enum class ERefType { m17, urf, none };
+enum class ERefModGate { allow, block, warn };
 
 #define IS_TRUE(a) ((a)=='t' || (a)=='T' || (a)=='1')
 
@@ -51,6 +52,7 @@ public:
 	bool IsString(const std::string &section, const std::string &key) const;
 	EIPType GetIPType(const std::string &addr) const;
 	ERefType GetReflectorType(const std::string &cs) const;
+	ERefModGate GetModuleGate(const std::string &section, const std::string &key) const;
 
 	const nlohmann::json &GetData() { return data; }
 
@@ -67,4 +69,5 @@ private:
 	void badParam(const std::string &section, const std::string &key) const;
 	void checkPath(const std::string &section, const std::string &key, const std::string &filepath, const std::filesystem::file_type type) const;
 	bool isDefined(ErrorLevel level, const std::string &section, const std::string &key, bool &rval);
+	void checkModuleGate(const std::string &section, const std::string &key, bool &rval) const;
 };

@@ -164,10 +164,10 @@ bool CConfigure::ReadData(const std::string &path)
 					data[g_Keys.gateway.section][g_Keys.gateway.ipv4] = IS_TRUE(value[0]);
 				else if (0 == key.compare(g_Keys.gateway.ipv6))
 					data[g_Keys.gateway.section][g_Keys.gateway.ipv6] = IS_TRUE(value[0]);
-				else if (0 == key.compare(g_Keys.gateway.warnNoTranscoder))
-					data[g_Keys.gateway.section][g_Keys.gateway.warnNoTranscoder] = IS_TRUE(value[0]);
-				else if (0 == key.compare(g_Keys.gateway.warnIfEncrypted))
-					data[g_Keys.gateway.section][g_Keys.gateway.warnIfEncrypted] = IS_TRUE(value[0]);
+				else if (0 == key.compare(g_Keys.gateway.m17EncryptedModule))
+					data[g_Keys.gateway.section][g_Keys.gateway.m17EncryptedModule] = getString(value, g_Keys.gateway.m17EncryptedModule, rval);
+				else if (0 == key.compare(g_Keys.gateway.urfUnTranscodedModule))
+					data[g_Keys.gateway.section][g_Keys.gateway.urfUnTranscodedModule] = getString(value, g_Keys.gateway.urfUnTranscodedModule, rval);
 				else if (0 == key.compare(g_Keys.gateway.startupLink))
 					data[g_Keys.gateway.section][g_Keys.gateway.startupLink] = getString(value, g_Keys.gateway.startupLink, rval);
 				else if (0 == key.compare(g_Keys.gateway.m17HostPath))
@@ -270,8 +270,10 @@ bool CConfigure::ReadData(const std::string &path)
 	// Gateway section
 	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.ipv4, rval);
 	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.ipv6, rval);
-	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.warnIfEncrypted, rval);
-	isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.warnNoTranscoder, rval);
+	if (isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.m17EncryptedModule, rval))
+		checkModuleGate(g_Keys.gateway.section, g_Keys.gateway.m17EncryptedModule, rval);
+	if (isDefined(ErrorLevel::fatal, g_Keys.gateway.section, g_Keys.gateway.urfUnTranscodedModule, rval))
+		checkModuleGate(g_Keys.gateway.section, g_Keys.gateway.urfUnTranscodedModule, rval);
 	if (data[g_Keys.gateway.section].contains(g_Keys.gateway.startupLink))
 	{
 		const auto ref = GetString(g_Keys.gateway.section, g_Keys.gateway.startupLink);
@@ -419,6 +421,15 @@ std::string CConfigure::getString(const std::string &value, const std::string &k
 	std::cerr << "ERROR: line #" << counter << ": " << key << " is not contained in double quotes" << std::endl;
 	rval = true;
 	return value;
+}
+
+void CConfigure::checkModuleGate(const std::string &section, const std::string &key, bool &rval) const
+{
+	const std::string value = GetString(section, key);
+	if (value.compare("block") and value.compare("allow") and value.compare("warn")) {
+		std::cerr << "ERROR: Value of " << '[' << section << "] " << key << " is not \"allow\", \"block\", or \"warn\"" << std::endl;
+		rval = true;
+	}
 }
 
 void CConfigure::badParam(const std::string &section, const std::string &key) const
@@ -640,6 +651,16 @@ ERefType CConfigure::GetReflectorType(const std::string &cs) const
 		return ERefType::urf;
 	else
 		return ERefType::none;
+}
+
+ERefModGate CConfigure::GetModuleGate(const std::string &section, const std::string &key) const
+{
+	const std::string value = GetString(section, key);
+	if (0 == value.compare("allow"))
+		return ERefModGate::allow;
+	else if (0 == value.compare("block"))
+		return ERefModGate::block;
+	return ERefModGate::warn;
 }
 
 #ifdef INICHECK

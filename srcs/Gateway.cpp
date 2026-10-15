@@ -186,8 +186,8 @@ bool CGateway::Start()
 	keep_running = true;
 	gateStream.Initialize(EStreamType::gate);
 	modemStream.Initialize(EStreamType::modem);
-	warnOnEncrypted    = g_Cfg.GetBoolean(g_Keys.gateway.section, g_Keys.gateway.warnIfEncrypted);
-	warnOnNoTranscoder = g_Cfg.GetBoolean(g_Keys.gateway.section, g_Keys.gateway.warnNoTranscoder);
+	eM17ModuleState = g_Cfg.GetModuleGate(g_Keys.gateway.section, g_Keys.gateway.m17EncryptedModule);
+	eURFModuleState = g_Cfg.GetModuleGate(g_Keys.gateway.section, g_Keys.gateway.urfUnTranscodedModule);
 	// set up link on boot up
 	if (g_Cfg.IsString(g_Keys.gateway.section, g_Keys.gateway.startupLink))
 	{
@@ -806,11 +806,25 @@ bool CGateway::setDestination(const CCallsign &callsign)
 				return false;
 			}
 			if (ERefType::m17 == eRefType) {
-				if (warnOnEncrypted and (std::string::npos != smods.find(module)))
-					Log(EUnit::gate, "WARNING: Reflector module %s is encrypted\n", callsign.c_str());
-			} else {
-				if (warnOnNoTranscoder and (std::string::npos == smods.find(module)))
-					Log(EUnit::gate, "WARNING: Reflector module %s is not transcoded\n", callsign.c_str());
+				if (std::string::npos != smods.find(module)) {
+					if (ERefModGate::block == eM17ModuleState) {
+						Log(EUnit::gate, "BLOCKED: Reflector module %s is encrypted\n", callsign.c_str());
+						return false;
+					}
+					else if (ERefModGate::warn == eM17ModuleState)
+						Log(EUnit::gate, "WARNING: Reflector module %s is encrypted\n", callsign.c_str());
+				}
+			} else if (ERefType::urf == eRefType) {
+				if (std::string::npos == smods.find(module)) {
+					if (ERefModGate::block == eURFModuleState) {
+						Log(EUnit::gate, "BLOCKED: Reflector module %s is not transcoded\n", callsign.c_str());
+						return false;
+					}
+					else if (ERefModGate::warn == eURFModuleState)
+						Log(EUnit::gate, "WARNING: Reflector module %s is not transcoded\n", callsign.c_str());
+				}
+			} else { // ERefType::none
+				return false;
 			}
 		}
 		target.TargetInit(callsign, eRefType, dType, mods, smods, addr, thisCS);

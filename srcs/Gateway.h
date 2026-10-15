@@ -97,7 +97,7 @@ private:
 	std::string progName;
 	uint16_t can;
 	std::string audioPath;
-	bool warnOnNoTranscoder, warnOnEncrypted;
+	ERefModGate eM17ModuleState, eURFModuleState;
 	EInternetType internetType;
 	std::atomic<bool> keep_running;
 	CUDPSocket ipv4, ipv6;

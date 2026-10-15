@@ -184,7 +184,7 @@ Go to the *mspot* repo and do: `git pull`. If any source files are updated, stop
 
 If you see any `config/*` files being updated, that's a strong clue you that you will need to recopy those updated files to the repo base directory and possibly edit them.
 
-- `mspot.ini` - To be safe, move your old file before before creating your working copy, for example `mv mspot.{ini,old}` will move `mspot.ini` to `mspot.old`. Then you can make your working copy, `make mspot.ini`, and then edit the new file and check it with `./inicheck mspot.ini`.
+- `mspot.ini` - To be safe, move your old file before before creating your working copy, for example `mv mspot.{ini,old}` will move `mspot.ini` to `mspot.old`. Then you can make your new working copy, `make mspot.ini`, and then edit the new file and check it with `./inicheck mspot.ini`.
 - `mspot.mk` - Stop or uninstall *mspot*, then make a working copy with `make mspot.mk` and rebuild it with `make clean && make`, then restart or reinstall it.
 - `mspot.service` - Only if you're running *mspot* with systemd, uninstall *mspot*, and then do `make mspot.mk`, edit it, and then remake *mspot*: `make clean && make`, and then reinstall it.
 - `index.php` or `mdash.service` - Uninstall the dashboard, `make uninstalldash`, and the reinstall it, `make installdash`.
