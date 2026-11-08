@@ -49,16 +49,14 @@ The user that executes *mspot* needs to be in the `dialout` group! Do a `getent 
 
 ## Updating the CC1200 firmware
 
-This version of *mspot* supports CC1200 firmware version 2.2. You don't need to compile the firmware, but you do need a few things to flash the CC1200 if it's not already running 2.2. Here is how to install that version:
+This version of *mspot* supports CC1200 firmware version 2.2 and later. You don't need to compile the firmware: each release of [CC1200_HAT-fw](https://github.com/M17-Project/CC1200_HAT-fw/releases) comes with a ready-to-flash `CC1200_HAT-fw.bin`. Here is how to download the latest one and flash it:
 ```
-sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi
-git clone https://github.com/M17-Project/CC1200_HAT-fw.git
-cd CC1200_HAT-fw/Release
+sudo apt-get install -y stm32flash
+wget https://github.com/M17-Project/CC1200_HAT-fw/releases/latest/download/CC1200_HAT-fw.bin
 sudo stm32flash -v -R -i "-532&-533&532,533,:-532,-533,533" -w CC1200_HAT-fw.bin /dev/ttyAMA0
-cd
 ```
 
-It will take several seconds to do the flashing and when it's all done, you'll see `Reset Done.` When you start *mspot* wil report the CC1200 firmware version in the log.
+Stop *mspot* before flashing, as it uses the same serial port. It will take several seconds to do the flashing and when it's all done, you'll see `Reset Done.` When you start *mspot* it will report the CC1200 firmware version in the log.
 
 ## Building *mspot*
 
@@ -191,4 +189,3 @@ I am working on:
 - Better voices and more voice prompts. See the new generation of voices available in [*mat*](https://github.com/n7tae/mat).
 
 73 de N7TAE
-
