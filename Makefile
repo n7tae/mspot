@@ -43,7 +43,7 @@ cc1200-reset : tools/cc1200-reset.c
 %.o: %.cpp
 		$(CXX) $(CPPFLAGS) -MMD -MP -c -o $@ $<
 
-.PHONY : clean config install installdash uninstall uninstalldash allconfigfiles
+.PHONY : clean config install installdash uninstall uninstalldash allconfigfiles updatecc1200fw
 
 clean :
 	$(RM) $(EXES) srcs/*.o srcs/*.d
@@ -79,6 +79,11 @@ uninstalldash :
 	systemctl --user disable mdash
 	$(RM) $(SYSTEMDDIR)/mdash.service
 	systemctl --user daemon-reload
+
+updatecc1200fw :
+	wget https://github.com/M17-Project/CC1200_HAT-fw/releases/latest/download/CC1200_HAT-fw.bin
+	sudo stm32flash -v -R -i "-532&-533&532,533,:-532,-533,533" -w CC1200_HAT-fw.bin /dev/ttyAMA0
+	$(RM) CC1200_HAT-fw.bin
 
 # files
 mspot.mk : config/mspot.mk
