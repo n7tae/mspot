@@ -107,7 +107,7 @@ To install the dashboard: `make installdash`
 
 To uninstall the dashboard: `make uninstalldash`
 
-In the `Building` section, a few `.txt` files were copied when you copied the contents of the *config* directory. These files are for connection information. 
+In your local area network, you can usually view the dashboard at `http://<hostname>.local`, or `http://<IPv4 address>` .
 
 ## Updating the CC1200 firmware
 
@@ -153,7 +153,7 @@ Make sure you have an M17 radio on and set to the proper frequency. You'll hear 
 
 Controlling the gateway is done with your M17 radio by setting different *commands* in the destination of your radio and sending a short transmission to *mspot*.
 
-You can connect to any known reflector module by putting that reflector's callsign and module letter in your radio and keying up. *mspot* will link to your reflector once you release the PTT button on your radio.Be sure the reflector module that you want connect is always at position nine! For example:
+You can connect to any known reflector module by putting that reflector's callsign and module letter in your radio and keying up. *mspot* will link to your reflector once you release the PTT button on your radio.vBe sure the reflector module that you want connect is always at position nine! For example:
 
 | Type | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
 |------|---|---|---|---|---|---|---|---|---|
@@ -163,6 +163,11 @@ You can connect to any known reflector module by putting that reflector's callsi
 There will alway be one space at position eight for an M17 reflector module destination, and two spaces at positions seven and eight for a URF reflector module destination.
 
 Once you hear a message that it's connected successfully, the next time you key up, you'll be transmitting into the reflector.
+
+If you are connected to a legacy reflector, *i.e.*, any URF reflector or an M17 reflector with a release version of less than 1.0.0. You must leave this value in your radio's destination for every transmisson. But if you are using an M17 reflector with a version number of at least 1.0.0, you can change your destination to the BROADCAST, or `@ALL` address.
+
+Here are some other destinations, *i.e.*, *commands*, that will trigger a functional response from *mspot*:
+
 - **`ECHO`** or **`E`** will parrot back anything that's transmitted to the repeater. Maximum recording time is two minutes. Also, don't forget that non-legacy versions of the M17 reflector will echo back up to 20 seconds of your transmission if you change your destination to **`PARROT`**. You have to be already linked to the reflector.
 - **`STATUS`** or **`S`** or **`I`** will play a connection state message.
 - **`UNLINK`** or **`U`** will disconnect you from a connected reflector module. Please note that *mspot* has to be in a disconnected state before you can connect to a reflector module. If you try to change modules or change reflectors, your transmission will be ignored and a connection message will be played when you end your transmission.
