@@ -25,7 +25,7 @@ If you already have an SD card with *trixie* on it, you can probably use it but 
 After you've completed the SD card prep and have booted it up on your Pi and have completed `sudo apt update` and `sudo apt full-upgrade`, there are several packages you will need:
 
 ```
-sudo apt install -y git build-essential cmake nlohmann-json3-dev libsqlite3-dev php-common php-fpm sqlite3 php-sqlite3 dnsutils
+sudo apt install -y git build-essential cmake nlohmann-json3-dev libsqlite3-dev php-common php-fpm sqlite3 php-sqlite3 dnsutils stm32flash
 ```
 If you are not going to show the IP address on your dashboard, you don't need the `dsnutils` package. And if you are not going to install the *mspot* dashboard server, you don't need any of the packages that have `php` in their package name.
 
@@ -47,17 +47,6 @@ cd
 If you created you trixie SD card using the instructions in the TRIXIE_SD_CARD_PREP.md file, you're all set because the user you defined is already a member of the *dialout* group! If not, read on...
 
 The user that executes *mspot* needs to be in the `dialout` group! Do a `getent group dialout`. If the user is not listed, do a `sudo adduser <username> dialout`, where `<username>` is the login name of the user. After this, you can verify with another `getent grep dialout` command.
-
-## Updating the CC1200 firmware
-
-This version of *mspot* supports CC1200 firmware version 2.2 and later. You don't need to compile the firmware: each release of [CC1200_HAT-fw](https://github.com/M17-Project/CC1200_HAT-fw/releases) comes with a ready-to-flash `CC1200_HAT-fw.bin`. Here is how to download the latest one and flash it:
-```
-sudo apt-get install -y stm32flash
-wget https://github.com/M17-Project/CC1200_HAT-fw/releases/latest/download/CC1200_HAT-fw.bin
-sudo stm32flash -v -R -i "-532&-533&532,533,:-532,-533,533" -w CC1200_HAT-fw.bin /dev/ttyAMA0
-```
-
-It will take several seconds to do the flashing and when it's all done, you'll see `Reset Done.` When you start *mspot* wil report the CC1200 firmware version in the log.
 
 ## Building *mspot*
 
@@ -119,6 +108,15 @@ To install the dashboard: `make installdash`
 To uninstall the dashboard: `make uninstalldash`
 
 In the `Building` section, a few `.txt` files were copied when you copied the contents of the *config* directory. These files are for connection information. 
+
+## Updating the CC1200 firmware
+
+Updating the CC1200 firmware is easy: `make updatecc1200fw`
+This *make* command will download the latest firmware file using *wget* and then use the *stm32flash* utility to flash the CC1200. It will take several seconds to do the flashing. During this process, you'll see a `...(100%) Done` line and finally a `Reset Done` line. Finally, *make* will delete the local copy of the firmware file.
+
+When you start *mspot*, it will report the CC1200 firmware version in the log. You can see if you are running the latest CC1200 firmware [here](https://github.com/M17-Project/CC1200_HAT-fw/releases).
+
+You can update the CC1200 firmware whenever `mspot` is not running.
 
 ## Starting *mspot*
 
