@@ -49,10 +49,9 @@ The user that executes *mspot* needs to be in the `dialout` group! Do a `getent 
 
 ## Updating the CC1200 firmware
 
-Updating the CC1200 firmware is easy: `make updatecc1200fw`
-This *make* command will download the latest firmware file using *wget* and then use the *stm32flash* utility to flash the CC1200. It will take several seconds to do the flashing. During this process, you'll see a `...(100%) Done` line and finally a `Reset Done` line. Finally, *make* will delete the local copy of the firmware file.
+Updating the CC1200 firmware is easy: `sudo ./flash-cc1200-fw`
 
-When you start *mspot*, it will report the CC1200 firmware version in the log. You can see if you are running the latest CC1200 firmware [here](https://github.com/M17-Project/CC1200_HAT-fw/releases).
+This script will download the latest firmware file using *wget -q* and then use the *stm32flash* utility to flash the CC1200. It will take several seconds to do the flashing. During this process, you'll see a `Wrote and verified <some hex address> (100%) Done` line and ultimately a `Reset Done` line. Finally, the local copy of the firmware file will be removed.
 
 You can update the CC1200 firmware whenever `mspot` is not running.
 

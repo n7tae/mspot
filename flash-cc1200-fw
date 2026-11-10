@@ -1,0 +1,38 @@
+#!/bin/bash
+
+# The sysfs number of the 40-pin header's GPIO0: the base of the GPIO chip
+# behind the header. It depends on the model and the kernel (512 on recent
+# kernels for the Pi 4 and older models, other values on the Pi 5), so it is
+# looked up, never assumed.
+header_gpio_base() {
+    local chip
+    for chip in /sys/class/gpio/gpiochip*; do
+        case "$(cat "$chip/label" 2>/dev/null)" in
+            pinctrl-rp1|pinctrl-bcm2711|pinctrl-bcm2835)
+                cat "$chip/base"
+                return 0
+                ;;
+        esac
+    done
+    return 1
+}
+
+flash_file() {
+    local base boot0 nrst
+    # The HAT's BOOT0 and nRST are on header GPIO20 and GPIO21
+    if ! base=$(header_gpio_base); then
+        echo "⚠️  Could not find the GPIOs of the 40-pin header, skipping flashing."
+        return 0
+    fi
+    boot0=$((base + 20))
+    nrst=$((base + 21))
+    if ! stm32flash -v -R -i "-$boot0&-$nrst&$boot0,$nrst,:-$boot0,-$nrst,$nrst" -w CC1200_HAT-fw.bin /dev/ttyAMA0; then
+        echo "⚠️  Flashing failed."
+    fi
+}
+
+wget -q https://github.com/M17-Project/CC1200_HAT-fw/releases/latest/download/CC1200_HAT-fw.bin
+
+flash_file
+
+/bin/rm CC1200_HAT-fw.bin
